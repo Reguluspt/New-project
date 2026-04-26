@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Quản Lý Templates - Hệ Thống Thẩm Định</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 20px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed-variant": "#812800",
+                        "surface-container-highest": "#d8e2ff",
+                        "surface": "#faf9ff",
+                        "on-tertiary-container": "#ffc6b2",
+                        "surface-bright": "#faf9ff",
+                        "secondary-container": "#cdddff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed": "#380d00",
+                        "on-primary-container": "#c4d2ff",
+                        "tertiary": "#7b2600",
+                        "tertiary-fixed": "#ffdbcf",
+                        "primary-fixed-dim": "#b2c5ff",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "secondary": "#4f5f7b",
+                        "surface-variant": "#d8e2ff",
+                        "primary": "#003d9b",
+                        "outline-variant": "#c3c6d6",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f1f3ff",
+                        "surface-container": "#e9edff",
+                        "on-surface": "#051a3e",
+                        "on-surface-variant": "#434654",
+                        "outline": "#737685",
+                        "secondary-fixed-dim": "#b7c7e8",
+                        "surface-dim": "#ccdaff",
+                        "tertiary-container": "#a33500",
+                        "on-secondary-container": "#51617e",
+                        "error": "#ba1a1a",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#b2c5ff",
+                        "on-background": "#051a3e",
+                        "surface-tint": "#0c56d0",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#374763",
+                        "primary-fixed": "#dae2ff",
+                        "tertiary-fixed-dim": "#ffb59b",
+                        "on-error": "#ffffff",
+                        "on-primary-fixed": "#001848",
+                        "background": "#faf9ff",
+                        "surface-container-high": "#e1e8ff",
+                        "on-primary-fixed-variant": "#0040a2",
+                        "inverse-on-surface": "#edf0ff",
+                        "secondary-fixed": "#d6e3ff",
+                        "primary-container": "#0052cc",
+                        "on-secondary-fixed": "#091c35",
+                        "inverse-surface": "#1d3054"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "8px",
+                        "lg": "12px",
+                        "xl": "16px",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "base": "4px",
+                        "sidebar-width": "260px",
+                        "xs": "4px",
+                        "margin": "24px",
+                        "gutter": "16px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "title-sm": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "data-tabular": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "data-tabular": ["13px", { "lineHeight": "18px", "fontWeight": "500" }],
+                        "body-sm": ["13px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md overflow-hidden">
+<!-- TopNavBar -->
+<header class="fixed top-0 left-0 w-full z-50 border-b border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none bg-white dark:bg-slate-950 flex justify-between items-center h-16 px-4 lg:px-6 gap-2">
+<div class="flex items-center gap-3 lg:gap-6 overflow-x-auto no-scrollbar">
+<div class="flex-shrink-0">
+<h1 class="font-bold text-blue-700 dark:text-blue-400 text-base lg:text-lg whitespace-nowrap">Hệ Thống Thẩm Định</h1>
+</div>
+<nav>
+<ul class="flex flex-row gap-1 lg:gap-2 font-inter text-sm antialiased">
+<!-- Dashboard -->
+<li>
+<a class="flex items-center gap-1.5 px-2 py-1.5 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap" href="#">
+<span class="material-symbols-outlined text-lg">dashboard</span>
+<span class="hidden sm:inline">Dashboard</span>
+</a>
+</li>
+<!-- Nhập Hồ Sơ -->
+<li>
+<a class="flex items-center gap-1.5 px-2 py-1.5 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap" href="#">
+<span class="material-symbols-outlined text-lg">document_scanner</span>
+<span class="hidden md:inline">Nhập Hồ Sơ</span>
+</a>
+</li>
+<!-- Quản Lý Hồ Sơ -->
+<li>
+<a class="flex items-center gap-1.5 px-2 py-1.5 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap" href="#">
+<span class="material-symbols-outlined text-lg">folder_shared</span>
+<span class="hidden md:inline">Quản Lý Hồ Sơ</span>
+</a>
+</li>
+<!-- Cấu Hình -->
+<li>
+<a class="flex items-center gap-1.5 px-2 py-1.5 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+<span class="hidden sm:inline">Cấu Hình</span>
+</a>
+</li>
+<!-- Templates (Active) -->
+<li>
+<a class="flex items-center gap-1.5 px-2 py-1.5 rounded bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-400 font-semibold opacity-90 transition-all duration-150 whitespace-nowrap" href="#">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">description</span>
+<span>Templates</span>
+</a>
+</li>
+</ul>
+</nav>
+</div>
+<div class="flex items-center gap-3 lg:gap-6 flex-shrink-0">
+<div class="relative w-40 md:w-56 lg:w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+<input class="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded font-inter text-sm font-medium focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Tìm kiếm..." type="text"/>
+</div>
+<div class="flex items-center gap-2 font-inter text-sm font-medium">
+<button class="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 transition-transform hover:scale-95 flex items-center justify-center p-1.5 rounded-full">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 transition-transform hover:scale-95 flex items-center justify-center p-1.5 rounded-full hidden sm:flex">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<div class="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
+<button class="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-semibold hover:scale-95 transition-transform">
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-slate-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCy8xWsIENxq-r1CLrer2NaViAaxa5FTSQJedqIn6rYd5yPrUjuVnWjc04X2EXUUb1nGkfqJKnO5NtLbus_rUCec9iHFM3JtM7NsRDuOIM_qZGfMxnUKbpoqa_BA507oELTk-mgmeq6meW10p882XUQ6-JqKRCnQPlssoDWjwtVCKjto7woddeKEKt6_llhZuVccmFw8VGZ4QaJXpR2LJbQdCVMznsgMki4ZjVwGTeaxTIh8j00Dvcf-s-lA6eWAfYTVSQGduH1NiUB"/>
+<span class="hidden md:inline whitespace-nowrap">Tài khoản</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Area (Split Screen) -->
+<main class="w-full mt-16 h-[calc(100vh-64px)] flex bg-surface">
+<!-- Left Panel: Template List -->
+<div class="flex-1 border-r border-outline-variant flex flex-col bg-surface-container-lowest overflow-hidden">
+<!-- Toolbar -->
+<div class="px-margin py-md border-b border-outline-variant flex justify-between items-center bg-surface">
+<div>
+<h2 class="font-title-sm text-title-sm text-on-surface mb-1">Quản Lý Mẫu Văn Bản</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Quản lý các mẫu Word/Excel cho báo cáo và hợp đồng.</p>
+</div>
+<div class="flex gap-sm">
+<button class="flex items-center gap-xs px-3 py-1.5 border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant font-data-tabular text-data-tabular hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" style="font-size: 16px;">upload</span>
+<span class="hidden sm:inline">Tải Lên Mẫu Mới</span>
+</button>
+<button class="flex items-center gap-xs px-3 py-1.5 border border-primary bg-primary text-on-primary rounded font-data-tabular text-data-tabular shadow-sm hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined" style="font-size: 16px;">add</span>
+<span class="hidden sm:inline">Tạo Mẫu Trống</span>
+</button>
+</div>
+</div>
+<!-- Tabs -->
+<div class="px-margin border-b border-outline-variant bg-surface flex gap-margin">
+<button class="py-3 font-data-tabular text-data-tabular text-primary border-b-2 border-primary whitespace-nowrap">
+                    Mẫu Doanh Nghiệp (12)
+                </button>
+<button class="py-3 font-data-tabular text-data-tabular text-on-surface-variant hover:text-on-surface transition-colors whitespace-nowrap">
+                    Mẫu Cá Nhân (4)
+                </button>
+</div>
+<!-- High Density Table -->
+<div class="flex-1 overflow-auto">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-surface-container-low border-b border-outline-variant z-10">
+<tr>
+<th class="px-md py-sm font-label-caps text-label-caps text-on-surface-variant w-10"></th>
+<th class="px-md py-sm font-label-caps text-label-caps text-on-surface-variant">Tên Mẫu Văn Bản</th>
+<th class="px-md py-sm font-label-caps text-label-caps text-on-surface-variant w-24">Phiên bản</th>
+<th class="px-md py-sm font-label-caps text-label-caps text-on-surface-variant w-32">Cập nhật cuối</th>
+<th class="px-md py-sm font-label-caps text-label-caps text-on-surface-variant w-28">Trạng thái</th>
+<th class="px-md py-sm font-label-caps text-label-caps text-on-surface-variant w-40 text-right">Thao tác</th>
+</tr>
+</thead>
+<tbody class="font-data-tabular text-data-tabular">
+<!-- Row 1: Selected / Active -->
+<tr class="border-b border-outline-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer">
+<td class="px-md py-2 text-center text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">description</span>
+</td>
+<td class="px-md py-2 font-medium text-on-surface">Báo cáo Thẩm định Bất động sản Thương mại</td>
+<td class="px-md py-2 text-on-surface-variant">v3.2</td>
+<td class="px-md py-2 text-on-surface-variant">10:30, Hôm nay</td>
+<td class="px-md py-2">
+<span class="inline-flex items-center px-2 py-0.5 rounded font-label-caps text-label-caps bg-secondary-container text-on-secondary-container">
+                                    Thử nghiệm
+                                </span>
+</td>
+<td class="px-md py-2 text-right">
+<div class="flex justify-end gap-xs">
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-colors" title="Sửa Placeholder">
+<span class="material-symbols-outlined" style="font-size: 18px;">edit_document</span>
+</button>
+<button class="p-1 rounded text-primary bg-primary-fixed-dim bg-opacity-20 transition-colors" title="Xem Lịch Sử">
+<span class="material-symbols-outlined" style="font-size: 18px;">history</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-colors" title="Khóa/Mở Khóa">
+<span class="material-symbols-outlined" style="font-size: 18px;">lock_open</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors cursor-pointer group">
+<td class="px-md py-2 text-center text-on-surface-variant group-hover:text-primary">
+<span class="material-symbols-outlined">table_view</span>
+</td>
+<td class="px-md py-2 text-on-surface">Bảng tính Dòng tiền Tương lai (DCF)</td>
+<td class="px-md py-2 text-on-surface-variant">v1.5</td>
+<td class="px-md py-2 text-on-surface-variant">24/10/2023</td>
+<td class="px-md py-2">
+<span class="inline-flex items-center px-2 py-0.5 rounded font-label-caps text-label-caps bg-primary text-on-primary">
+                                    Sản xuất
+                                </span>
+</td>
+<td class="px-md py-2 text-right">
+<div class="flex justify-end gap-xs opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-colors" title="Sửa Placeholder">
+<span class="material-symbols-outlined" style="font-size: 18px;">edit_document</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-colors" title="Xem Lịch Sử">
+<span class="material-symbols-outlined" style="font-size: 18px;">history</span>
+</button>
+<button class="p-1 rounded text-error hover:bg-error-container transition-colors" title="Khóa/Mở Khóa">
+<span class="material-symbols-outlined" style="font-size: 18px;">lock</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="border-b border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low transition-colors cursor-pointer group">
+<td class="px-md py-2 text-center text-on-surface-variant group-hover:text-primary">
+<span class="material-symbols-outlined">description</span>
+</td>
+<td class="px-md py-2 text-on-surface">Hợp đồng Cầm cố Tài sản Máy móc Thiết bị</td>
+<td class="px-md py-2 text-on-surface-variant">v4.0</td>
+<td class="px-md py-2 text-on-surface-variant">15/10/2023</td>
+<td class="px-md py-2">
+<span class="inline-flex items-center px-2 py-0.5 rounded font-label-caps text-label-caps bg-tertiary-container text-on-tertiary-container">
+                                    Bản nháp
+                                </span>
+</td>
+<td class="px-md py-2 text-right">
+<div class="flex justify-end gap-xs opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-colors" title="Sửa Placeholder">
+<span class="material-symbols-outlined" style="font-size: 18px;">edit_document</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-colors" title="Xem Lịch Sử">
+<span class="material-symbols-outlined" style="font-size: 18px;">history</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-colors" title="Khóa/Mở Khóa">
+<span class="material-symbols-outlined" style="font-size: 18px;">lock_open</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Panel: Edit History (Side Panel) -->
+<div class="w-[380px] bg-surface flex flex-col shadow-[-4px_0_12px_rgba(0,0,0,0.02)] z-10 border-l border-outline-variant flex-shrink-0 hidden xl:flex">
+<div class="p-margin border-b border-outline-variant bg-surface-container-lowest flex justify-between items-start">
+<div>
+<h3 class="font-title-sm text-title-sm text-on-surface mb-1">Lịch sử chỉnh sửa</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">Báo cáo Thẩm định Bất động sản Thương mại</p>
+</div>
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="flex-1 overflow-auto p-margin">
+<div class="relative border-l-2 border-surface-variant ml-3 space-y-6">
+<!-- Timeline Item 1 (Current) -->
+<div class="relative pl-6">
+<div class="absolute w-3 h-3 bg-primary rounded-full -left-[7px] top-1.5 ring-4 ring-surface"></div>
+<div class="bg-surface-container-lowest border border-outline-variant p-3 rounded shadow-sm">
+<div class="flex justify-between items-start mb-2">
+<span class="font-data-tabular text-data-tabular font-bold text-on-surface">Phiên bản 3.2</span>
+<span class="font-label-caps text-label-caps text-primary bg-primary-fixed px-2 py-0.5 rounded">Hiện tại</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-2">Cập nhật placeholder tính toán IRR và NPV theo công thức mới.</p>
+<div class="flex justify-between items-center font-body-sm text-body-sm text-outline">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined" style="font-size: 14px;">person</span> Trần Thị B</span>
+<span>10:30, Hôm nay</span>
+</div>
+</div>
+</div>
+<!-- Timeline Item 2 -->
+<div class="relative pl-6">
+<div class="absolute w-3 h-3 bg-outline-variant rounded-full -left-[7px] top-1.5 ring-4 ring-surface"></div>
+<div class="bg-surface-container-lowest border border-transparent p-3 rounded hover:border-outline-variant transition-colors group">
+<div class="flex justify-between items-start mb-2">
+<span class="font-data-tabular text-data-tabular font-medium text-on-surface">Phiên bản 3.1</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-2">Sửa lỗi format ngày tháng trong phần phụ lục.</p>
+<div class="flex justify-between items-center font-body-sm text-body-sm text-outline mb-3">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined" style="font-size: 14px;">person</span> Lê Văn C</span>
+<span>14:15, 25/10/2023</span>
+</div>
+<button class="w-full py-1.5 border border-outline-variant rounded font-data-tabular text-data-tabular text-on-surface hover:bg-surface-container transition-colors opacity-0 group-hover:opacity-100 flex justify-center items-center gap-2">
+<span class="material-symbols-outlined" style="font-size: 16px;">restore</span> Khôi phục bản này
+                            </button>
+</div>
+</div>
+<!-- Timeline Item 3 -->
+<div class="relative pl-6">
+<div class="absolute w-3 h-3 bg-outline-variant rounded-full -left-[7px] top-1.5 ring-4 ring-surface"></div>
+<div class="bg-surface-container-lowest border border-transparent p-3 rounded hover:border-outline-variant transition-colors group">
+<div class="flex justify-between items-start mb-2">
+<span class="font-data-tabular text-data-tabular font-medium text-on-surface">Phiên bản 3.0</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-2">Phát hành chính thức mẫu báo cáo mới theo thông tư 20.</p>
+<div class="flex justify-between items-center font-body-sm text-body-sm text-outline mb-3">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined" style="font-size: 14px;">person</span> Hệ thống</span>
+<span>09:00, 20/10/2023</span>
+</div>
+<button class="w-full py-1.5 border border-outline-variant rounded font-data-tabular text-data-tabular text-on-surface hover:bg-surface-container transition-colors opacity-0 group-hover:opacity-100 flex justify-center items-center gap-2">
+<span class="material-symbols-outlined" style="font-size: 16px;">restore</span> Khôi phục bản này
+                            </button>
+</div>
+</div>
+</div>
+</div>
+<div class="p-margin border-t border-outline-variant bg-surface-container-lowest">
+<button class="w-full py-2 border border-outline-variant rounded font-data-tabular text-data-tabular text-primary font-medium hover:bg-surface-container transition-colors flex justify-center items-center gap-2">
+                    Xem toàn bộ lịch sử
+                </button>
+</div>
+</div>
+</main>
+</body></html>

@@ -1,0 +1,211 @@
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+
+import streamlit as st
+
+from src.app_config import (
+    CASE_FILES_DIR,
+    OUTPUT_DIR,
+    UNPAID_STATUS,
+    extraction_to_defaults,
+    render_confidence_row,
+    selectbox_from_excel,
+    sync_form_to_gcn_from_fields,
+    sync_gcn_to_form_from_fields,
+)
+from src.case_files import case_folder, save_original_file
+from src.excel_writer import fill_template
+from src.models import LandCertificateExtraction
+from src.sqlite_store import DEFAULT_CASE_STATUS, create_case, display_cases, recent_cases, update_case
+
+
+def render(
+    *,
+    sqlite_db_path: Path,
+    excel_template_path: Path,
+    excel_dropdown_options: dict,
+) -> None:
+    st.subheader("Bước 1 - Kiểm tra và xuất form nhập liệu")
+    extraction = st.session_state.extraction
+
+    with st.expander("Dữ liệu đọc từ GCN", expanded=True):
+        so_thua = render_confidence_row("Số thửa đất", extraction.so_thua_dat, "so_thua", on_change=sync_gcn_to_form_from_fields)
+        so_to = render_confidence_row("Số tờ bản đồ", extraction.so_to_ban_do, "so_to", on_change=sync_gcn_to_form_from_fields)
+        land_address = render_confidence_row(
+            "Địa chỉ thửa đất",
+            extraction.dia_chi_thua_dat,
+            "land_address",
+            on_change=sync_gcn_to_form_from_fields,
+        )
+        owner_name = render_confidence_row(
+            "Tên chủ sở hữu cuối cùng",
+            extraction.ten_chu_so_huu_cuoi_cung,
+            "owner_name",
+            on_change=sync_gcn_to_form_from_fields,
+        )
+        owner_address = render_confidence_row(
+            "Địa chỉ chủ sở hữu cuối cùng",
+            extraction.dia_chi_chu_so_huu_cuoi_cung,
+            "owner_address",
+            on_change=sync_gcn_to_form_from_fields,
+        )
+        citizen_id = render_confidence_row(
+            "Số CCCD/CMND",
+            extraction.so_cccd_chu_so_huu_cuoi_cung,
+            "citizen_id",
+            on_change=sync_gcn_to_form_from_fields,
+        )
+
+    defaults = extraction_to_defaults(
+        LandCertificateExtraction(
+            so_thua_dat=extraction.so_thua_dat.model_copy(update={"value": so_thua}),
+            so_to_ban_do=extraction.so_to_ban_do.model_copy(update={"value": so_to}),
+            dia_chi_thua_dat=extraction.dia_chi_thua_dat.model_copy(update={"value": land_address}),
+            ten_chu_so_huu_cuoi_cung=extraction.ten_chu_so_huu_cuoi_cung.model_copy(
+                update={"value": owner_name}
+            ),
+            dia_chi_chu_so_huu_cuoi_cung=extraction.dia_chi_chu_so_huu_cuoi_cung.model_copy(
+                update={"value": owner_address}
+            ),
+            so_cccd_chu_so_huu_cuoi_cung=extraction.so_cccd_chu_so_huu_cuoi_cung.model_copy(
+                update={"value": citizen_id}
+            ),
+            notes=extraction.notes,
+        )
+    )
+
+    execution_month = datetime.now().strftime("%m/%Y")
+    case_status = DEFAULT_CASE_STATUS
+    payment_status = UNPAID_STATUS
+
+    with st.expander("Thông tin bổ sung cho form Excel", expanded=True):
+        customer_type = st.selectbox(
+            "Loại khách hàng",
+            ["individual", "organization"],
+            format_func=lambda value: "Cá nhân" if value == "individual" else "Tổ chức",
+            key="entry_customer_type",
+        )
+        contract_number = st.text_input("Số hợp đồng", key="entry_contract_number")
+        asset_type = selectbox_from_excel("Loại tài sản", "asset_type", excel_dropdown_options, "entry_asset_type")
+        asset_description = st.text_area(
+            "Tài sản thẩm định giá",
+            height=88,
+            key="entry_asset_description",
+            on_change=sync_form_to_gcn_from_fields,
+        )
+        preliminary_status = selectbox_from_excel("Sơ bộ", "preliminary_status", excel_dropdown_options, "entry_preliminary_status")
+        expected_finish_date = st.text_input("Thời gian dự kiến hoàn thành", key="entry_expected_finish_date")
+        valuation_purpose = selectbox_from_excel("Mục đích thẩm định", "valuation_purpose", excel_dropdown_options, "entry_valuation_purpose")
+        source = selectbox_from_excel("Nguồn/đối tác", "source", excel_dropdown_options, "entry_source")
+        customer_info = st.text_input("Thông tin khách hàng", key="entry_customer_info", on_change=sync_form_to_gcn_from_fields)
+        customer_address = st.text_input("Địa chỉ khách hàng", key="entry_customer_address", on_change=sync_form_to_gcn_from_fields)
+        customer_citizen_id = st.text_input("Số CCCD/CMND", key="entry_citizen_id", on_change=sync_form_to_gcn_from_fields)
+        valuation_fee_number = st.text_input("Phí thẩm định", key="entry_valuation_fee_number")
+        advance_payment = st.text_input("Tạm ứng", key="entry_advance_payment")
+        survey_cost = st.text_input("Chi phí khảo sát", key="entry_survey_cost")
+        valuation_staff = selectbox_from_excel("Chuyên viên nghiệp vụ", "valuation_staff", excel_dropdown_options, "entry_valuation_staff")
+        personal_note = st.text_area("Ghi chú cá nhân", height=68, key="entry_personal_note")
+        with st.expander("Thông tin riêng cho khách hàng tổ chức", expanded=customer_type == "organization"):
+            org_col1, org_col2 = st.columns(2)
+            with org_col1:
+                tax_code = st.text_input("Mã số thuế", key="entry_tax_code")
+                representative_name = st.text_input("Người đại diện", key="entry_representative_name")
+                representative_position = st.text_input("Chức vụ người đại diện", key="entry_representative_position")
+            with org_col2:
+                handover_contact_name = st.text_input("Người nhận bàn giao", key="entry_handover_contact_name")
+                handover_contact_position = st.text_input("Chức vụ người nhận bàn giao", key="entry_handover_contact_position")
+                handover_contact_phone = st.text_input("Điện thoại người nhận bàn giao", key="entry_handover_contact_phone")
+            authorization_note = st.text_area("Căn cứ/giấy ủy quyền đại diện", height=70, key="entry_authorization_note")
+
+    output_values = {
+        "customer_type": customer_type,
+        "case_status": case_status,
+        "execution_month": execution_month,
+        "payment_status": payment_status,
+        "contract_number": contract_number,
+        "asset_type": asset_type,
+        "asset_description": asset_description,
+        "preliminary_status": preliminary_status,
+        "expected_finish_date": expected_finish_date,
+        "valuation_purpose": valuation_purpose,
+        "source": source,
+        "customer_info": customer_info,
+        "customer_address": customer_address,
+        "citizen_id": customer_citizen_id,
+        "valuation_fee_number": valuation_fee_number,
+        "advance_payment": advance_payment,
+        "survey_cost": survey_cost,
+        "valuation_staff": valuation_staff,
+        "personal_note": personal_note,
+        "so_thua_dat": so_thua,
+        "so_to_ban_do": so_to,
+        "dia_chi_thua_dat": land_address,
+        "owner_name": owner_name,
+        "tax_code": tax_code,
+        "representative_name": representative_name,
+        "representative_position": representative_position,
+        "authorization_note": authorization_note,
+        "handover_contact_name": handover_contact_name,
+        "handover_contact_position": handover_contact_position,
+        "handover_contact_phone": handover_contact_phone,
+    }
+
+    save_col, export_col = st.columns(2)
+    with save_col:
+        if st.button("Lưu hồ sơ vào SQLite", width="stretch"):
+            try:
+                case_id = create_case(sqlite_db_path, output_values)
+                folder = case_folder(
+                    CASE_FILES_DIR,
+                    case_id=case_id,
+                    contract_number=contract_number,
+                )
+                saved_original = save_original_file(
+                    st.session_state.uploaded_path,
+                    st.session_state.uploaded_original_name,
+                    folder,
+                )
+                update_case(
+                    sqlite_db_path,
+                    case_id,
+                    {
+                        **output_values,
+                        "case_folder": str(folder),
+                        "original_file_path": str(saved_original) if saved_original else "",
+                    },
+                )
+                st.success(f"Đã lưu hồ sơ #{case_id} vào SQLite.")
+            except Exception as exc:
+                st.error(f"Lưu SQLite thất bại: {exc}")
+
+    with export_col:
+        export_clicked = st.button("Xuất ra Form nhập liệu Excel", type="primary", width="stretch")
+
+    if export_clicked:
+        template = excel_template_path
+        if not template.exists():
+            st.error(f"Không tìm thấy file mẫu: {template}")
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output = OUTPUT_DIR / f"form_nhap_lieu_{timestamp}.xlsx"
+            try:
+                fill_template(template, output, output_values)
+                st.success(f"Đã tạo file: {output}")
+                st.download_button(
+                    "Tải file Excel đã điền",
+                    data=output.read_bytes(),
+                    file_name=output.name,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    width="stretch",
+                )
+            except Exception as exc:
+                st.error(f"Xuất Excel thất bại: {exc}")
+
+    st.subheader("Hồ sơ gần nhất")
+    recent = recent_cases(sqlite_db_path, limit=6)
+    if recent:
+        st.dataframe(display_cases(recent), width="stretch", hide_index=True)
+    else:
+        st.caption("Chưa có hồ sơ nào trong SQLite.")

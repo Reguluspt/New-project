@@ -1,0 +1,13 @@
+{
+  "provider": "Gemini",
+  "providers": {
+    "Gemini": {
+      "api_key": "AIzaSyBTlEd5fX0lC7hC3KUSf4-JFEq-uKmYOS4",
+      "model": "gemini-2.5-flash"
+    },
+    "OpenAI": {
+      "api_key": "",
+      "model": "gpt-4.1-mini"
+    }
+  }
+}
