@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from copy import copy
 from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
-from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter, quote_sheetname, range_boundaries
 
 
@@ -54,15 +52,15 @@ EXCEL_DROPDOWN_LABELS = {
 def compose_asset_description(so_thua: str, so_to: str, dia_chi: str) -> str:
     parts: list[str] = []
     if so_thua:
-        parts.append(f"Thua dat so {so_thua}")
+        parts.append(f"Thửa đất số {so_thua}")
     if so_to:
-        parts.append(f"to ban do so {so_to}")
+        parts.append(f"tờ bản đồ số {so_to}")
 
     summary = ", ".join(parts)
     if dia_chi:
         if summary:
-            return f"{summary}; tai dia chi {dia_chi}."
-        return f"Thua dat tai dia chi {dia_chi}."
+            return f"{summary}; tại địa chỉ {dia_chi}."
+        return f"Thửa đất tại địa chỉ {dia_chi}."
     return f"{summary}." if summary else ""
 
 

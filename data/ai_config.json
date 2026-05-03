@@ -2,7 +2,7 @@
   "provider": "Gemini",
   "providers": {
     "Gemini": {
-      "api_key": "AIzaSyBTlEd5fX0lC7hC3KUSf4-JFEq-uKmYOS4",
+      "api_key": "AIzaSyDijNwIJQEPpJr6HtkivKYyLQZaLsrtwyQ",
       "model": "gemini-2.5-flash"
     },
     "OpenAI": {

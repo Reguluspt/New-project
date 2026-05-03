@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import mimetypes
+from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 from google import genai
 from google.genai import types
@@ -18,6 +20,25 @@ def _part_for_file(path: Path) -> types.Part:
     if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
         raise ValueError("Chi ho tro file PDF hoac anh PNG/JPG/JPEG/WebP.")
     return types.Part.from_bytes(data=path.read_bytes(), mime_type=mime_type)
+
+
+def _remove_unsupported_schema_keys(schema: Any) -> Any:
+    if isinstance(schema, dict):
+        cleaned: dict[str, Any] = {}
+        for key, value in schema.items():
+            if key == "additionalProperties":
+                continue
+            cleaned[key] = _remove_unsupported_schema_keys(value)
+        return cleaned
+    if isinstance(schema, list):
+        return [_remove_unsupported_schema_keys(item) for item in schema]
+    return schema
+
+
+def gemini_response_json_schema() -> dict[str, Any]:
+    """Return a Gemini-compatible JSON schema without SDK-added extras."""
+    schema = deepcopy(LandCertificateExtraction.model_json_schema())
+    return _remove_unsupported_schema_keys(schema)
 
 
 def extract_land_certificate_with_gemini(
@@ -44,7 +65,7 @@ def extract_land_certificate_with_gemini(
         config=types.GenerateContentConfig(
             system_instruction=EXTRACTION_INSTRUCTIONS,
             response_mime_type="application/json",
-            response_schema=LandCertificateExtraction,
+            response_json_schema=gemini_response_json_schema(),
             temperature=0,
         ),
     )

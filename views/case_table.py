@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import html
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,9 @@ import streamlit as st
 from src.app_config import CASE_EXPORT_DIR, CASE_FILES_DIR, CASE_TABLE_CONFIG_PATH, UNPAID_STATUS
 from src.case_excel_export import export_case_rows_to_excel
 from src.case_files import case_folder
+from src.contracts import short_contract_number
+from src.database_manager import get_db_path
+from src.record_case_sync import sync_case_to_record
 from src.case_filters import (
     CUSTOMER_TYPE_LABELS,
     SORT_FIELD_OPTIONS,
@@ -248,7 +252,7 @@ def _render_case_row(
         cols = st.columns(widths)
         cols[0].markdown(f"**#{row_id}**")
         cols[0].caption(_row_text(row.get("execution_month"), "Chưa có tháng"))
-        cols[1].markdown(f"**{_row_text(row.get('contract_number'), 'Chưa có số HĐ')}**")
+        cols[1].markdown(f"**{short_contract_number(row.get('contract_number'), fallback='Chưa có số HĐ')}**")
         cols[1].caption(_row_text(row.get("source"), "Chưa có nguồn"))
         cols[2].markdown(f"**{_row_text(row.get('customer_info'), 'Chưa có khách hàng')}**")
         cols[2].caption(CUSTOMER_TYPE_LABELS.get(str(row.get("customer_type") or "individual"), "Cá nhân"))
@@ -272,6 +276,7 @@ def _render_case_row(
             help=f"Đổi sang {next_case_status_label}",
         ):
             update_case(db_path, row_id, {"case_status": next_case_status, "cancel_reason": ""})
+            asyncio.run(sync_case_to_record(get_db_path(), db_path, row_id))
             st.session_state["active_case_id"] = row_id
             st.rerun()
         if is_active:
@@ -345,7 +350,7 @@ def _render_unpaid_report_rows(db_path: Path, rows: list[dict[str, object]]) -> 
         with st.container(border=True):
             cols = st.columns(column_widths)
             cols[0].write(_row_text(row.get("Tháng thực hiện")))
-            cols[1].write(_row_text(row.get("Số hợp đồng")))
+            cols[1].write(short_contract_number(row.get("Số hợp đồng"), fallback="-"))
             cols[2].write(_row_text(row.get("Khách hàng")))
             cols[3].write(_row_text(row.get("Loại khách hàng")))
             cols[4].write(_row_text(row.get("Nguồn/ngân hàng")))
@@ -552,11 +557,11 @@ def render(db_path: Path) -> dict[str, object] | None:
     total_pages = max(1, (total_matches + page_size - 1) // page_size)
     with size_col:
         current_page = min(int(st.session_state.get("case_page_number", 1)), total_pages)
+        st.session_state["case_page_number"] = current_page
         page_number = st.number_input(
             "Trang",
             min_value=1,
             max_value=total_pages,
-            value=current_page,
             step=1,
             key="case_page_number",
         )
@@ -600,7 +605,7 @@ def render(db_path: Path) -> dict[str, object] | None:
     _render_case_grid(db_path, rows, active_case_id, widths)
 
     batch_options = {
-        f"#{row['id']} | {row.get('contract_number') or 'Chưa có số HĐ'} | {row.get('customer_info') or 'Chưa có khách hàng'}": row["id"]
+        f"#{row['id']} | {short_contract_number(row.get('contract_number'), fallback='Chưa có số HĐ')} | {row.get('customer_info') or 'Chưa có khách hàng'}": row["id"]
         for row in rows
     }
     st.markdown("**Batch action trên trang hiện tại**")
@@ -615,12 +620,14 @@ def render(db_path: Path) -> dict[str, object] | None:
         if st.button("Hủy nhiều hồ sơ", key="batch_cancel_cases", width="stretch", icon=":material/block:", disabled=not selected_batch_ids):
             for case_id in selected_batch_ids:
                 update_case(db_path, int(case_id), {"case_status": CANCELED_CASE_STATUS, "cancel_reason": ""})
+                asyncio.run(sync_case_to_record(get_db_path(), db_path, int(case_id)))
             st.success(f"Đã hủy {len(selected_batch_ids)} hồ sơ.")
             st.rerun()
     with batch_col2:
         if st.button("Khôi phục nhiều hồ sơ", key="batch_restore_cases", width="stretch", icon=":material/undo:", disabled=not selected_batch_ids):
             for case_id in selected_batch_ids:
                 update_case(db_path, int(case_id), {"case_status": DEFAULT_CASE_STATUS, "cancel_reason": ""})
+                asyncio.run(sync_case_to_record(get_db_path(), db_path, int(case_id)))
             st.success(f"Đã khôi phục {len(selected_batch_ids)} hồ sơ.")
             st.rerun()
 
@@ -665,6 +672,7 @@ def render(db_path: Path) -> dict[str, object] | None:
                 CASE_FILES_DIR,
                 case_id=int(refreshed_case["id"]),
                 contract_number=refreshed_case.get("contract_number") or "",
+                customer_name=refreshed_case.get("customer_info") or "",
             )
         )
 

@@ -1,0 +1,154 @@
+2026-05-02T20:14:42+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     127.0.0.1:49860 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49862 - "GET /health HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T06:32:57+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     127.0.0.1:60503 - "GET /health HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T06:49:05+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     127.0.0.1:63823 - "GET /health HTTP/1.1" 200 OK
+2026-05-03T07:55:16+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     127.0.0.1:49185 - "GET /health HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T10:19:47+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T10:27:33+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+2026-05-03T10:32:31+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T10:38:33+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+2026-05-03T10:42:49+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T10:50:30+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+2026-05-03T10:53:01+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T10:58:21+07:00 [mail_service] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T11:03:37+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T11:08:07+07:00 [mail_service] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T11:26:01+07:00 [mail_service] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T11:32:57+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+2026-05-03T11:33:42+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T12:24:23+07:00 [telegram_server] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+2026-05-03T12:28:44+07:00 [mail_service] RECORDS_DB_PATH=C:\Users\Truon\Documents\New project\data\telegram_records.db
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK
+INFO:     91.108.5.102:0 - "POST /webhook/telegram HTTP/1.1" 200 OK

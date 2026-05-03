@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from pathlib import Path
 
@@ -9,16 +10,42 @@ from src.app_config import (
     CASE_FILES_DIR,
     OUTPUT_DIR,
     UNPAID_STATUS,
-    extraction_to_defaults,
-    render_confidence_row,
     selectbox_from_excel,
     sync_form_to_gcn_from_fields,
-    sync_gcn_to_form_from_fields,
 )
 from src.case_files import case_folder, save_original_file
+from src.database_store import format_money, parse_money
+from src.database_manager import create_outbound_tracking_record, resolve_records_db_path
 from src.excel_writer import fill_template
-from src.models import LandCertificateExtraction
+from src.mail_service import send_appraisal_email
 from src.sqlite_store import DEFAULT_CASE_STATUS, create_case, display_cases, recent_cases, update_case
+
+
+def _hidden_gcn_value(session_key: str, extracted_value) -> str:
+    if session_key not in st.session_state:
+        st.session_state[session_key] = str(extracted_value.value or "").strip()
+    return str(st.session_state.get(session_key) or "").strip()
+
+
+def _format_fee_input() -> None:
+    key = "entry_valuation_fee_number"
+    amount = parse_money(st.session_state.get(key))
+    if amount is not None:
+        st.session_state[key] = format_money(amount)
+
+
+async def _tracked_entry_mail_payload(output_values: dict[str, object]) -> dict[str, object]:
+    records_db_path = Path(resolve_records_db_path())
+    record_id = await create_outbound_tracking_record(records_db_path, output_values, file_path="desktop_entry")
+    return {**output_values, "record_id": record_id, "records_db_path": str(records_db_path)}
+
+
+def _send_entry_mail(output_values: dict[str, object]) -> None:
+    mail_payload = asyncio.run(_tracked_entry_mail_payload(output_values))
+    result = asyncio.run(send_appraisal_email(mail_payload))
+    st.success(f"Đã gửi mail yêu cầu định giá tới {result.to_email}.")
+    if result.cc_emails:
+        st.caption(f"CC: {', '.join(result.cc_emails)}")
 
 
 def render(
@@ -30,51 +57,12 @@ def render(
     st.subheader("Bước 1 - Kiểm tra và xuất form nhập liệu")
     extraction = st.session_state.extraction
 
-    with st.expander("Dữ liệu đọc từ GCN", expanded=True):
-        so_thua = render_confidence_row("Số thửa đất", extraction.so_thua_dat, "so_thua", on_change=sync_gcn_to_form_from_fields)
-        so_to = render_confidence_row("Số tờ bản đồ", extraction.so_to_ban_do, "so_to", on_change=sync_gcn_to_form_from_fields)
-        land_address = render_confidence_row(
-            "Địa chỉ thửa đất",
-            extraction.dia_chi_thua_dat,
-            "land_address",
-            on_change=sync_gcn_to_form_from_fields,
-        )
-        owner_name = render_confidence_row(
-            "Tên chủ sở hữu cuối cùng",
-            extraction.ten_chu_so_huu_cuoi_cung,
-            "owner_name",
-            on_change=sync_gcn_to_form_from_fields,
-        )
-        owner_address = render_confidence_row(
-            "Địa chỉ chủ sở hữu cuối cùng",
-            extraction.dia_chi_chu_so_huu_cuoi_cung,
-            "owner_address",
-            on_change=sync_gcn_to_form_from_fields,
-        )
-        citizen_id = render_confidence_row(
-            "Số CCCD/CMND",
-            extraction.so_cccd_chu_so_huu_cuoi_cung,
-            "citizen_id",
-            on_change=sync_gcn_to_form_from_fields,
-        )
-
-    defaults = extraction_to_defaults(
-        LandCertificateExtraction(
-            so_thua_dat=extraction.so_thua_dat.model_copy(update={"value": so_thua}),
-            so_to_ban_do=extraction.so_to_ban_do.model_copy(update={"value": so_to}),
-            dia_chi_thua_dat=extraction.dia_chi_thua_dat.model_copy(update={"value": land_address}),
-            ten_chu_so_huu_cuoi_cung=extraction.ten_chu_so_huu_cuoi_cung.model_copy(
-                update={"value": owner_name}
-            ),
-            dia_chi_chu_so_huu_cuoi_cung=extraction.dia_chi_chu_so_huu_cuoi_cung.model_copy(
-                update={"value": owner_address}
-            ),
-            so_cccd_chu_so_huu_cuoi_cung=extraction.so_cccd_chu_so_huu_cuoi_cung.model_copy(
-                update={"value": citizen_id}
-            ),
-            notes=extraction.notes,
-        )
-    )
+    so_thua = _hidden_gcn_value("so_thua", extraction.so_thua_dat)
+    so_to = _hidden_gcn_value("so_to", extraction.so_to_ban_do)
+    land_address = _hidden_gcn_value("land_address", extraction.dia_chi_thua_dat)
+    owner_name = _hidden_gcn_value("owner_name", extraction.ten_chu_so_huu_cuoi_cung)
+    owner_address = _hidden_gcn_value("owner_address", extraction.dia_chi_chu_so_huu_cuoi_cung)
+    citizen_id = _hidden_gcn_value("citizen_id", extraction.so_cccd_chu_so_huu_cuoi_cung)
 
     execution_month = datetime.now().strftime("%m/%Y")
     case_status = DEFAULT_CASE_STATUS
@@ -96,15 +84,13 @@ def render(
             on_change=sync_form_to_gcn_from_fields,
         )
         preliminary_status = selectbox_from_excel("Sơ bộ", "preliminary_status", excel_dropdown_options, "entry_preliminary_status")
-        expected_finish_date = st.text_input("Thời gian dự kiến hoàn thành", key="entry_expected_finish_date")
         valuation_purpose = selectbox_from_excel("Mục đích thẩm định", "valuation_purpose", excel_dropdown_options, "entry_valuation_purpose")
         source = selectbox_from_excel("Nguồn/đối tác", "source", excel_dropdown_options, "entry_source")
-        customer_info = st.text_input("Thông tin khách hàng", key="entry_customer_info", on_change=sync_form_to_gcn_from_fields)
+        customer_info = st.text_input("Tên khách hàng", key="entry_customer_info", on_change=sync_form_to_gcn_from_fields)
         customer_address = st.text_input("Địa chỉ khách hàng", key="entry_customer_address", on_change=sync_form_to_gcn_from_fields)
         customer_citizen_id = st.text_input("Số CCCD/CMND", key="entry_citizen_id", on_change=sync_form_to_gcn_from_fields)
-        valuation_fee_number = st.text_input("Phí thẩm định", key="entry_valuation_fee_number")
+        valuation_fee_number = st.text_input("Phí thẩm định", key="entry_valuation_fee_number", on_change=_format_fee_input)
         advance_payment = st.text_input("Tạm ứng", key="entry_advance_payment")
-        survey_cost = st.text_input("Chi phí khảo sát", key="entry_survey_cost")
         valuation_staff = selectbox_from_excel("Chuyên viên nghiệp vụ", "valuation_staff", excel_dropdown_options, "entry_valuation_staff")
         personal_note = st.text_area("Ghi chú cá nhân", height=68, key="entry_personal_note")
         with st.expander("Thông tin riêng cho khách hàng tổ chức", expanded=customer_type == "organization"):
@@ -128,7 +114,6 @@ def render(
         "asset_type": asset_type,
         "asset_description": asset_description,
         "preliminary_status": preliminary_status,
-        "expected_finish_date": expected_finish_date,
         "valuation_purpose": valuation_purpose,
         "source": source,
         "customer_info": customer_info,
@@ -136,13 +121,14 @@ def render(
         "citizen_id": customer_citizen_id,
         "valuation_fee_number": valuation_fee_number,
         "advance_payment": advance_payment,
-        "survey_cost": survey_cost,
         "valuation_staff": valuation_staff,
         "personal_note": personal_note,
         "so_thua_dat": so_thua,
         "so_to_ban_do": so_to,
         "dia_chi_thua_dat": land_address,
         "owner_name": owner_name,
+        "owner_address": owner_address,
+        "owner_citizen_id": citizen_id,
         "tax_code": tax_code,
         "representative_name": representative_name,
         "representative_position": representative_position,
@@ -152,7 +138,7 @@ def render(
         "handover_contact_phone": handover_contact_phone,
     }
 
-    save_col, export_col = st.columns(2)
+    save_col, export_col, mail_col = st.columns(3)
     with save_col:
         if st.button("Lưu hồ sơ vào SQLite", width="stretch"):
             try:
@@ -161,6 +147,7 @@ def render(
                     CASE_FILES_DIR,
                     case_id=case_id,
                     contract_number=contract_number,
+                    customer_name=customer_info,
                 )
                 saved_original = save_original_file(
                     st.session_state.uploaded_path,
@@ -182,6 +169,15 @@ def render(
 
     with export_col:
         export_clicked = st.button("Xuất ra Form nhập liệu Excel", type="primary", width="stretch")
+
+    with mail_col:
+        mail_clicked = st.button("Gửi mail yêu cầu định giá", width="stretch", icon=":material/mail:")
+
+    if mail_clicked:
+        try:
+            _send_entry_mail(output_values)
+        except Exception as exc:
+            st.error(f"Gửi mail thất bại: {exc}")
 
     if export_clicked:
         template = excel_template_path

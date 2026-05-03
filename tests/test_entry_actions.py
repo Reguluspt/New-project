@@ -11,9 +11,9 @@ from openpyxl import Workbook, load_workbook
 from src.app_config import UNPAID_STATUS, extraction_to_form_state
 from src.case_files import case_folder, save_original_file
 from src.excel_writer import fill_template
-from src.models import ExtractedValue, LandCertificateExtraction
+from src.models import ExtractedValue, LandCertificateExtraction, PageOrientationMetadata
 from src.sqlite_store import DEFAULT_CASE_STATUS, create_case, get_case, init_db
-from views.entry_actions import run_ocr_extraction
+from views.entry_actions import apply_gemini_page_metadata_to_viewer, run_ocr_extraction
 
 
 def _value(value: str, confidence: float = 0.95) -> ExtractedValue:
@@ -83,6 +83,36 @@ class EntryActionsTests(unittest.TestCase):
         openai.assert_not_called()
         apply_form.assert_called_once_with(extraction)
         remember_ai_config.assert_called_once()
+
+    def test_apply_gemini_page_metadata_updates_viewer_rotations(self) -> None:
+        extraction = _sample_extraction().model_copy(
+            update={
+                "page_metadata": [
+                    PageOrientationMetadata(page_number=1, rotation=90),
+                    PageOrientationMetadata(page_number=2, rotation=180),
+                    PageOrientationMetadata(page_number=3, rotation=45),
+                ]
+            }
+        )
+        state: dict[str, object] = {}
+        with patch("views.entry_actions.st.session_state", state):
+            updated = apply_gemini_page_metadata_to_viewer(Path("gcn.pdf"), extraction)
+            rotations = dict(state["page_rotations"])
+
+        self.assertTrue(updated)
+        self.assertEqual(rotations[f"{Path('gcn.pdf').resolve()}::1"], 90)
+        self.assertEqual(rotations[f"{Path('gcn.pdf').resolve()}::2"], 180)
+        self.assertNotIn(f"{Path('gcn.pdf').resolve()}::3", rotations)
+
+    def test_apply_gemini_page_metadata_accepts_legacy_dict(self) -> None:
+        extraction = _sample_extraction().model_copy(update={"page_metadata": {"1": 270}})
+        state: dict[str, object] = {}
+        with patch("views.entry_actions.st.session_state", state):
+            updated = apply_gemini_page_metadata_to_viewer(Path("gcn.pdf"), extraction)
+            rotations = dict(state["page_rotations"])
+
+        self.assertTrue(updated)
+        self.assertEqual(rotations[f"{Path('gcn.pdf').resolve()}::1"], 270)
 
     def test_run_ocr_extraction_uses_openai_and_applies_form(self) -> None:
         extraction = object()
@@ -187,8 +217,8 @@ class EntryActionsTests(unittest.TestCase):
         self.assertIs(result, extraction)
         remember_ai_config.assert_called_once()
         self.assertEqual(values["contract_number"], "HD-OCR-EXCEL")
-        self.assertIn("Thua dat so 123", values["asset_description"])
-        self.assertIn("to ban do so 45", values["asset_description"])
+        self.assertIn("Thửa đất số 123", values["asset_description"])
+        self.assertIn("tờ bản đồ số 45", values["asset_description"])
         self.assertEqual(values["customer_info"], "Nguyen Van A")
         self.assertEqual(values["valuation_fee_number"], 1200000)
         self.assertEqual(values["customer_address"], "12 Le Loi")
@@ -203,7 +233,12 @@ class EntryActionsTests(unittest.TestCase):
             source_pdf.write_bytes(b"%PDF-1.4\nsample")
             source_image.write_bytes(b"\xff\xd8\xff sample")
 
-            folder = case_folder(root / "cases", case_id=12, contract_number="HD/2026:001")
+            folder = case_folder(
+                root / "cases",
+                case_id=12,
+                contract_number="HD/2026:001",
+                customer_name="Nguyen Van A - 0905222125 (Thu tien)",
+            )
             saved_pdf = save_original_file(source_pdf, "Giay chung nhan.pdf", folder)
             saved_image = save_original_file(source_image, "Anh GCN.jpg", folder)
             self.assertIsNotNone(saved_pdf)
@@ -216,7 +251,7 @@ class EntryActionsTests(unittest.TestCase):
             self.assertEqual(saved_image.read_bytes(), b"\xff\xd8\xff sample")
             self.assertEqual(saved_pdf.parent.name, "originals")
             self.assertEqual(saved_image.parent.name, "originals")
-            self.assertTrue(saved_pdf.parent.parent.name.startswith("00012_"))
+            self.assertEqual(saved_pdf.parent.parent.name, "HD-2026-001 - Nguyen Van A")
             self.assertNotIn("/", saved_pdf.parent.parent.name)
             self.assertNotIn(":", saved_pdf.parent.parent.name)
 

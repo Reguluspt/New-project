@@ -1,0 +1,327 @@
+INFO:     Started server process [15932]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1269: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpcore\_async\connection.py", line 101, in handle_async_request
+    raise exc
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpcore\_async\connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpcore\_async\connection.py", line 156, in _connect
+    stream = await stream.start_tls(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpcore\_backends\anyio.py", line 67, in start_tls
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\Truon\AppData\Local\Python\pythoncore-3.14-64\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpcore\_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\request\_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Truon\AppData\Local\Python\pythoncore-3.14-64\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Truon\Documents\New project\src\telegram_server.py", line 1226, in handle_post_confirm_action
+    await query.answer()
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_callbackquery.py", line 190, in answer
+    return await self.get_bot().answer_callback_query(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<10 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 970, in answer_callback_query
+    return await super().answer_callback_query(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<10 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_bot.py", line 4445, in answer_callback_query
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\request\_httpxrequest.py", line 296, in do_request
+    raise TimedOut from err
+telegram.error.TimedOut: Timed out
+INFO:     Started server process [14664]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1277: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+KhÙng x·c nh\u1eadn \u0111\u01b0\u1ee3c tiÍu \u0111\u1ec1 trang 'G\u1eedi YÍu C\u1ea7u Th\u1ea9m \u0110\u1ecbnh'. URL hi\u1ec7n t\u1ea1i: https://dinhgiav2.cenvalue.vn/#/form-customer ó vui lÚng ki\u1ec3m tra th\u1ee7 cÙng.
+Dropdown 'Chi nh·nh th\u1ea9m \u0111\u1ecbnh': khÙng tÏm th\u1ea5y gi· tr\u1ecb 'Chi nh·nh \u0110‡ N\u1eb5ng' trong danh s·ch.
+Dropdown 'Ch\u1ecdn V\u0103n PhÚng': khÙng tÏm th\u1ea5y gi· tr\u1ecb 'V\u0103n phÚng \u0110‡ N\u1eb5ng' trong danh s·ch.
+Dropdown 'T\u1ec9nh/ th‡nh ph\u1ed1' khÙng t\u1ed3n t\u1ea1i trÍn trang.
+Dropdown 'M\u1ee5c \u0111Ìch th\u1ea9m \u0111\u1ecbnh': khÙng tÏm th\u1ea5y gi· tr\u1ecb 'L‡m c\u01a1 s\u1edf tham kh\u1ea3o \u0111\u1ec3 th\u1ebf ch\u1ea5p vay v\u1ed1n t\u1ea1i ng‚n h‡ng BIDV' trong danh s·ch.
+Dropdown 'Lo\u1ea1i t‡i s\u1ea3n': khÙng tÏm th\u1ea5y gi· tr\u1ecb 'B\u1ea5t \u0111\u1ed9ng s\u1ea3n \u0111\u1eb7c th˘' trong danh s·ch.
+Dropdown 'NhÛm t‡i s\u1ea3n': khÙng tÏm th\u1ea5y gi· tr\u1ecb 'B\u1ea5t \u0111\u1ed9ng s\u1ea3n \u0111\u1eb7c th˘' trong danh s·ch.
+KhÙng tÏm th\u1ea5y Ù PhÌ th\u1ea9m \u0111\u1ecbnh trÍn form.
+KhÙng th\u1ec3 check 'CÛ bao g\u1ed3m phÌ kh\u1ea3o s·t': Locator.check: Timeout 10000ms exceeded.
+Call log:
+  - waiting for get_by_label("CÛ bao g\u1ed3m phÌ kh\u1ea3o s·t")
+
+KhÙng tÏm th\u1ea5y Ù PhÌ t\u1ea1m \u1ee9ng trÍn form.
+\u274c L\u1ed7i khi nh\u1eadp Web C.Ty cho h\u1ed3 s\u01a1 #22: Timeout 30000ms exceeded while waiting for event "response"
+KhÙng th\u1ec3 ch\u1ee5p \u1ea3nh m‡n hÏnh: Page.screenshot: Target page, context or browser has been closed
+INFO:     Started server process [5760]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1277: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [9556]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1277: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+Kh√¥ng x√°c nh·∫≠n ƒë∆∞·ª£c ti√™u ƒë·ªÅ trang 'G·ª≠i Y√™u C·∫ßu Th·∫©m ƒê·ªãnh'. URL hi·ªán t·∫°i: https://dinhgiav2.cenvalue.vn/#/form-customer ‚Äî vui l√≤ng ki·ªÉm tra th·ªß c√¥ng.
+INFO:     Started server process [15704]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1376: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+KhÙng x·c nh\u1eadn \u0111\u01b0\u1ee3c tiÍu \u0111\u1ec1 trang 'G\u1eedi YÍu C\u1ea7u Th\u1ea9m \u0110\u1ecbnh'. URL hi\u1ec7n t\u1ea1i: https://dinhgiav2.cenvalue.vn/#/form-customer ó vui lÚng ki\u1ec3m tra th\u1ee7 cÙng.
+\u274c L\u1ed7i khi nh\u1eadp Web C.Ty cho h\u1ed3 s\u01a1 #24: KhÙng tÏm th\u1ea5y t\u1ec7p \u0111\u1ec3 t\u1ea3i lÍn: C:\Users\Truon\Documents\New project\data\uploads\telegram_case
+KhÙng th\u1ec3 ch\u1ee5p \u1ea3nh m‡n hÏnh: Page.screenshot: Target page, context or browser has been closed
+INFO:     Started server process [27216]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1376: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [24892]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1396: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+KhÙng x·c nh\u1eadn \u0111\u01b0\u1ee3c tiÍu \u0111\u1ec1 trang 'G\u1eedi YÍu C\u1ea7u Th\u1ea9m \u0110\u1ecbnh'. URL hi\u1ec7n t\u1ea1i: https://dinhgiav2.cenvalue.vn/#/form-customer ó vui lÚng ki\u1ec3m tra th\u1ee7 cÙng.
+\u274c L\u1ed7i khi nh\u1eadp Web C.Ty cho h\u1ed3 s\u01a1 #24: Timeout 30000ms exceeded while waiting for event "response"
+KhÙng th\u1ec3 ch\u1ee5p \u1ea3nh m‡n hÏnh: Page.screenshot: Target page, context or browser has been closed
+INFO:     Started server process [19072]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1396: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [20280]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1396: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+KhÙng x·c nh\u1eadn \u0111\u01b0\u1ee3c tiÍu \u0111\u1ec1 trang 'G\u1eedi YÍu C\u1ea7u Th\u1ea9m \u0110\u1ecbnh'. URL hi\u1ec7n t\u1ea1i: https://dinhgiav2.cenvalue.vn/#/form-customer ó vui lÚng ki\u1ec3m tra th\u1ee7 cÙng.
+\u274c L\u1ed7i khi nh\u1eadp Web C.Ty cho h\u1ed3 s\u01a1 #24: Timeout 30000ms exceeded while waiting for event "response"
+KhÙng th\u1ec3 ch\u1ee5p \u1ea3nh m‡n hÏnh: Page.screenshot: Target page, context or browser has been closed
+Telegram error: Message is too long
+Traceback (most recent call last):
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_application.py", line 1315, in process_update
+    await coroutine
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_handlers\conversationhandler.py", line 841, in handle_update
+    new_state: object = await handler.handle_update(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        update, application, handler_check_result, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Truon\Documents\New project\src\telegram_server.py", line 1140, in handle_missing_field_reply
+    await update.effective_message.reply_text(
+    ...<2 lines>...
+    )
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_message.py", line 2106, in reply_text
+    return await self.get_bot().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 3118, in send_message
+    return await super().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_bot.py", line 1123, in send_message
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 630, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<23 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_bot.py", line 820, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.BadRequest: Message is too long
+INFO:     Started server process [10520]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1411: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [13852]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1411: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+KhÙng x·c nh\u1eadn \u0111\u01b0\u1ee3c tiÍu \u0111\u1ec1 trang 'G\u1eedi YÍu C\u1ea7u Th\u1ea9m \u0110\u1ecbnh'. URL hi\u1ec7n t\u1ea1i: https://dinhgiav2.cenvalue.vn/#/form-customer ó vui lÚng ki\u1ec3m tra th\u1ee7 cÙng.
+INFO:     Started server process [13972]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1411: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [11656]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1485: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [6076]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1485: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started server process [392]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1485: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+KhÙng x·c nh\u1eadn \u0111\u01b0\u1ee3c tiÍu \u0111\u1ec1 trang 'G\u1eedi YÍu C\u1ea7u Th\u1ea9m \u0110\u1ecbnh'. URL hi\u1ec7n t\u1ea1i: https://dinhgiav2.cenvalue.vn/#/form-customer ó vui lÚng ki\u1ec3m tra th\u1ee7 cÙng.

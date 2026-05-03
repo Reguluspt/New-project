@@ -17,7 +17,10 @@ from src.case_exports import (
     export_case_documents,
     package_case_documents,
 )
+from src.case_output_preferences import load_case_output_dir, save_case_output_dir
 from src.document_exporter import render_docx_preview_html
+from src.document_exporter import render_docx_template
+from src.document_exporter import build_placeholder_context
 from src.case_filters import (
     build_chart_data,
     build_chart_rows,
@@ -337,6 +340,30 @@ class CaseFiltersTests(unittest.TestCase):
 
 
 class CaseExportsTests(unittest.TestCase):
+    def test_case_folder_uses_contract_and_customer_without_id_prefix(self) -> None:
+        folder = case_folder(
+            Path("cases"),
+            case_id=12,
+            contract_number="010/2026/N04.1027/DN",
+            customer_name="Ông Nguyễn Huy Hoàng - 0905222125 (Thu tiền)",
+        )
+
+        self.assertEqual(folder, Path("cases") / "010-2026-N04.1027-DN - Ông Nguyễn Huy Hoàng")
+
+    def test_case_output_dir_preferences_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config_path = root / "config" / "case_output.json"
+            default_dir = root / "default"
+            selected_dir = root / "exports"
+
+            self.assertEqual(load_case_output_dir(config_path, default_dir=default_dir), default_dir)
+            saved = save_case_output_dir(config_path, selected_dir)
+
+            self.assertEqual(saved, selected_dir)
+            self.assertTrue(selected_dir.exists())
+            self.assertEqual(load_case_output_dir(config_path, default_dir=default_dir), selected_dir)
+
     def test_document_action_error_validates_customer_type_and_pdf_tool(self) -> None:
         self.assertEqual(
             document_action_error(
@@ -377,6 +404,35 @@ class CaseExportsTests(unittest.TestCase):
         with patch("src.case_exports.export_organization_document_set", return_value=[Path("b.docx")]) as organization_export:
             self.assertEqual(export_case_documents(case, customer_type="organization", templates_dir=templates_dir), [Path("b.docx")])
             organization_export.assert_called_once()
+
+    def test_export_case_documents_accepts_custom_output_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            templates_dir = root / "templates"
+            output_dir = root / "selected_output"
+            _write_individual_templates(templates_dir)
+            case = {
+                "id": 7,
+                "customer_type": "individual",
+                "contract_number": "HD-CUSTOM-001",
+                "customer_info": "Nguyen Van A",
+                "asset_description": "Thua dat so 123.",
+                "valuation_fee_number": "1500000",
+            }
+
+            paths = export_case_documents(
+                case,
+                customer_type="individual",
+                templates_dir=templates_dir,
+                case_files_dir=output_dir,
+            )
+            path_count = len(paths)
+            paths_in_output_dir = all(str(path).startswith(str(output_dir)) for path in paths)
+            paths_exist = all(path.exists() for path in paths)
+
+        self.assertEqual(path_count, 3)
+        self.assertTrue(paths_in_output_dir)
+        self.assertTrue(paths_exist)
 
     def test_approve_pdf_exports_word_then_pdf(self) -> None:
         with (
@@ -459,8 +515,9 @@ class CaseExportsTests(unittest.TestCase):
         self.assertTrue(generated_files_exist)
         self.assertTrue(zip_exists)
         self.assertIn("originals/GCN.pdf", names)
-        self.assertEqual(len([name for name in names if name.startswith("documents/") and name.endswith(".docx")]), 3)
-        self.assertEqual(len([name for name in names if name.startswith("documents/") and name.endswith(".pdf")]), 3)
+        self.assertEqual(len([name for name in names if "/" not in name and name.endswith(".docx")]), 3)
+        self.assertEqual(len([name for name in names if "/" not in name and name.endswith(".pdf")]), 3)
+        self.assertFalse(any(name.startswith("documents/") for name in names))
 
     def test_exported_word_renders_placeholders_with_case_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -527,6 +584,157 @@ class CaseExportsTests(unittest.TestCase):
         self.assertIn("Nguyen Van A", rendered)
         self.assertIn("HD-001", rendered)
         self.assertNotIn("{{", rendered)
+
+    def test_placeholder_context_does_not_append_internal_source_or_duplicate_bank(self) -> None:
+        context = build_placeholder_context(
+            {
+                "valuation_purpose": "Làm cơ sở tham khảo để thế chấp vay vốn tại VP Bank",
+                "source": "KHN",
+            }
+        )
+        self.assertEqual(
+            context["MUC_DICH_THAM_DINH_DAY_DU"],
+            "Làm cơ sở tham khảo để thế chấp vay vốn tại VP\xa0Bank.",
+        )
+
+        context = build_placeholder_context(
+            {
+                "valuation_purpose": "Làm cơ sở tham khảo để thế chấp vay vốn tại Sacombank",
+                "source": "Sacombank Kon Tum - Mr. Luân - 0967097789",
+            }
+        )
+        self.assertEqual(
+            context["MUC_DICH_THAM_DINH_DAY_DU"],
+            "Làm cơ sở tham khảo để thế chấp vay vốn tại Sacombank.",
+        )
+
+    def test_placeholder_context_for_request_form_uses_land_address_short_purpose_and_contract_date(self) -> None:
+        context = build_placeholder_context(
+            {
+                "asset_description": (
+                    "Giá trị quyền sử dụng đất tại Thửa đất số 136, tờ bản đồ số 325, "
+                    "tại địa chỉ thôn Vinh Bình, xã Cam Lâm, tỉnh Khánh Hòa."
+                ),
+                "customer_address": "44 Nguyễn Du",
+                "valuation_purpose": "Làm cơ sở tham khảo để thế chấp vay vốn tại VP Bank",
+                "source": "KHN",
+                "contract_date": "25/04/2026",
+            }
+        )
+
+        self.assertEqual(context["DIA_CHI_TAI_SAN"], "thôn Vinh Bình, xã Cam Lâm, tỉnh Khánh Hòa")
+        self.assertEqual(context["MUC_DICH_THAM_DINH_RUT_GON"], "thế chấp vay vốn tại VP\xa0Bank.")
+        self.assertEqual(context["NGAY_HOP_DONG_PLEIKU"], "Pleiku, Ngày 25 tháng 04 năm 2026")
+
+    def test_request_form_short_purpose_does_not_include_source_contact(self) -> None:
+        context = build_placeholder_context(
+            {
+                "valuation_purpose": "Làm cơ sở tham khảo để xử lý tài sản đảm bảo tại ngân hàng",
+                "source": "BIDV Phố Núi - Ms Quỳnh Anh - 0975172634",
+            }
+        )
+
+        self.assertEqual(
+            context["MUC_DICH_THAM_DINH_RUT_GON"],
+            "xử lý tài sản đảm bảo tại ngân hàng.",
+        )
+        self.assertEqual(
+            context["MUC_DICH_THAM_DINH_DAY_DU"],
+            "Làm cơ sở tham khảo để xử lý tài sản đảm bảo tại ngân hàng.",
+        )
+        self.assertNotIn("BIDV", context["MUC_DICH_THAM_DINH_RUT_GON"])
+        self.assertNotIn("BIDV", context["MUC_DICH_THAM_DINH_DAY_DU"])
+        self.assertNotIn("0975172634", context["MUC_DICH_THAM_DINH_RUT_GON"])
+        self.assertNotIn("0975172634", context["MUC_DICH_THAM_DINH_DAY_DU"])
+
+    def test_placeholder_context_ignores_excel_formula_error_fee_words(self) -> None:
+        context = build_placeholder_context(
+            {
+                "valuation_fee_number": "4400000",
+                "valuation_fee_words": "#NAME?",
+            }
+        )
+
+        self.assertEqual(context["PHI_THAM_DINH"], "4.400.000")
+        self.assertNotEqual(context["PHI_THAM_DINH_BANG_CHU"], "#NAME?")
+        self.assertEqual(context["PHI_THAM_DINH_BANG_CHU"], "Bốn triệu bốn trăm ngàn đồng chẵn")
+
+    def test_sample_templates_do_not_repeat_phone_or_leave_asset_dot_leaders(self) -> None:
+        sample_root = Path("samples/templates")
+        violations: list[str] = []
+        for path in sample_root.rglob("*.docx"):
+            text = read_docx_text(path)
+            if "{{DIEN_THOAI_KHACH_HANG}} {{DIEN_THOAI_KHACH_HANG}}" in text:
+                violations.append(f"{path}: lặp placeholder điện thoại")
+            if "{{TAI_SAN_THAM_DINH}}..." in text:
+                violations.append(f"{path}: còn dấu chấm đệm sau tài sản")
+
+        self.assertEqual(violations, [])
+
+    def test_sample_request_form_uses_short_purpose_and_contract_date_placeholders(self) -> None:
+        text = read_docx_text(Path("samples/templates/individual/mau_pyc.docx"))
+
+        self.assertIn("Địa điểm khảo sát tài sản: {{DIA_CHI_TAI_SAN}}.", text)
+        self.assertNotIn("{{TAI_SAN_THAM_DINH}}.", text)
+        self.assertIn("mục đích {{MUC_DICH_THAM_DINH_RUT_GON}}", text)
+        self.assertIn("{{NGAY_HOP_DONG_PLEIKU}}", text)
+        self.assertNotIn("{{NGAY_LAP_PLEIKU}}", text)
+
+    def test_render_docx_template_preserves_run_formatting_when_replacing_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            template = root / "template.docx"
+            output = root / "output.docx"
+            document = Document()
+            paragraph = document.add_paragraph()
+            label = paragraph.add_run("Khách hàng: ")
+            label.bold = True
+            value = paragraph.add_run("{{TEN_KHACH_HANG}}")
+            value.italic = True
+            document.save(template)
+
+            render_docx_template(
+                template,
+                output,
+                {
+                    "id": 1,
+                    "customer_info": "Nguyen Van A",
+                },
+            )
+            rendered = Document(output)
+            runs = rendered.paragraphs[0].runs
+
+        self.assertEqual(runs[0].text, "Khách hàng: ")
+        self.assertTrue(runs[0].bold)
+        self.assertEqual(runs[1].text, "Nguyen Van A")
+        self.assertTrue(runs[1].italic)
+
+    def test_render_docx_template_handles_placeholder_split_across_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            template = root / "template.docx"
+            output = root / "output.docx"
+            document = Document()
+            paragraph = document.add_paragraph()
+            first = paragraph.add_run("{{TEN")
+            first.italic = True
+            second = paragraph.add_run("_KHACH_HANG}}")
+            second.bold = True
+            document.save(template)
+
+            render_docx_template(
+                template,
+                output,
+                {
+                    "id": 1,
+                    "customer_info": "Nguyen Van A",
+                },
+            )
+            rendered = Document(output)
+            runs = rendered.paragraphs[0].runs
+
+        self.assertEqual("".join(run.text for run in runs), "Nguyen Van A")
+        self.assertTrue(runs[0].italic)
 
     def test_preview_and_exported_word_match_after_render(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -626,8 +834,9 @@ class CaseExportsTests(unittest.TestCase):
         self.assertEqual(pdf_count, 4)
         self.assertTrue(generated_files_exist)
         self.assertIn("originals/GCN_To_Chuc.pdf", names)
-        self.assertEqual(len([name for name in names if name.startswith("documents/") and name.endswith(".docx")]), 4)
-        self.assertEqual(len([name for name in names if name.startswith("documents/") and name.endswith(".pdf")]), 4)
+        self.assertEqual(len([name for name in names if "/" not in name and name.endswith(".docx")]), 4)
+        self.assertEqual(len([name for name in names if "/" not in name and name.endswith(".pdf")]), 4)
+        self.assertFalse(any(name.startswith("documents/") for name in names))
 
     def test_collect_template_errors_reports_missing_required_individual_templates(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -699,11 +908,10 @@ class CaseExportsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             folder = root / "case"
-            documents_dir = folder / "documents"
             package_dir = folder / "package"
-            documents_dir.mkdir(parents=True)
+            folder.mkdir(parents=True)
             package_dir.mkdir(parents=True)
-            (documents_dir / "hop_dong.docx").write_bytes(b"docx")
+            (folder / "hop_dong.docx").write_bytes(b"docx")
             old_zip = package_dir / "old_package.zip"
             old_zip.write_bytes(b"old zip should not be nested")
 
@@ -712,7 +920,7 @@ class CaseExportsTests(unittest.TestCase):
             with ZipFile(zip_path) as archive:
                 names = set(archive.namelist())
 
-        self.assertIn("documents/hop_dong.docx", names)
+        self.assertIn("hop_dong.docx", names)
         self.assertNotIn("package/old_package.zip", names)
         self.assertFalse(any(name.startswith("package/") for name in names))
 

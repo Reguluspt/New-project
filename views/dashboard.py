@@ -6,6 +6,7 @@ from pathlib import Path
 import streamlit as st
 
 from src.app_config import UNPAID_STATUS
+from src.contracts import short_contract_number
 from src.database_store import format_money
 from src.sqlite_store import (
     CANCELED_CASE_STATUS,
@@ -199,7 +200,7 @@ def render(db_path: Path) -> None:
         if unpaid_rows:
             unpaid_report_rows = [
                 {
-                    "Số hợp đồng": row.get("contract_number") or "",
+                    "Số hợp đồng": short_contract_number(row.get("contract_number")),
                     "Khách hàng": row.get("customer_info") or "",
                     "Ngân hàng": row.get("source") or "",
                     "Tổng phí": format_money(row.get("valuation_fee_number")),

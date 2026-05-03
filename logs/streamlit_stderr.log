@@ -1,0 +1,34 @@
+2026-05-02 13:52:42.000 The widget with key "case_page_number" was created with a default value but also had its value set via the Session State API.
+Stack (most recent call last):
+  File "C:\Users\Truon\AppData\Local\Python\pythoncore-3.14-64\Lib\threading.py", line 1044, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\Truon\AppData\Local\Python\pythoncore-3.14-64\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+  File "C:\Users\Truon\AppData\Local\Python\pythoncore-3.14-64\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 379, in _run_script_thread
+    self._run_script(request.rerun_data)
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 705, in _run_script
+    ) = exec_func_with_error_handling(code_to_exec, ctx)
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+  File "C:\Users\Truon\Documents\New project\app.py", line 120, in <module>
+    main()
+  File "C:\Users\Truon\Documents\New project\app.py", line 99, in main
+    cases_view.render(
+  File "C:\Users\Truon\Documents\New project\views\cases.py", line 48, in render
+    selected_case = case_table.render(db_path)
+  File "C:\Users\Truon\Documents\New project\views\case_table.py", line 556, in render
+    page_number = st.number_input(
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\runtime\metrics_util.py", line 563, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\elements\widgets\number_input.py", line 447, in number_input
+    return self._number_input(
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\elements\widgets\number_input.py", line 492, in _number_input
+    check_widget_policies(
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 180, in check_widget_policies
+    check_session_state_rules(
+  File "C:\Users\Truon\Documents\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 91, in check_session_state_rules
+    _LOGGER.warning(

@@ -1,0 +1,6 @@
+INFO:     Started server process [27468]
+INFO:     Waiting for application startup.
+C:\Users\Truon\Documents\New project\src\telegram_server.py:1366: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+  conversation = ConversationHandler(
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

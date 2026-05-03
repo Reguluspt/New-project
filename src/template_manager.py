@@ -19,7 +19,7 @@ TEMPLATE_REQUIREMENTS = {
             "CCCD",
             "DIEN_THOAI_KHACH_HANG",
             "TAI_SAN_THAM_DINH",
-            "MUC_DICH_THAM_DINH",
+            "MUC_DICH_THAM_DINH_DAY_DU",
             "SO_HOP_DONG_VAN_BAN",
             "PHI_THAM_DINH",
             "PHI_THAM_DINH_BANG_CHU",
@@ -35,7 +35,8 @@ TEMPLATE_REQUIREMENTS = {
             "TAI_SAN_THAM_DINH",
             "DIA_CHI_TAI_SAN",
             "MUC_DICH_THAM_DINH_DAY_DU",
-            "NGAY_LAP_PLEIKU",
+            "MUC_DICH_THAM_DINH_RUT_GON",
+            "NGAY_HOP_DONG_PLEIKU",
             "THANG_NAM",
         },
         "mau_bbnt.docx": {

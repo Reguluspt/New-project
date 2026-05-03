@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import streamlit as st
 
 from src.app_config import UNPAID_STATUS
+from src.database_manager import get_db_path
+from src.record_case_sync import sync_case_delete_to_record, sync_case_to_record
 from src.sqlite_store import (
     CANCELED_CASE_STATUS,
     DEFAULT_CASE_STATUS,
@@ -162,12 +165,14 @@ def open_case_edit_dialog(db_path: Path, case_id: int) -> None:
 
     if update_clicked:
         update_case(db_path, case_id, edited_values)
+        asyncio.run(sync_case_to_record(get_db_path(), db_path, case_id))
         st.session_state["active_case_id"] = case_id
         st.success(f"Đã cập nhật hồ sơ #{case_id}.")
         st.rerun()
 
     if quick_export_clicked:
         update_case(db_path, case_id, edited_values)
+        asyncio.run(sync_case_to_record(get_db_path(), db_path, case_id))
         st.session_state["active_case_id"] = case_id
         st.session_state["case_documents_dialog_open"] = True
         st.rerun()
@@ -176,6 +181,7 @@ def open_case_edit_dialog(db_path: Path, case_id: int) -> None:
         if not confirm_delete:
             st.error("Cần tick xác nhận trước khi xóa.")
         else:
+            asyncio.run(sync_case_delete_to_record(get_db_path(), db_path, case_id))
             delete_case(db_path, case_id)
             st.session_state.pop("active_case_id", None)
             st.success(f"Đã xóa hồ sơ #{case_id}.")

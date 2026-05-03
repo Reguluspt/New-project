@@ -16,6 +16,8 @@ from src.app_config import (
     ensure_entry_form_defaults,
     load_ai_config,
 )
+from src.background_services import ensure_background_services
+from src.database_manager import get_db_path, log_records_db_path
 from src.excel_writer import load_dropdown_options
 from src.models import blank_extraction
 from src.template_manager import load_template_config
@@ -29,11 +31,15 @@ from views import templates as templates_view
 
 
 def main() -> None:
+    load_dotenv(Path(__file__).resolve().parent / "API.env")
     load_dotenv()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_background_services()
+    records_db_path = Path(get_db_path())
+    log_records_db_path("streamlit_app", records_db_path)
     st.set_page_config(
-        page_title="Hệ thống thẩm định nội bộ",
+        page_title="Há»‡ thá»‘ng tháº©m Ä‘á»‹nh ná»™i bá»™",
         layout="wide",
         initial_sidebar_state="collapsed",
     )
@@ -49,7 +55,7 @@ def main() -> None:
         excel_dropdown_options = load_dropdown_options(excel_template_path) if excel_template_path.exists() else {}
     except Exception as exc:
         excel_dropdown_options = {}
-        st.warning(f"Không đọc được danh sách chọn từ file Excel mẫu: {exc}")
+        st.warning(f"KhÃ´ng Ä‘á»c Ä‘Æ°á»£c danh sÃ¡ch chá»n tá»« file Excel máº«u: {exc}")
 
     sidebar_state = sidebar_view.render(
         ai_config=ai_config,
@@ -77,7 +83,7 @@ def main() -> None:
     ensure_entry_form_defaults()
 
     dashboard_tab, entry_tab, manage_tab, template_tab, settings_tab = st.tabs(
-        ["Dashboard", "Nhập Hồ Sơ", "Quản Lý Hồ Sơ", "Templates", "Cấu Hình"]
+        ["Dashboard", "Nhap Ho So", "Quan Ly Ho So", "Templates", "Cau Hinh"]
     )
 
     with dashboard_tab:
@@ -98,6 +104,7 @@ def main() -> None:
     with manage_tab:
         cases_view.render(
             sqlite_db_path,
+            records_db_path,
             individual_template_dir,
             organization_template_dir,
         )

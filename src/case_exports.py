@@ -110,10 +110,11 @@ def preview_case_documents(
     *,
     customer_type: str,
     templates_dir: Path,
+    case_files_dir: str | Path = CASE_FILES_DIR,
 ) -> list[dict[str, str]]:
     if customer_type == "individual":
-        return preview_individual_document_set(case, templates_dir=templates_dir, case_files_dir=CASE_FILES_DIR)
-    return preview_organization_document_set(case, templates_dir=templates_dir, case_files_dir=CASE_FILES_DIR)
+        return preview_individual_document_set(case, templates_dir=templates_dir, case_files_dir=case_files_dir)
+    return preview_organization_document_set(case, templates_dir=templates_dir, case_files_dir=case_files_dir)
 
 
 def compare_case_documents(
@@ -121,8 +122,14 @@ def compare_case_documents(
     *,
     customer_type: str,
     templates_dir: Path,
+    case_files_dir: str | Path = CASE_FILES_DIR,
 ) -> list[dict[str, object]]:
-    previews = preview_case_documents(case, customer_type=customer_type, templates_dir=templates_dir)
+    previews = preview_case_documents(
+        case,
+        customer_type=customer_type,
+        templates_dir=templates_dir,
+        case_files_dir=case_files_dir,
+    )
     return compare_preview_with_export(previews)
 
 
@@ -131,10 +138,11 @@ def export_case_documents(
     *,
     customer_type: str,
     templates_dir: Path,
+    case_files_dir: str | Path = CASE_FILES_DIR,
 ) -> list[Path]:
     if customer_type == "individual":
-        return export_individual_document_set(case, templates_dir=templates_dir, case_files_dir=CASE_FILES_DIR)
-    return export_organization_document_set(case, templates_dir=templates_dir, case_files_dir=CASE_FILES_DIR)
+        return export_individual_document_set(case, templates_dir=templates_dir, case_files_dir=case_files_dir)
+    return export_organization_document_set(case, templates_dir=templates_dir, case_files_dir=case_files_dir)
 
 
 def approve_case_documents_pdf(
@@ -143,8 +151,14 @@ def approve_case_documents_pdf(
     customer_type: str,
     templates_dir: Path,
     soffice_path: str | Path,
+    case_files_dir: str | Path = CASE_FILES_DIR,
 ) -> tuple[list[Path], list[Path]]:
-    word_paths = export_case_documents(case, customer_type=customer_type, templates_dir=templates_dir)
+    word_paths = export_case_documents(
+        case,
+        customer_type=customer_type,
+        templates_dir=templates_dir,
+        case_files_dir=case_files_dir,
+    )
     pdf_paths = export_docx_set_to_pdf(word_paths, soffice_path=soffice_path)
     return word_paths, pdf_paths
 

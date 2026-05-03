@@ -31,6 +31,7 @@ TEMPLATE_HISTORY_PATH = DATA_DIR / "template_edit_history.jsonl"
 TEMPLATE_VERSIONS_DIR = DATA_DIR / "template_versions"
 AI_CONFIG_PATH = DATA_DIR / "ai_config.json"
 CASE_TABLE_CONFIG_PATH = DATA_DIR / "case_table_config.json"
+CASE_OUTPUT_CONFIG_PATH = DATA_DIR / "case_output_config.json"
 
 # ── Default configs ──────────────────────────────────────────────────────────
 
@@ -325,9 +326,9 @@ def _extract_first_match(pattern: str, text: str) -> str:
 def parse_asset_description_fields(text: str) -> dict[str, str]:
     value = (text or "").strip()
     return {
-        "so_thua": _extract_first_match(r"thua\s+dat\s+so\s+([^,;.\n]+)", value),
-        "so_to": _extract_first_match(r"to\s+ban\s+do\s+so\s+([^,;.\n]+)", value),
-        "land_address": _extract_first_match(r"tai\s+dia\s+chi\s+(.+)", value),
+        "so_thua": _extract_first_match(r"th(?:ửa|ua)\s+(?:đất|dat)\s+s(?:ố|o)\s+([^,;.\n]+)", value),
+        "so_to": _extract_first_match(r"t(?:ờ|o)\s+(?:bản|ban)\s+(?:đồ|do)\s+s(?:ố|o)\s+([^,;.\n]+)", value),
+        "land_address": _extract_first_match(r"t(?:ại|ai)\s+(?:địa|dia)\s+(?:chỉ|chi)\s+(.+)", value),
     }
 
 

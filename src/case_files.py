@@ -17,10 +17,26 @@ def sanitize_folder_name(value: str, *, fallback: str) -> str:
     return text[:120] or fallback
 
 
-def case_folder(base_dir: str | Path, *, case_id: int, contract_number: str = "") -> Path:
-    folder_name = sanitize_folder_name(contract_number, fallback=f"HS-{case_id:05d}")
-    if not folder_name.startswith(f"{case_id:05d}_"):
-        folder_name = f"{case_id:05d}_{folder_name}"
+def clean_customer_folder_name(value: str) -> str:
+    text = value or ""
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = re.sub(r"\b0\d{8,10}\b", "", text)
+    text = re.sub(r"\b\d{9,12}\b", "", text)
+    text = re.sub(r"\s*[-–]\s*$", "", text)
+    text = re.sub(r"\s+", " ", text).strip(" -–")
+    return text
+
+
+def case_folder(
+    base_dir: str | Path,
+    *,
+    case_id: int,
+    contract_number: str = "",
+    customer_name: str = "",
+) -> Path:
+    contract = sanitize_folder_name(contract_number, fallback=f"HS-{case_id:05d}")
+    customer = sanitize_folder_name(clean_customer_folder_name(customer_name), fallback="")
+    folder_name = f"{contract} - {customer}" if customer else contract
     return Path(base_dir) / folder_name
 
 

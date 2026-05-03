@@ -27,6 +27,8 @@ Quy tac nghiep vu:
 - Neu co nhieu dong chu so huu, giu nguyen day du ten cac ca nhan/to chuc.
 - Neu khong thay CCCD/CMND hoac dia chi, de value rong va ghi ly do trong notes.
 - Evidence phai ngan gon, chi can mot cum tu/dong lien quan de nguoi dung kiem tra.
+- Neu co the xac dinh huong trang, tra ve page_metadata la danh sach object.
+- Moi object gom page_number va rotation. rotation chi duoc la 0, 90, 180 hoac 270.
 """.strip()
 
 

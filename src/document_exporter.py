@@ -12,7 +12,7 @@ from docx.text.paragraph import Paragraph
 
 from .case_files import case_folder, sanitize_folder_name
 from .database_store import format_money, money_to_vietnamese_words, parse_money
-from .template_manager import iter_paragraphs, read_docx_text
+from .template_manager import PLACEHOLDER_PATTERN, iter_paragraphs, read_docx_text
 
 
 CONTRACT_DOC_SUFFIX = "/HĐTĐG"
@@ -65,6 +65,81 @@ def ensure_period(value: str) -> str:
     return text if text.endswith((".", "!", "?")) else f"{text}."
 
 
+BANK_ALIASES = {
+    "vcb": "vietcombank",
+    "vietcombank": "vietcombank",
+    "sacombank": "sacombank",
+    "vp bank": "vpbank",
+    "vpbank": "vpbank",
+    "techcombank": "techcombank",
+    "tcb": "techcombank",
+    "bidv": "bidv",
+    "mb bank": "mbbank",
+    "mbbank": "mbbank",
+    "mb": "mbbank",
+    "agribank": "agribank",
+    "vib": "vib",
+}
+
+
+def _normalized_bank_terms(value: str) -> set[str]:
+    text = re.sub(r"[^0-9a-zA-ZÀ-ỹ]+", " ", value or "").casefold()
+    compact = text.replace(" ", "")
+    terms: set[str] = set()
+    for alias, canonical in BANK_ALIASES.items():
+        alias_text = alias.casefold()
+        if alias_text in text or alias_text.replace(" ", "") in compact:
+            terms.add(canonical)
+    return terms
+
+
+def _should_append_source_to_purpose(purpose: str, source: str) -> bool:
+    if not source:
+        return False
+    if "ngân hàng" in purpose.casefold():
+        return False
+    if source.casefold() in purpose.casefold():
+        return False
+    if re.fullmatch(r"[A-ZĐ]{2,5}", source.strip()):
+        return False
+    source_bank_terms = _normalized_bank_terms(source)
+    if source_bank_terms and source_bank_terms.intersection(_normalized_bank_terms(purpose)):
+        return False
+    return True
+
+
+def _protect_nonbreaking_terms(value: str) -> str:
+    text = value or ""
+    replacements = {
+        "VP Bank": "VP\u00a0Bank",
+        "MB Bank": "MB\u00a0Bank",
+    }
+    for old, new in replacements.items():
+        text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
+    return text
+
+
+def _shorten_valuation_purpose(value: str) -> str:
+    text = (value or "").strip()
+    prefixes = [
+        r"làm\s+cơ\s+sở\s+tham\s+khảo\s+để\s+",
+        r"làm\s+cơ\s+sở\s+để\s+",
+    ]
+    for pattern in prefixes:
+        text = re.sub(f"^{pattern}", "", text, flags=re.IGNORECASE).strip()
+    return _protect_nonbreaking_terms(text)
+
+
+def _extract_land_address_from_asset(value: str) -> str:
+    text = (value or "").strip().rstrip(".")
+    if not text:
+        return ""
+    match = re.search(r"\btại\s+địa\s+chỉ\s+(.+)$", text, flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip().rstrip(".")
+    return ""
+
+
 def contract_document_number(contract_number: str) -> str:
     text = (contract_number or "").strip()
     if not text:
@@ -108,6 +183,12 @@ def _date_parts_from_text(value: Any) -> dict[str, str]:
     return {"full": text, "day": "", "month": "", "year": ""}
 
 
+def _pleiku_date_from_parts(parts: dict[str, str]) -> str:
+    if parts["day"] and parts["month"] and parts["year"]:
+        return f"Pleiku, Ngày {parts['day']} tháng {parts['month']} năm {parts['year']}"
+    return _date_context()["NGAY_LAP_PLEIKU"]
+
+
 def _compute_remaining_amount(case: dict[str, Any]) -> str:
     fee = parse_money(case.get("valuation_fee_number"))
     advance = parse_money(case.get("advance_payment"))
@@ -120,7 +201,7 @@ def _compute_remaining_amount(case: dict[str, Any]) -> str:
 
 def _fee_words(case: dict[str, Any]) -> str:
     explicit = str(case.get("valuation_fee_words") or "").strip()
-    if explicit:
+    if explicit and not explicit.startswith("#"):
         return explicit.rstrip(".")
     fee = parse_money(case.get("valuation_fee_number"))
     if fee is None:
@@ -136,24 +217,35 @@ def build_placeholder_context(case: dict[str, Any], *, organization: bool = Fals
     source = str(case.get("source") or "").strip()
     purpose = str(case.get("valuation_purpose") or "").strip()
     purpose_full = purpose
-    if source and source.lower() not in purpose.lower():
+    if _should_append_source_to_purpose(purpose, source):
         purpose_full = f"{purpose} {source}".strip()
+    purpose = _protect_nonbreaking_terms(purpose)
+    purpose_full = _protect_nonbreaking_terms(purpose_full)
     contract_date = _date_parts_from_text(case.get("contract_date"))
     certificate_date = _date_parts_from_text(case.get("certificate_date"))
+    asset_description = str(case.get("asset_description") or "").strip()
+    land_address = str(
+        case.get("dia_chi_thua_dat")
+        or _extract_land_address_from_asset(asset_description)
+        or case.get("customer_address")
+        or ""
+    ).strip()
 
     context = {
         "TEN_KHACH_HANG": customer_name,
         "DIA_CHI_KHACH_HANG": str(case.get("customer_address") or "").strip(),
         "CCCD": str(case.get("citizen_id") or "").strip(),
         "DIEN_THOAI_KHACH_HANG": phone,
-        "TAI_SAN_THAM_DINH": ensure_period(str(case.get("asset_description") or "").strip()),
-        "DIA_CHI_TAI_SAN": str(case.get("dia_chi_thua_dat") or case.get("customer_address") or "").strip(),
+        "TAI_SAN_THAM_DINH": ensure_period(asset_description),
+        "DIA_CHI_TAI_SAN": land_address,
         "MUC_DICH_THAM_DINH": purpose,
         "MUC_DICH_THAM_DINH_DAY_DU": ensure_period(purpose_full),
+        "MUC_DICH_THAM_DINH_RUT_GON": ensure_period(_shorten_valuation_purpose(purpose)),
         "NGUON": source,
         "SO_HOP_DONG": contract_number,
         "SO_HOP_DONG_VAN_BAN": contract_document_number(contract_number),
         "NGAY_HOP_DONG": contract_date["full"],
+        "NGAY_HOP_DONG_PLEIKU": _pleiku_date_from_parts(contract_date),
         "NGAY_HOP_DONG_NGAY": contract_date["day"],
         "NGAY_HOP_DONG_THANG": contract_date["month"],
         "NGAY_HOP_DONG_NAM": contract_date["year"],
@@ -198,12 +290,52 @@ def _replace_in_paragraph(paragraph, context: dict[str, str]) -> None:
     updated = _replace_placeholders(original, context)
     if updated == original:
         return
-    if paragraph.runs:
+    if not paragraph.runs:
+        paragraph.add_run(updated)
+        return
+
+    run_texts = [run.text for run in paragraph.runs]
+    full_text = "".join(run_texts)
+    if full_text != original:
         paragraph.runs[0].text = updated
         for run in paragraph.runs[1:]:
             run.text = ""
-    else:
-        paragraph.add_run(updated)
+        return
+
+    ranges: list[tuple[int, int]] = []
+    cursor = 0
+    for text in run_texts:
+        start = cursor
+        cursor += len(text)
+        ranges.append((start, cursor))
+
+    replacements = [
+        (match.start(), match.end(), str(context.get(match.group(1)) or ""))
+        for match in PLACEHOLDER_PATTERN.finditer(full_text)
+        if match.group(1) in context
+    ]
+    if not replacements:
+        return
+
+    for start, end, replacement in reversed(replacements):
+        affected = [
+            index
+            for index, (run_start, run_end) in enumerate(ranges)
+            if run_start < end and run_end > start
+        ]
+        if not affected:
+            continue
+        first_index = affected[0]
+        for index in affected:
+            run_start, run_end = ranges[index]
+            local_start = max(start, run_start) - run_start
+            local_end = min(end, run_end) - run_start
+            text = run_texts[index]
+            insert = replacement if index == first_index else ""
+            run_texts[index] = text[:local_start] + insert + text[local_end:]
+
+    for run, text in zip(paragraph.runs, run_texts):
+        run.text = text
 
 
 def _alignment_css(value: Any) -> str:
@@ -349,7 +481,12 @@ def _case_folder_and_contract(case: dict[str, Any], case_files_dir: str | Path) 
     case_id = int(case["id"])
     folder = Path(
         case.get("case_folder")
-        or case_folder(case_files_dir, case_id=case_id, contract_number=case.get("contract_number") or "")
+        or case_folder(
+            case_files_dir,
+            case_id=case_id,
+            contract_number=case.get("contract_number") or "",
+            customer_name=case.get("customer_info") or "",
+        )
     )
     contract = sanitize_folder_name(case.get("contract_number") or f"HS-{case_id:05d}", fallback=f"HS-{case_id:05d}")
     return folder, contract
@@ -363,7 +500,7 @@ def _describe_documents(
     case_files_dir: str | Path,
 ) -> list[dict[str, Any]]:
     folder, contract = _case_folder_and_contract(case, case_files_dir)
-    output_dir = folder / "documents"
+    output_dir = folder
     documents: list[dict[str, Any]] = []
     for key, (template_name, label, output_pattern) in templates.items():
         documents.append(

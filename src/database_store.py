@@ -25,16 +25,16 @@ DATABASE_COLUMNS = {
 }
 
 _ONES = [
-    "khong",
-    "mot",
+    "không",
+    "một",
     "hai",
     "ba",
-    "bon",
-    "nam",
-    "sau",
-    "bay",
-    "tam",
-    "chin",
+    "bốn",
+    "năm",
+    "sáu",
+    "bảy",
+    "tám",
+    "chín",
 ]
 
 
@@ -66,29 +66,29 @@ def _read_three_digits(number: int, *, full: bool) -> str:
     words: list[str] = []
 
     if hundreds:
-        words.extend([_ONES[hundreds], "tram"])
+        words.extend([_ONES[hundreds], "trăm"])
     elif full and (tens or ones):
-        words.extend(["khong", "tram"])
+        words.extend(["không", "trăm"])
 
     if tens > 1:
-        words.extend([_ONES[tens], "muoi"])
+        words.extend([_ONES[tens], "mươi"])
         if ones == 1:
-            words.append("mot")
+            words.append("mốt")
         elif ones == 4:
-            words.append("bon")
+            words.append("tư")
         elif ones == 5:
-            words.append("lam")
+            words.append("lăm")
         elif ones:
             words.append(_ONES[ones])
     elif tens == 1:
-        words.append("muoi")
+        words.append("mười")
         if ones == 5:
-            words.append("lam")
+            words.append("lăm")
         elif ones:
             words.append(_ONES[ones])
     elif ones:
         if hundreds or full:
-            words.append("le")
+            words.append("lẻ")
         words.append(_ONES[ones])
 
     return " ".join(words)
@@ -99,7 +99,7 @@ def money_to_vietnamese_words(value: Any) -> str:
     if amount is None:
         return ""
     if amount == 0:
-        return "Khong dong."
+        return "Không đồng."
 
     groups = []
     number = amount
@@ -107,7 +107,7 @@ def money_to_vietnamese_words(value: Any) -> str:
         groups.append(number % 1000)
         number //= 1000
 
-    units = ["", "ngan", "trieu", "ty", "ngan ty", "trieu ty"]
+    units = ["", "ngàn", "triệu", "tỷ", "ngàn tỷ", "triệu tỷ"]
     parts: list[str] = []
     for idx in range(len(groups) - 1, -1, -1):
         group = groups[idx]
@@ -120,7 +120,7 @@ def money_to_vietnamese_words(value: Any) -> str:
 
     sentence = " ".join(parts).strip()
     sentence = sentence[:1].upper() + sentence[1:]
-    return f"{sentence} dong chan."
+    return f"{sentence} đồng chẵn."
 
 
 def _last_data_row(ws: Worksheet) -> int:
