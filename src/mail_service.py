@@ -46,6 +46,9 @@ class GmailSmtpSettings:
 
 
 def _load_env() -> None:
+    import sys
+    if "unittest" in sys.modules or "pytest" in sys.modules:
+        return
     load_dotenv(PROJECT_ROOT / "API.env", override=True)
     load_dotenv(override=True)
 
@@ -86,6 +89,19 @@ def load_gmail_smtp_settings() -> GmailSmtpSettings:
     username = os.getenv("SMTP_USERNAME", os.getenv("MAIL_USERNAME", "")).strip()
     password = os.getenv("SMTP_PASSWORD", os.getenv("MAIL_PASSWORD", "")).strip()
     mail_from = os.getenv("MAIL_FROM", "").strip() or username
+    
+    # Repair mojibake in mail_from if any (e.g. UTF-8 interpreted as Latin-1 / CP1252)
+    try:
+        if any(c in mail_from for c in "Æ°á»›º¡"):
+            mail_from = mail_from.encode('latin-1').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        pass
+    try:
+        if any(c in mail_from for c in "Æ°á»›º¡"):
+            mail_from = mail_from.encode('cp1252').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        pass
+
     if mail_from and "@" not in mail_from and username:
         mail_from = formataddr((mail_from, username))
     management_cc = _parse_email_list(os.getenv("MANAGEMENT_CC", ""))

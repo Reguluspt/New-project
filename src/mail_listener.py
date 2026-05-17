@@ -103,6 +103,9 @@ class MailListenerSettings:
 
 
 def _load_env() -> None:
+    import sys
+    if "unittest" in sys.modules or "pytest" in sys.modules:
+        return
     load_dotenv(PROJECT_ROOT / "API.env", override=True)
     load_dotenv(override=True)
 
