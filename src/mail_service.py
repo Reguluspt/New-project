@@ -46,8 +46,16 @@ class GmailSmtpSettings:
 
 
 def _load_env() -> None:
-    load_dotenv(PROJECT_ROOT / "API.env")
-    load_dotenv()
+    load_dotenv(PROJECT_ROOT / "API.env", override=True)
+    load_dotenv(override=True)
+
+
+def _clean_header(value: object) -> str:
+    if not value:
+        return ""
+    # Aggressively remove all newlines and tabs to prevent EmailMessage errors
+    return re.sub(r"[\r\n\t]+", " ", str(value)).strip()
+
 
 
 def _int_env(name: str, default: int) -> int:

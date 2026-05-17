@@ -15,14 +15,30 @@ from .mail_service import load_gmail_smtp_settings, _parse_email_list, _clean_he
 def _decode_header_str(header_value):
     if not header_value:
         return ""
-    decoded_parts = decode_header(header_value)
-    parts = []
-    for content, encoding in decoded_parts:
-        if isinstance(content, bytes):
-            parts.append(content.decode(encoding or 'utf-8', errors='replace'))
-        else:
-            parts.append(str(content))
-    return "".join(parts)
+    try:
+        decoded_parts = decode_header(str(header_value))
+        parts = []
+        for content, encoding in decoded_parts:
+            if isinstance(content, bytes):
+                parts.append(content.decode(encoding or 'utf-8', errors='replace'))
+            else:
+                parts.append(str(content))
+        decoded = "".join(parts)
+    except Exception:
+        decoded = str(header_value)
+    
+    # Repair mojibake if any (e.g. UTF-8 interpreted as Latin-1 / CP1252)
+    try:
+        if any(c in decoded for c in "Æ°á»›º¡"):
+            return decoded.encode('latin-1').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        pass
+    try:
+        if any(c in decoded for c in "Æ°á»›º¡"):
+            return decoded.encode('cp1252').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        pass
+    return decoded
 
 def _find_latest_email_by_subject_sync(contract_number: str):
     settings = load_gmail_smtp_settings()
@@ -58,9 +74,9 @@ def _find_latest_email_by_subject_sync(contract_number: str):
         result = {
             "msg_id": _clean_header(msg.get("Message-ID")),
             "subject": _clean_header(_decode_header_str(msg.get("Subject"))),
-            "from": _clean_header(msg.get("From")),
-            "to": _clean_header(msg.get("To")),
-            "cc": _clean_header(msg.get("Cc")),
+            "from": _clean_header(_decode_header_str(msg.get("From"))),
+            "to": _clean_header(_decode_header_str(msg.get("To"))),
+            "cc": _clean_header(_decode_header_str(msg.get("Cc"))),
             "references": _clean_header(msg.get("References", ""))
         }
         
@@ -245,9 +261,9 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
                 original_mail = {
                     "msg_id": _clean_header(msg.get("Message-ID")),
                     "subject": _clean_header(_decode_header_str(msg.get("Subject"))),
-                    "from": _clean_header(msg.get("From")),
-                    "to": _clean_header(msg.get("To")),
-                    "cc": _clean_header(msg.get("Cc")),
+                    "from": _clean_header(_decode_header_str(msg.get("From"))),
+                    "to": _clean_header(_decode_header_str(msg.get("To"))),
+                    "cc": _clean_header(_decode_header_str(msg.get("Cc"))),
                     "references": _clean_header(msg.get("References", ""))
                 }
         except Exception as exc:
