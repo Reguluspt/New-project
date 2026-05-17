@@ -677,7 +677,10 @@ async def send_thread_reply(
 
 
 def _is_from_admin(incoming: IncomingEmail, settings: MailListenerSettings) -> bool:
-    return bool(settings.admin_email) and incoming.from_email.casefold() == settings.admin_email.casefold()
+    if not settings.admin_email:
+        return False
+    admins = [email.strip().lower() for email in settings.admin_email.split(",") if email.strip()]
+    return incoming.from_email.lower() in admins
 
 
 def build_professional_forward_message(
@@ -700,7 +703,8 @@ def build_professional_forward_message(
         }
     )
     html = render_appraisal_email(mail_data)
-    cc_list = _dedupe_emails([settings.admin_email, *(settings.monitor_cc_list or [])])
+    admin_emails = [e.strip() for e in settings.admin_email.split(",") if e.strip()]
+    cc_list = _dedupe_emails([*admin_emails, *(settings.monitor_cc_list or [])])
 
     message = EmailMessage()
     message["From"] = smtp_settings.mail_from
@@ -745,7 +749,8 @@ async def send_professional_forward(
             }
         )
         html = render_appraisal_email(mail_data)
-        cc_list = _dedupe_emails([settings.admin_email, *(settings.monitor_cc_list or [])])
+        admin_emails = [e.strip() for e in settings.admin_email.split(",") if e.strip()]
+        cc_list = _dedupe_emails([*admin_emails, *(settings.monitor_cc_list or [])])
         subject = _reply_subject(incoming.subject)
         
         try:

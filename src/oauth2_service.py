@@ -439,8 +439,10 @@ async def fetch_emails_via_oauth2(
             # Search messages
             search_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
             params: dict[str, Any] = {"maxResults": limit}
+            q_parts = ["is:unread", "label:INBOX"]
             if query_contract:
-                params["q"] = f'subject:"{query_contract}"'
+                q_parts.append(f'subject:"{query_contract}"')
+            params["q"] = " ".join(q_parts)
             
             response = await client.get(search_url, headers=headers, params=params)
             if response.status_code != 200:
@@ -470,8 +472,10 @@ async def fetch_emails_via_oauth2(
                 "$select": "id,subject",
                 "$orderby": "receivedDateTime desc"
             }
+            filter_parts = ["isRead eq false"]
             if query_contract:
-                params["$filter"] = f"contains(subject, '{query_contract}')"
+                filter_parts.append(f"contains(subject, '{query_contract}')")
+            params["$filter"] = " and ".join(filter_parts)
 
             response = await client.get(search_url, headers=headers, params=params)
             if response.status_code != 200:

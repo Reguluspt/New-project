@@ -201,6 +201,11 @@ def render_oauth2_integration() -> None:
         key="oauth_redirect_uri"
     )
 
+    if current_redirect_uri.strip() != saved_redirect_uri.strip():
+        oauth_config["redirect_uri"] = current_redirect_uri.strip()
+        save_oauth_config(oauth_config)
+        st.rerun()
+
     col_g, col_o = st.columns(2)
 
     # 1. Google Workspace Card

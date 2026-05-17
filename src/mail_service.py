@@ -144,11 +144,16 @@ def render_mail_html(data_dict: Mapping[str, Any]) -> str:
 
 
 def _send_sync(message: EmailMessage, recipients: list[str], settings: GmailSmtpSettings) -> None:
+    from email.utils import parseaddr
+    envelope_from = parseaddr(settings.mail_from)[1] or settings.mail_from.strip()
+    envelope_to = [parseaddr(r)[1] or r.strip() for e in recipients for r in e.split(",") if r.strip()]
+    envelope_to = _dedupe_emails(envelope_to)
+    
     with smtplib.SMTP(settings.host, settings.port, timeout=30) as smtp:
         smtp.starttls()
         if settings.username and settings.password:
             smtp.login(settings.username, settings.password)
-        smtp.send_message(message, from_addr=settings.mail_from, to_addrs=recipients)
+        smtp.send_message(message, from_addr=envelope_from, to_addrs=envelope_to)
 
 
 async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
@@ -213,7 +218,8 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
     html = render_appraisal_email(mail_data)
     message.set_content("Email này cần trình đọc HTML để xem bảng thông tin hồ sơ.")
     message.add_alternative(html, subtype="html")
-    recipients = _dedupe_emails([to_email, *cc_emails])
+    to_emails = [addr.strip() for addr in to_email.split(",") if addr.strip()]
+    recipients = _dedupe_emails([*to_emails, *cc_emails])
 
     await asyncio.to_thread(_send_sync, message, recipients, settings)
     record_id = str(data_dict.get("record_id") or data_dict.get("id") or "").strip()
