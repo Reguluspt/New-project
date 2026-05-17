@@ -190,13 +190,13 @@ def render_oauth2_integration() -> None:
     oauth_config = load_oauth_config()
 
     # Detect current URL or default
-    redirect_uri = "http://localhost:8501/"
+    saved_redirect_uri = oauth_config.get("redirect_uri", "http://localhost:8501/")
     
     # Base Redirect URI configuration
     st.markdown("##### ⚙️ Cấu hình Redirect URI")
     current_redirect_uri = st.text_input(
         "Đường dẫn phản hồi (Redirect URI) - Phải khớp chính xác với cấu hình trên Google/Microsoft Developer Console",
-        value=redirect_uri,
+        value=saved_redirect_uri,
         help="Mặc định chạy ở local là http://localhost:8501/. Nếu chạy trên VPS/tên miền riêng, hãy đổi thành URL của trang này.",
         key="oauth_redirect_uri"
     )
@@ -225,22 +225,23 @@ def render_oauth2_integration() -> None:
             st.markdown("🟢 **Trạng thái:** ĐÃ LIÊN KẾT TÀI KHOẢN")
         else:
             st.markdown("🔴 **Trạng thái:** CHƯA LIÊN KẾT TÀI KHOẢN")
-
+ 
         with st.form("google_oauth_form"):
             g_client_id = st.text_input("Client ID", value=g_config.get("client_id", ""), type="password", key="g_cid")
             g_client_secret = st.text_input("Client Secret", value=g_config.get("client_secret", ""), type="password", key="g_secret")
             g_enabled_checkbox = st.checkbox("Kích hoạt sử dụng Gmail API (OAuth2)", value=g_enabled, key="g_enable")
             
-            g_save = st.form_submit_button("Lưu Cấu Hình Google", type="secondary")
+            g_save = st.form_submit_button("Lưu Cấu Hinh Google", type="secondary")
             if g_save:
                 g_config["client_id"] = g_client_id.strip()
                 g_config["client_secret"] = g_client_secret.strip()
                 g_config["enabled"] = g_enabled_checkbox
                 oauth_config["google"] = g_config
+                oauth_config["redirect_uri"] = current_redirect_uri.strip()
                 save_oauth_config(oauth_config)
                 st.success("Đã lưu cấu hình Google Workspace.")
                 st.rerun()
-
+ 
         # Connect button
         if g_config.get("client_id") and g_config.get("client_secret"):
             try:
@@ -250,7 +251,7 @@ def render_oauth2_integration() -> None:
                 st.error(f"Lỗi tạo link liên kết: {e}")
         else:
             st.caption("⚠️ Nhập Client ID & Secret để tạo nút liên kết.")
-
+ 
     # 2. Microsoft Outlook Card
     with col_o:
         st.markdown(
@@ -267,13 +268,13 @@ def render_oauth2_integration() -> None:
         
         o_config = oauth_config.get("outlook", {})
         o_enabled = o_config.get("enabled", False)
-
+ 
         # Show connection status badge
         if o_config.get("refresh_token"):
             st.markdown("🟢 **Trạng thái:** ĐÃ LIÊN KẾT TÀI KHOẢN")
         else:
             st.markdown("🔴 **Trạng thái:** CHƯA LIÊN KẾT TÀI KHOẢN")
-
+ 
         with st.form("outlook_oauth_form"):
             o_client_id = st.text_input("Client ID", value=o_config.get("client_id", ""), type="password", key="o_cid")
             o_client_secret = st.text_input("Client Secret", value=o_config.get("client_secret", ""), type="password", key="o_secret")
@@ -287,10 +288,11 @@ def render_oauth2_integration() -> None:
                 o_config["tenant"] = o_tenant.strip() or "common"
                 o_config["enabled"] = o_enabled_checkbox
                 oauth_config["outlook"] = o_config
+                oauth_config["redirect_uri"] = current_redirect_uri.strip()
                 save_oauth_config(oauth_config)
                 st.success("Đã lưu cấu hình Microsoft Outlook.")
                 st.rerun()
-
+ 
         # Connect button
         if o_config.get("client_id") and o_config.get("client_secret"):
             try:

@@ -50,17 +50,19 @@ def main() -> None:
     code = st.query_params.get("code")
     state = st.query_params.get("state")
     oauth_provider = st.query_params.get("oauth_provider") or state
-    redirect_uri = "http://localhost:8501/"
     if code and oauth_provider:
         try:
-            from src.oauth2_service import exchange_code_for_tokens
+            from src.oauth2_service import load_oauth_config, exchange_code_for_tokens
+            oauth_config = load_oauth_config()
+            redirect_uri = oauth_config.get("redirect_uri", "http://localhost:8501/")
+            
             exchange_code_for_tokens(oauth_provider, code, redirect_uri)
             st.session_state["oauth_success_provider"] = oauth_provider
             st.query_params.clear()
             st.rerun()
         except Exception as e:
             st.error(f"❌ Kết nối OAuth2 thất bại: {e}")
-            st.info("💡 Gợi ý: Hãy kiểm tra lại Client Secret hoặc Redirect URI trên Google Cloud Console xem đã khớp 100% với 'http://localhost:8501/' chưa.")
+            st.info(f"💡 Gợi ý: Hãy kiểm tra lại Client Secret hoặc Redirect URI trên Google Cloud Console xem đã khớp 100% với '{redirect_uri}' chưa.")
 
     # Silent backup once per session
     if "startup_backup_done" not in st.session_state:

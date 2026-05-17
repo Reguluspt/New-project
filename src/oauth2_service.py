@@ -33,7 +33,8 @@ DEFAULT_OAUTH_CONFIG = {
         "refresh_token": "",
         "expires_at": 0.0,
         "enabled": False,
-    }
+    },
+    "redirect_uri": "http://localhost:8501/"
 }
 
 
@@ -53,6 +54,9 @@ def load_oauth_config() -> dict[str, Any]:
                 for k, v in DEFAULT_OAUTH_CONFIG[provider].items():
                     if k not in data[provider]:
                         data[provider][k] = v
+        # Ensure redirect_uri key is loaded
+        if "redirect_uri" not in data:
+            data["redirect_uri"] = DEFAULT_OAUTH_CONFIG["redirect_uri"]
         return data
     except Exception as exc:
         logger.error(f"Lỗi khi đọc file cấu hình OAuth2: {exc}")
