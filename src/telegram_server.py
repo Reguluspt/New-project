@@ -274,7 +274,13 @@ def _safe_file_name(file_name: str) -> str:
 def _normalize_search_text(value: str) -> str:
     normalized = unicodedata.normalize("NFD", value or "")
     without_marks = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
-    return re.sub(r"\s+", " ", without_marks.lower()).strip()
+    text = re.sub(r"\s+", " ", without_marks.lower()).strip()
+    # Map common bank abbreviations to full names for robust matching
+    text = text.replace("vcb", "vietcombank")
+    text = text.replace("vietinbank", "vietin")
+    text = text.replace("viettinbank", "vietin")
+    text = text.replace("tcb", "techcombank")
+    return text
 
 
 def _score_dropdown_option(query: str, option: str) -> int:
@@ -634,7 +640,10 @@ def apply_smart_autofill(values: dict[str, str], context: ContextTypes.DEFAULT_T
                 person_matches = search_dropdown_options(person_query, options, limit=50)
                 if person_matches:
                     # 2. Dò lại theo tổ chức
-                    filtered = search_dropdown_options(org_query, person_matches, limit=1)
+                    filtered = search_dropdown_options(org_query, person_matches, limit=10)
+                    if not filtered:
+                        # Nếu lọc theo tổ chức không ra, thử giữ nguyên kết quả dò theo tên nhân viên
+                        filtered = person_matches[:10]
                     if filtered:
                         values[field] = filtered[0]
                         continue
@@ -986,6 +995,22 @@ def _settings_from_context(context: ContextTypes.DEFAULT_TYPE) -> TelegramSettin
 def _dropdown_options_from_context(context: ContextTypes.DEFAULT_TYPE, field_name: str) -> list[str]:
     if field_name == "asset_type":
         return ASSET_TYPE_OPTIONS
+        
+    # Check cache and dynamically reload from excel file if > 5 minutes
+    import time
+    now = time.time()
+    last_load = context.application.bot_data.get("excel_dropdown_options_last_load", 0)
+    if now - last_load > 300:  # 5 minutes
+        try:
+            settings = context.application.bot_data.get("settings")
+            if settings and settings.excel_template_path:
+                from src.excel_writer import load_dropdown_options
+                context.application.bot_data["excel_dropdown_options"] = load_dropdown_options(settings.excel_template_path)
+                context.application.bot_data["excel_dropdown_options_last_load"] = now
+                logger.info("Da reload dropdown options tu: %s", settings.excel_template_path)
+        except Exception as e:
+            logger.error("Loi khi reload dropdown options tu file: %s", e)
+
     dropdown_options = context.application.bot_data.get("excel_dropdown_options", {})
     if not isinstance(dropdown_options, dict):
         return []
