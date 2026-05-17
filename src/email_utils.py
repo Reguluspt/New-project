@@ -42,11 +42,127 @@ async def send_sobo_email_with_result(
     cc_emails: list[str] = None,
 ) -> SoboEmailResult:
     _load_env()
+    
+    # --- TÍCH HỢP OAUTH2 ---
+    from .oauth2_service import is_oauth_enabled, get_valid_access_token_async
+    
+    provider = None
+    if is_oauth_enabled("google"):
+        provider = "google"
+    elif is_oauth_enabled("outlook"):
+        provider = "outlook"
+        
+    user = os.getenv("SMTP_USERNAME", os.getenv("MAIL_USERNAME", os.getenv("EMAIL_USER", ""))).strip()
+    mail_from_name = os.getenv("MAIL_FROM", "").strip()
+    
+    if provider:
+        try:
+            print(f"Sending sobo email using OAuth2 API for provider: {provider}")
+            
+            # Xây dựng đối tượng MIME message chuẩn chứa đính kèm và logo
+            msg = EmailMessage()
+            msg["Subject"] = subject
+            if mail_from_name and "@" not in mail_from_name:
+                msg["From"] = formataddr((mail_from_name, user))
+            else:
+                msg["From"] = mail_from_name or user
+            msg["To"] = to_email
+            if cc_emails:
+                msg["Cc"] = ", ".join(cc_emails)
+            msg.set_content(body)
+            
+            if html_body:
+                msg.add_alternative(html_body, subtype="html")
+                logo_path = os.path.join(PROJECT_ROOT, "src", "templates", "cen_value_logo.png")
+                if os.path.exists(logo_path):
+                    try:
+                        with open(logo_path, "rb") as f:
+                            msg.get_payload()[1].add_related(f.read(), maintype="image", subtype="png", cid="<cen_value_logo>", filename="cen_value_logo.png")
+                    except Exception as e:
+                        logger.error(f"Lỗi logo OAuth2: {e}")
+                        
+            if attachment_path and os.path.exists(attachment_path):
+                filename = os.path.basename(attachment_path)
+                with open(attachment_path, "rb") as f:
+                    file_data = f.read()
+                maintype = "application"
+                subtype = "octet-stream"
+                if filename.lower().endswith(".pdf"):
+                    subtype = "pdf"
+                elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                    maintype = "image"
+                    subtype = "jpeg" if filename.lower().endswith(".jpg") else filename.lower().split(".")[-1]
+                msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
+                
+            access_token = await get_valid_access_token_async(provider)
+            
+            if provider == "google":
+                import base64
+                import httpx
+                raw_bytes = msg.as_bytes()
+                raw_b64 = base64.urlsafe_b64encode(raw_bytes).decode("utf-8")
+                
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    headers = {
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json",
+                    }
+                    send_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+                    response = await client.post(send_url, headers=headers, json={"raw": raw_b64})
+                    if response.status_code not in [200, 201]:
+                        raise RuntimeError(f"Gửi sobo qua Gmail API thất bại: {response.text}")
+                return SoboEmailResult(True)
+                
+            elif provider == "outlook":
+                import base64
+                import httpx
+                to_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in to_email.split(",") if addr.strip()]
+                cc_recipients = []
+                if cc_emails:
+                    cc_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in cc_emails if addr.strip()]
+                    
+                attachments_payload = []
+                if attachment_path and os.path.exists(attachment_path):
+                    filename = os.path.basename(attachment_path)
+                    content_bytes = base64.b64encode(open(attachment_path, "rb").read()).decode("utf-8")
+                    attachments_payload.append({
+                        "@odata.type": "#microsoft.graph.fileAttachment",
+                        "name": filename,
+                        "contentType": "application/pdf" if filename.lower().endswith(".pdf") else "image/jpeg",
+                        "contentBytes": content_bytes
+                    })
+                    
+                email_payload = {
+                    "message": {
+                        "subject": subject,
+                        "body": {
+                            "contentType": "HTML" if html_body else "Text",
+                            "content": html_body or body
+                        },
+                        "toRecipients": to_recipients,
+                        "ccRecipients": cc_recipients,
+                        "attachments": attachments_payload
+                    }
+                }
+                
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    headers = {
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json",
+                    }
+                    send_url = "https://graph.microsoft.com/v1.0/me/sendMail"
+                    response = await client.post(send_url, headers=headers, json=email_payload)
+                    if response.status_code not in [200, 202]:
+                        raise RuntimeError(f"Gửi sobo qua Microsoft Graph API thất bại: {response.text}")
+                return SoboEmailResult(True)
+                
+        except Exception as exc:
+            logger.error(f"OAuth2 sending failed for Sobo: {exc}, falling back to SMTP.")
+            
+    # --- PHẦN SMTP GỐC ---
     host = os.getenv("SMTP_HOST", os.getenv("MAIL_SERVER", os.getenv("EMAIL_HOST", "smtp.gmail.com"))).strip()
     port = int(os.getenv("SMTP_PORT", os.getenv("MAIL_PORT", os.getenv("EMAIL_PORT", "587"))))
-    user = os.getenv("SMTP_USERNAME", os.getenv("MAIL_USERNAME", os.getenv("EMAIL_USER", ""))).strip()
     password = os.getenv("SMTP_PASSWORD", os.getenv("MAIL_PASSWORD", os.getenv("EMAIL_PASSWORD", ""))).strip().replace(" ", "")
-    mail_from_name = os.getenv("MAIL_FROM", "").strip()
 
     if not user or not password:
         message = "Chua cau hinh MAIL_USERNAME/SMTP_USERNAME hoac MAIL_PASSWORD/SMTP_PASSWORD trong API.env."

@@ -157,8 +157,39 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
     to_email = _recipient_from_payload(data_dict, settings)
     subject = _subject_from_payload(data_dict, mail_data)
     cc_emails = _dedupe_emails(list(settings.monitor_cc_list or []))
-    message_id = make_msgid(domain="gmail.com")
 
+    # --- BẮT ĐẦU TÍCH HỢP OAUTH2 ---
+    from .oauth2_service import is_oauth_enabled, send_email_via_oauth2
+    
+    provider = None
+    if is_oauth_enabled("google"):
+        provider = "google"
+    elif is_oauth_enabled("outlook"):
+        provider = "outlook"
+        
+    if provider:
+        html = render_appraisal_email(mail_data)
+        try:
+            print(f"Sending appraisal email using OAuth2 API for provider: {provider}")
+            oauth_msg_id = await send_email_via_oauth2(
+                provider=provider,
+                from_email=settings.mail_from or settings.username,
+                to_email=to_email,
+                subject=subject,
+                html_body=html,
+                cc_emails=cc_emails,
+            )
+            record_id = str(data_dict.get("record_id") or data_dict.get("id") or "").strip()
+            db_path = resolve_records_db_path(data_dict.get("records_db_path"))
+            if record_id:
+                log_records_db_path("mail_service", db_path)
+                await save_outbound_message(db_path, record_id, message_id=oauth_msg_id, subject=subject)
+            return MailSendResult(to_email=to_email, subject=subject, cc_emails=cc_emails, message_id=oauth_msg_id)
+        except Exception as exc:
+            print(f"OAuth2 sending failed: {exc}, falling back to SMTP.")
+    # --- KẾT THÚC TÍCH HỢP OAUTH2 ---
+
+    message_id = make_msgid(domain="gmail.com")
     missing = [
         name
         for name, value in {

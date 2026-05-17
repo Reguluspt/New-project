@@ -156,6 +156,63 @@ def _send_phathanh_reply_sync(original_mail, html_body, settings):
         return False
 
 async def send_phathanh_reply(original_mail, html_body, settings):
+    from src.oauth2_service import is_oauth_enabled, send_email_via_oauth2
+    from email.utils import parseaddr
+    
+    provider = None
+    if is_oauth_enabled("google"):
+        provider = "google"
+    elif is_oauth_enabled("outlook"):
+        provider = "outlook"
+        
+    if provider:
+        try:
+            # Recipients (Reply All logic)
+            orig_from = original_mail["from"]
+            orig_to = original_mail["to"] or ""
+            orig_cc = original_mail["cc"] or ""
+            
+            all_to = _parse_email_list(orig_from)
+            all_cc = _parse_email_list(orig_to) + _parse_email_list(orig_cc)
+            
+            self_email = (settings.username or "").lower()
+            
+            final_to = []
+            seen = set()
+            for addr in all_to:
+                email_addr = parseaddr(addr)[1].lower()
+                if email_addr and email_addr != self_email and email_addr not in seen:
+                    final_to.append(addr)
+                    seen.add(email_addr)
+                    
+            final_cc = []
+            for addr in all_cc:
+                email_addr = parseaddr(addr)[1].lower()
+                if email_addr and email_addr != self_email and email_addr not in seen:
+                    final_cc.append(addr)
+                    seen.add(email_addr)
+                    
+            if not final_to:
+                final_to = [orig_from] # Fallback
+                
+            orig_subject = original_mail["subject"]
+            subject = orig_subject if orig_subject.lower().startswith("re:") else f"Re: {orig_subject}"
+
+            print(f"Replying to email using OAuth2 API for provider: {provider}")
+            await send_email_via_oauth2(
+                provider=provider,
+                from_email=settings.mail_from or settings.username,
+                to_email=", ".join(final_to),
+                subject=subject,
+                html_body=html_body,
+                cc_emails=final_cc,
+                reply_to_msg_id=original_mail["msg_id"],
+                references=original_mail["references"]
+            )
+            return True
+        except Exception as exc:
+            print(f"OAuth2 send reply failed: {exc}, falling back to SMTP.")
+            
     return await asyncio.to_thread(_send_phathanh_reply_sync, original_mail, html_body, settings)
 
 
