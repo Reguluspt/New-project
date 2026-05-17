@@ -28,6 +28,10 @@ class LandCertificateExtraction(BaseModel):
     )
 
 
+class LandCertificateMultiExtraction(BaseModel):
+    assets: list[LandCertificateExtraction] = Field(description="Danh sach cac tai san duoc trich xuat")
+
+
 def blank_extraction() -> LandCertificateExtraction:
     empty = ExtractedValue(value="", confidence=0.0, evidence="")
     return LandCertificateExtraction(
@@ -40,3 +44,10 @@ def blank_extraction() -> LandCertificateExtraction:
         notes=[],
         page_metadata=[],
     )
+
+class OrganizationExtraction(BaseModel):
+    tax_code: str = Field(description="Mã số thuế của tổ chức", default="")
+    name: str = Field(description="Tên tổ chức/công ty", default="")
+    address: str = Field(description="Địa chỉ trụ sở chính", default="")
+    representative: str = Field(description="Người đại diện pháp luật hoặc người ký", default="")
+    position: str = Field(description="Chức vụ của người đại diện (VD: Giám đốc, Tổng giám đốc...)", default="")

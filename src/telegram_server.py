@@ -7,8 +7,8 @@ import subprocess
 import sys
 import unicodedata
 import asyncio
-from asyncio import create_task
-from asyncio import to_thread
+import fitz
+from asyncio import create_task, to_thread
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from email.message import EmailMessage
@@ -32,7 +32,7 @@ from telegram.ext import (
 )
 
 from .gemini_extractor import extract_land_certificate_with_gemini
-from .contracts import short_contract_number
+from .contracts import short_contract_number, expand_contract_number
 from .excel_writer import load_dropdown_options
 from .mail_renderer import mail_data_from_record, render_appraisal_email, send_appraisal_email_preview
 from .mail_service import send_appraisal_email as send_appraisal_email_service
@@ -41,6 +41,7 @@ from .database_manager import (
     create_outbound_tracking_record,
     create_record_from_values,
     ensure_tracking_record_schema,
+    find_organization_by_query,
     get_record as db_get_record,
     get_record_by_contract_number as db_get_record_by_contract_number,
     log_records_db_path,
@@ -48,7 +49,7 @@ from .database_manager import (
     update_record_fields as db_update_record_fields,
     update_record_status as db_update_record_status,
 )
-from .models import LandCertificateExtraction, blank_extraction
+from .models import LandCertificateExtraction, LandCertificateMultiExtraction, blank_extraction
 from .mail_listener import (
     DEFAULT_LOG_PATH as MAIL_LISTENER_LOG_PATH,
     listener_status_summary,
@@ -56,6 +57,8 @@ from .mail_listener import (
     set_listener_enabled,
     write_listener_pid,
 )
+from .sobo_handler import get_sobo_conversation_handler
+from .phathanh_handler import get_phathanh_conversation_handler
 
 
 TELEGRAM_WEBHOOK_PATH = "/webhook/telegram"
@@ -82,29 +85,55 @@ CUSTOMER_TYPE_LABELS = {
     "organization": "T\u1ed5 ch\u1ee9c",
 }
 REQUIRED_RECORD_FIELDS = [
-    ("so_to", "S\u1ed1 t\u1edd b\u1ea3n \u0111\u1ed3"),
-    ("so_thua", "S\u1ed1 th\u1eeda \u0111\u1ea5t"),
-    ("chu_so_huu", "Ch\u1ee7 s\u1edf h\u1eefu"),
+    ("so_to", "Số tờ bản đồ"),
+    ("so_thua", "Số thửa đất"),
+    ("chu_so_huu", "Chủ sở hữu"),
 ]
+
+# Danh sách Loại tài sản mặc định
+ASSET_TYPE_OPTIONS = [
+    "BĐS đặc thù khác",
+    "Combo bất động sản",
+    "Máy móc thiết bị",
+    "Doanh nghiệp",
+    "Combo Máy móc thiết bị + bất động sản"
+]
+
 TELEGRAM_FORM_FIELDS = [
-    ("customer_type", "Lo\u1ea1i kh\u00e1ch h\u00e0ng", "individual"),
-    ("contract_number", "S\u1ed1 h\u1ee3p \u0111\u1ed3ng", ""),
-    ("asset_type", "Lo\u1ea1i t\u00e0i s\u1ea3n", "B\u0110S \u0111\u1eb7c th\u00f9 kh\u00e1c"),
-    ("asset_description", "T\u00e0i s\u1ea3n th\u1ea9m \u0111\u1ecbnh gi\u00e1", ""),
-    ("preliminary_status", "S\u01a1 b\u1ed9", "Ch\u01b0a s\u01a1 b\u1ed9"),
-    ("expected_finish_date", "Th\u1eddi gian d\u1ef1 ki\u1ebfn ho\u00e0n th\u00e0nh", ""),
-    ("valuation_purpose", "M\u1ee5c \u0111\u00edch th\u1ea9m \u0111\u1ecbnh", ""),
-    ("source", "Ngu\u1ed3n/\u0111\u1ed1i t\u00e1c", ""),
-    ("customer_info", "Th\u00f4ng tin kh\u00e1ch h\u00e0ng", ""),
-    ("customer_address", "\u0110\u1ecba ch\u1ec9 kh\u00e1ch h\u00e0ng", ""),
-    ("citizen_id", "S\u1ed1 CCCD/CMND", ""),
-    ("valuation_fee_number", "Ph\u00ed th\u1ea9m \u0111\u1ecbnh", ""),
-    ("advance_payment", "T\u1ea1m \u1ee9ng", "0"),
-    ("survey_cost", "Chi ph\u00ed kh\u1ea3o s\u00e1t", "0"),
-    ("valuation_staff", "Chuy\u00ean vi\u00ean nghi\u1ec7p v\u1ee5", ""),
-    ("personal_note", "Ghi ch\u00fa c\u00e1 nh\u00e2n", ""),
+    ("customer_type", "Loại khách hàng", "individual"),
+    ("customer_info", "Tên khách hàng", ""),
+    ("customer_address", "Địa chỉ khách hàng", ""),
+    ("contract_number", "Số hợp đồng", ""),
+    ("asset_type", "Loại tài sản", ASSET_TYPE_OPTIONS[0]),
+    ("asset_description", "Tài sản thẩm định giá", ""),
+    ("preliminary_status", "Sơ bộ", "Chưa sơ bộ"),
+    ("expected_finish_date", "Thời gian dự kiến hoàn thành", ""),
+    ("valuation_purpose", "Mục đích thẩm định", ""),
+    ("source", "Nguồn/đối tác", ""),
+    ("customer_phone", "Số điện thoại khách hàng", ""),
+    ("citizen_id", "Số CCCD/CMND", ""),
+    ("valuation_fee_number", "Phí thẩm định", "3000000"),
+    ("advance_payment", "Tạm ứng", "0"),
+    ("survey_cost", "Chi phí khảo sát", "0"),
+    ("valuation_staff", "Chuyên viên nghiệp vụ", ""),
+    ("personal_note", "Ghi chú cá nhân", ""),
+]
+TELEGRAM_ORGANIZATION_REDUCED_FIELDS = [
+    ("customer_type", "Loại khách hàng", "organization"),
+    ("customer_info", "Tên khách hàng", ""),
+    ("customer_address", "Địa chỉ khách hàng", ""),
+    ("contract_number", "Số hợp đồng", ""),
+    ("asset_type", "Loại tài sản", ASSET_TYPE_OPTIONS[0]),
+    ("asset_description", "Tài sản thẩm định giá", ""),
+    ("valuation_purpose", "Mục đích thẩm định", ""),
+    ("source", "Nguồn/đối tác", ""),
+    ("valuation_fee_number", "Phí thẩm định", "3000000"),
+    ("advance_payment", "Tạm ứng", "0"),
+    ("valuation_staff", "Chuyên viên nghiệp vụ", ""),
+    ("personal_note", "Ghi chú cá nhân", ""),
 ]
 TELEGRAM_ORGANIZATION_FIELDS = [
+    ("customer_info", "T\u00ean t\u1ed5 ch\u1ee9c/kh\u00e1ch h\u00e0ng", ""),
     ("tax_code", "M\u00e3 s\u1ed1 thu\u1ebf", ""),
     ("representative_name", "Ng\u01b0\u1eddi \u0111\u1ea1i di\u1ec7n", ""),
     ("representative_position", "Ch\u1ee9c v\u1ee5 ng\u01b0\u1eddi \u0111\u1ea1i di\u1ec7n", ""),
@@ -123,6 +152,7 @@ TELEGRAM_RECORD_TEXT_COLUMNS = {
     "valuation_purpose",
     "source",
     "customer_info",
+    "customer_phone",
     "customer_address",
     "citizen_id",
     "valuation_fee_number",
@@ -138,7 +168,7 @@ TELEGRAM_RECORD_TEXT_COLUMNS = {
     "handover_contact_position",
     "handover_contact_phone",
 }
-TELEGRAM_SKIPPED_FORM_FIELDS = {"preliminary_status", "expected_finish_date", "survey_cost"}
+TELEGRAM_SKIPPED_FORM_FIELDS = {"preliminary_status", "expected_finish_date", "survey_cost", "tax_code", "representative_name", "representative_position", "handover_contact_name", "handover_contact_position", "handover_contact_phone", "authorization_note"}
 TELEGRAM_DROPDOWN_FIELDS = {
     "asset_type": "asset_type",
     "valuation_purpose": "valuation_purpose",
@@ -460,13 +490,184 @@ async def send_email(settings: TelegramSettings, draft: EmailDraft) -> None:
     await to_thread(_send_email_sync, settings, draft)
 
 
-def extraction_to_record_values(extraction: LandCertificateExtraction) -> dict[str, str]:
-    so_thua = extraction.so_thua_dat.value.strip()
-    so_to = extraction.so_to_ban_do.value.strip()
-    dia_chi = extraction.dia_chi_thua_dat.value.strip()
-    chu_so_huu = extraction.ten_chu_so_huu_cuoi_cung.value.strip()
-    owner_address = extraction.dia_chi_chu_so_huu_cuoi_cung.value.strip()
-    citizen_id = extraction.so_cccd_chu_so_huu_cuoi_cung.value.strip()
+def _normalize_search_text(value: str) -> str:
+    import unicodedata
+    normalized = unicodedata.normalize("NFD", value or "")
+    without_marks = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    # Thay thế các dấu câu phổ biến bằng khoảng trắng
+    clean_text = re.sub(r"[,.;:!\?]", " ", without_marks)
+    return re.sub(r"\s+", " ", clean_text).strip().lower()
+
+
+async def find_and_fill_organization_info(values: dict[str, str], context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Tra cứu thông tin tổ chức và tự động điền các trường liên quan."""
+    if values.get("customer_type") != "organization":
+        return ""
+        
+    query = values.get("customer_info", "").strip()
+    if not query:
+        return ""
+        
+    settings = _settings_from_context(context)
+    db_path = settings.records_db_path
+    cases_db_path = settings.cases_db_path
+    
+    found_info = {}
+    
+    # 1. Tìm trong bảng organizations (Database Telegram và Database chính)
+    orgs = await find_organization_by_query(str(db_path), query)
+    if not orgs and cases_db_path and os.path.exists(cases_db_path) and cases_db_path != db_path:
+        try:
+            async with aiosqlite.connect(cases_db_path, timeout=30) as conn:
+                conn.row_factory = aiosqlite.Row
+                search = query.lower()
+                cursor = await conn.execute(
+                    "SELECT * FROM organizations WHERE LOWER(name) LIKE ? OR LOWER(abbreviation) LIKE ? OR LOWER(tax_code) LIKE ?",
+                    (f"%{search}%", f"%{search}%", f"%{search}%")
+                )
+                rows = await cursor.fetchall()
+                orgs = [dict(row) for row in rows]
+        except Exception:
+            pass
+            
+    if orgs:
+        org = orgs[0]
+        found_info["customer_info"] = org.get("name") or query
+        found_info["tax_code"] = org.get("tax_code") or ""
+        found_info["customer_address"] = org.get("address") or ""
+        found_info["representative_name"] = org.get("representative") or ""
+        found_info["representative_position"] = org.get("position") or ""
+
+    # 2. Tìm trong bảng cases để lấy thêm chi tiết (người nhận bàn giao, v.v.)
+    search_name = found_info.get("customer_info", query)
+    search_tax = found_info.get("tax_code", "")
+    
+    search_db_paths = [cases_db_path, db_path] if cases_db_path != db_path else [db_path]
+    
+    for s_db_path in search_db_paths:
+        if not s_db_path or not os.path.exists(s_db_path):
+            continue
+        try:
+            async with aiosqlite.connect(s_db_path, timeout=30) as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute(
+                    "SELECT * FROM cases WHERE (TRIM(customer_info) = ? OR (TRIM(tax_code) <> '' AND TRIM(tax_code) = ?)) ORDER BY id DESC LIMIT 1",
+                    (search_name, search_tax or search_name)
+                )
+                case_row = await cursor.fetchone()
+                if case_row:
+                    case = dict(case_row)
+                    mapping = {
+                        "customer_info": "customer_info",
+                        "tax_code": "tax_code",
+                        "customer_address": "customer_address",
+                        "representative_name": "representative_name",
+                        "representative_position": "representative_position",
+                        "handover_contact_name": "handover_contact_name",
+                        "handover_contact_position": "handover_contact_position",
+                        "handover_contact_phone": "handover_contact_phone",
+                        "authorization_note": "authorization_note",
+                        "customer_phone": "customer_phone"
+                    }
+                    for case_f, rec_f in mapping.items():
+                        val = str(case.get(case_f) or "").strip()
+                        if val and not found_info.get(rec_f):
+                            found_info[rec_f] = val
+        except Exception:
+            pass
+
+    if found_info:
+        values.update(found_info)
+        info_msg = f"🔍 Tìm thấy thông tin: **{found_info.get('customer_info')}**"
+        if found_info.get("tax_code"): info_msg += f"\n📌 MST: `{found_info.get('tax_code')}`"
+        if found_info.get("customer_address"): info_msg += f"\n📍 Địa chỉ: {found_info.get('customer_address')}"
+        return info_msg
+    return ""
+
+
+def apply_smart_autofill(values: dict[str, str], context: ContextTypes.DEFAULT_TYPE) -> list[str]:
+    """Áp dụng các logic tự động điền thông minh cho toàn bộ values."""
+    notifications = []
+    
+    # 1. Mở rộng số hợp đồng
+    if values.get("contract_number"):
+        original = values["contract_number"]
+        expanded = expand_contract_number(original)
+        if expanded != original:
+            values["contract_number"] = expanded
+            
+    # 2. Định dạng tài sản thẩm định giá
+    desc = values.get("asset_description", "").strip()
+    if desc:
+        # Pattern: "96, 12, địa chỉ..."
+        match = re.match(r"^(\d+)\s*,\s*(\d+)\s*,\s*(.*)$", desc)
+        if match:
+            thua, to, addr = match.groups()
+            values["so_thua"] = thua
+            values["so_to"] = to
+            values["dia_chi"] = addr
+            # Chỉ định dạng lại nếu đây là luồng OCR hoặc các trường so_thua/so_to/dia_chi chưa có dữ liệu.
+            # Nếu người dùng nhập tay, chúng ta ưu tiên giữ nguyên format của họ.
+            if not values.get("so_thua") or not values.get("so_to") or not values.get("dia_chi"):
+                new_desc = f"Thửa đất số {thua}, tờ bản đồ số {to}, tại địa chỉ {addr}"
+                values["asset_description"] = new_desc
+                notifications.append(f"📝 Đã định dạng lại tài sản: {new_desc}")
+            else:
+                # Nếu đã có dữ liệu (luồng nhập tay/mẫu), giữ nguyên text gốc
+                values["asset_description"] = desc
+
+    # 3. Dropdown matching (Mục đích, Nguồn, Loại TS, Chuyên viên)
+    for field in TELEGRAM_DROPDOWN_FIELDS:
+        val = values.get(field, "").strip()
+        if not val: continue
+        
+        options = _dropdown_options_from_context(context, field)
+        if not options: continue
+        
+        # Matching 2 bước cho Nguồn/đối tác (BIDV, Cường) - Đồng bộ luồng Tương tác: Người trước, Tổ chức sau
+        if field == "source" and "," in val:
+            parts = [p.strip() for p in val.split(",")]
+            if len(parts) >= 2:
+                org_query, person_query = parts[0], parts[1]
+                
+                # 1. Dò theo tên nhân viên trước
+                person_matches = search_dropdown_options(person_query, options, limit=50)
+                if person_matches:
+                    # 2. Dò lại theo tổ chức
+                    filtered = search_dropdown_options(org_query, person_matches, limit=1)
+                    if filtered:
+                        values[field] = filtered[0]
+                        continue
+        
+        # Matching thông thường
+        matches = search_dropdown_options(val, options)
+        if len(matches) == 1:
+            values[field] = matches[0]
+
+    # 4. Tự động sinh số điện thoại nếu thiếu
+    if not values.get("customer_phone"):
+        import random
+        prefix = random.choice(["091", "098", "090", "033", "035", "038", "077", "088"])
+        suffix = "".join([str(random.randint(0, 9)) for _ in range(7)])
+        random_phone = f"{prefix}{suffix}"
+        values["customer_phone"] = random_phone
+        notifications.append(f"📱 Số điện thoại khách hàng (ngẫu nhiên): {random_phone}")
+            
+    return notifications
+
+
+def extraction_to_record_values(extraction: LandCertificateExtraction | LandCertificateMultiExtraction) -> dict[str, str]:
+    if isinstance(extraction, LandCertificateMultiExtraction):
+        asset = extraction.assets[0] if extraction.assets else blank_extraction()
+    else:
+        asset = extraction
+        
+    so_thua = asset.so_thua_dat.value.strip()
+    so_to = asset.so_to_ban_do.value.strip()
+    dia_chi = asset.dia_chi_thua_dat.value.strip()
+    chu_so_huu = asset.ten_chu_so_huu_cuoi_cung.value.strip()
+    owner_address = asset.dia_chi_chu_so_huu_cuoi_cung.value.strip()
+    citizen_id = asset.so_cccd_chu_so_huu_cuoi_cung.value.strip()
     asset_description_parts = []
     if so_thua:
         asset_description_parts.append(f"Th\u1eeda \u0111\u1ea5t s\u1ed1 {so_thua}")
@@ -477,11 +678,11 @@ def extraction_to_record_values(extraction: LandCertificateExtraction) -> dict[s
         asset_description = f"{asset_description}; t\u1ea1i \u0111\u1ecba ch\u1ec9 {dia_chi}." if asset_description else f"Th\u1eeda \u0111\u1ea5t t\u1ea1i \u0111\u1ecba ch\u1ec9 {dia_chi}."
     values = _default_form_values()
     values.update({
-        "so_thua": extraction.so_thua_dat.value.strip(),
-        "so_to": extraction.so_to_ban_do.value.strip(),
-        "dia_chi": extraction.dia_chi_thua_dat.value.strip(),
-        "chu_so_huu": extraction.ten_chu_so_huu_cuoi_cung.value.strip(),
-        "customer_type": "individual",
+        "so_thua": asset.so_thua_dat.value.strip(),
+        "so_to": asset.so_to_ban_do.value.strip(),
+        "dia_chi": asset.dia_chi_thua_dat.value.strip(),
+        "chu_so_huu": asset.ten_chu_so_huu_cuoi_cung.value.strip(),
+        "customer_type": "individual",  # Mặc định là cá nhân, bot vẫn sẽ hỏi
         "asset_type": "B\u0110S \u0111\u1eb7c th\u00f9 kh\u00e1c",
         "asset_description": asset_description,
         "preliminary_status": "Ch\u01b0a s\u01a1 b\u1ed9",
@@ -490,6 +691,7 @@ def extraction_to_record_values(extraction: LandCertificateExtraction) -> dict[s
         "citizen_id": citizen_id,
         "advance_payment": "0",
         "survey_cost": "0",
+        "valuation_fee_number": "3000000",
     })
     return values
 
@@ -504,13 +706,23 @@ def manual_missing_required_fields(values: dict[str, str]) -> list[tuple[str, st
 
 
 def build_form_field_queue(values: dict[str, str]) -> list[tuple[str, str]]:
-    queue = [
-        (field, label)
-        for field, label, _default in TELEGRAM_FORM_FIELDS
-        if field not in TELEGRAM_SKIPPED_FORM_FIELDS
-    ]
-    if values.get("customer_type") == "organization":
-        queue.extend((field, label) for field, label, _default in TELEGRAM_ORGANIZATION_FIELDS)
+    is_org = values.get("customer_type") == "organization"
+    if is_org:
+        base_fields = list(TELEGRAM_ORGANIZATION_REDUCED_FIELDS)
+        for f, l, d in TELEGRAM_ORGANIZATION_FIELDS:
+            if f != "customer_info":
+                base_fields.append((f, l, d))
+    else:
+        base_fields = TELEGRAM_FORM_FIELDS
+        
+    queue = []
+    for field, label, _default in base_fields:
+        if is_org and field in {"tax_code", "representative_name", "representative_position", "handover_contact_name", "handover_contact_position", "handover_contact_phone", "authorization_note"}:
+            queue.append((field, label))
+            continue
+        if field in TELEGRAM_SKIPPED_FORM_FIELDS:
+            continue
+        queue.append((field, label))
     return queue
 
 
@@ -550,6 +762,7 @@ def _display_record_value(field: str, value: str) -> str:
 
 def _default_form_values() -> dict[str, str]:
     values = {field: default for field, _label, default in TELEGRAM_FORM_FIELDS}
+    values.update({field: default for field, _label, default in TELEGRAM_ORGANIZATION_REDUCED_FIELDS})
     values.update({field: default for field, _label, default in TELEGRAM_ORGANIZATION_FIELDS})
     return values
 
@@ -605,7 +818,8 @@ def sync_hidden_gcn_fields_from_form(values: dict[str, str]) -> dict[str, str]:
 
 
 def _field_label(field_name: str) -> str:
-    for field, label, _default in [*TELEGRAM_FORM_FIELDS, *TELEGRAM_ORGANIZATION_FIELDS]:
+    all_fields = [*TELEGRAM_FORM_FIELDS, *TELEGRAM_ORGANIZATION_REDUCED_FIELDS, *TELEGRAM_ORGANIZATION_FIELDS]
+    for field, label, _default in all_fields:
         if field == field_name:
             return label
     for field, label in REQUIRED_RECORD_FIELDS:
@@ -614,15 +828,20 @@ def _field_label(field_name: str) -> str:
     return field_name
 
 
-def format_extraction_response(record_id: int, extraction: LandCertificateExtraction) -> str:
+def format_extraction_response(record_id: int, extraction: LandCertificateExtraction | LandCertificateMultiExtraction) -> str:
+    if isinstance(extraction, LandCertificateMultiExtraction):
+        asset = extraction.assets[0] if extraction.assets else blank_extraction()
+    else:
+        asset = extraction
+        
     return "\n".join(
         [
             f"Da quet GCN va luu ban ghi #{record_id}.",
             "",
-            f"So thua: {extraction.so_thua_dat.value or 'Chua doc duoc'}",
-            f"So to ban do: {extraction.so_to_ban_do.value or 'Chua doc duoc'}",
-            f"Dia chi thua dat: {extraction.dia_chi_thua_dat.value or 'Chua doc duoc'}",
-            f"Chu so huu: {extraction.ten_chu_so_huu_cuoi_cung.value or 'Chua doc duoc'}",
+            f"So thua: {asset.so_thua_dat.value or 'Chua doc duoc'}",
+            f"So to ban do: {asset.so_to_ban_do.value or 'Chua doc duoc'}",
+            f"Dia chi thua dat: {asset.dia_chi_thua_dat.value or 'Chua doc duoc'}",
+            f"Chu so huu: {asset.ten_chu_so_huu_cuoi_cung.value or 'Chua doc duoc'}",
             f"Trang thai: {PENDING_STATUS}",
         ]
     )
@@ -694,7 +913,17 @@ async def _ask_next_missing_field(update: Update, context: ContextTypes.DEFAULT_
         if field == "customer_type":
             hint += "\nG\u1ee3i \u00fd: nh\u1eadp 'c\u00e1 nh\u00e2n' ho\u1eb7c 't\u1ed5 ch\u1ee9c'."
         if str(field) in TELEGRAM_DROPDOWN_FIELDS:
-            hint += "\n\u0110\u00e2y l\u00e0 tr\u01b0\u1eddng c\u00f3 danh s\u00e1ch ch\u1ecdn. Nh\u1eadp t\u1eeb kh\u00f3a, bot s\u1ebd t\u00ecm g\u1ee3i \u00fd ph\u00f9 h\u1ee3p."
+            options = _dropdown_options_from_context(context, str(field))
+            if options:
+                # Nếu danh sách ngắn (như Loại tài sản), hiển thị đánh số luôn
+                if len(options) <= 10 or str(field) == "asset_type":
+                    record["pending_dropdown"] = {"field": str(field), "matches": options}
+                    choices = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
+                    hint += f"\n\nDanh sách lựa chọn:\n{choices}\n\nNhập số thứ tự để chọn nhanh, hoặc nhập từ khóa để tìm."
+                else:
+                    hint += "\nĐây là trường có danh sách chọn. Nhập từ khóa, bot sẽ tìm gợi ý phù hợp."
+            else:
+                hint += "\nĐây là trường có danh sách chọn. Nhập từ khóa, bot sẽ tìm gợi ý phù hợp."
         await update.effective_message.reply_text(f"{label}:\n{hint}")
         return ASK_MISSING_FIELD
     missing_fields = record.get("missing_fields")
@@ -755,6 +984,8 @@ def _settings_from_context(context: ContextTypes.DEFAULT_TYPE) -> TelegramSettin
 
 
 def _dropdown_options_from_context(context: ContextTypes.DEFAULT_TYPE, field_name: str) -> list[str]:
+    if field_name == "asset_type":
+        return ASSET_TYPE_OPTIONS
     dropdown_options = context.application.bot_data.get("excel_dropdown_options", {})
     if not isinstance(dropdown_options, dict):
         return []
@@ -1018,14 +1249,14 @@ async def request_manual_template_command(update: Update, context: ContextTypes.
     template = (
         "Anh/chị hãy copy bảng dưới đây, điền thông tin và gửi lại cho bot:\n\n"
         "1. Loại khách hàng: Cá nhân\n"
-        "2. Số hợp đồng: Chưa có\n"
-        "3. Loại tài sản: BĐS đặc thù khác\n"
-        "4. Tài sản thẩm định giá: \n"
-        "5. Mục đích thẩm định: Làm cơ sở tham khảo để thế chấp vay vốn tại Vietcombank\n"
-        "6. Nguồn/đối tác: \n"
-        "7. Thông tin khách hàng: \n"
-        "8. Địa chỉ khách hàng: \n"
-        "9. Số CCCD/CMND: Chưa có\n"
+        "2. Tên khách hàng: \n"
+        "3. Địa chỉ khách hàng: \n"
+        "4. Số hợp đồng: \n"
+        "5. Loại tài sản: BĐS đặc thù khác\n"
+        "6. Tài sản thẩm định giá: \n"
+        "7. Mục đích thẩm định: Làm cơ sở tham khảo để thế chấp vay vốn tại \n"
+        "8. Nguồn/đối tác: \n"
+        "9. Số CCCD/CMND: \n"
         "10. Phí thẩm định: 3000000\n"
         "11. Tạm ứng: 0\n"
         "12. Chuyên viên nghiệp vụ: Thampt2\n"
@@ -1040,7 +1271,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.effective_message.text or ""
     text_lower = text.lower()
 
-    if "1. loại khách hàng:" in text_lower and "4. tài sản thẩm định giá:" in text_lower:
+    if "1. loại khách hàng:" in text_lower and "6. tài sản thẩm định giá:" in text_lower:
         await process_manual_template_submission(update, context, text)
         return
 
@@ -1073,13 +1304,13 @@ async def process_manual_template_submission(update: Update, context: ContextTyp
     
     field_map = {
         "1. loại khách hàng:": "customer_type",
-        "2. số hợp đồng:": "contract_number",
-        "3. loại tài sản:": "asset_type",
-        "4. tài sản thẩm định giá:": "asset_description",
-        "5. mục đích thẩm định:": "valuation_purpose",
-        "6. nguồn/đối tác:": "source",
-        "7. thông tin khách hàng:": "customer_info",
-        "8. địa chỉ khách hàng:": "customer_address",
+        "2. tên khách hàng:": "customer_info",
+        "3. địa chỉ khách hàng:": "customer_address",
+        "4. số hợp đồng:": "contract_number",
+        "5. loại tài sản:": "asset_type",
+        "6. tài sản thẩm định giá:": "asset_description",
+        "7. mục đích thẩm định:": "valuation_purpose",
+        "8. nguồn/đối tác:": "source",
         "9. số cccd/cmnd:": "citizen_id",
         "10. phí thẩm định:": "valuation_fee_number",
         "11. tạm ứng:": "advance_payment",
@@ -1098,6 +1329,12 @@ async def process_manual_template_submission(update: Update, context: ContextTyp
         values["customer_type"] = "individual"
     elif values.get("customer_type", "").lower() == "tổ chức":
         values["customer_type"] = "organization"
+
+    # Áp dụng auto-fill thông minh
+    notifications = apply_smart_autofill(values, context)
+    org_msg = await find_and_fill_organization_info(values, context)
+    if org_msg:
+        notifications.insert(0, org_msg)
         
     try:
         from .database_manager import create_record_from_values
@@ -1106,21 +1343,48 @@ async def process_manual_template_submission(update: Update, context: ContextTyp
         
         record = await db_get_record(settings.records_db_path, record_id)
         summary = format_record_summary(record_id, record)
+        
+        final_msg = f"Đã tạo hồ sơ thành công từ mẫu nhập tay:\n\n{summary}"
+        if notifications:
+            final_msg = "\n\n".join(notifications) + "\n\n---\n" + final_msg
+            
         await update.effective_message.reply_text(
-            f"Đã tạo hồ sơ thành công từ mẫu nhập tay:\n\n{summary}",
-            reply_markup=automation_keyboard(record_id)
+            final_msg,
+            reply_markup=automation_keyboard(record_id),
+            parse_mode="Markdown"
         )
     except Exception as exc:
         await update.effective_message.reply_text(f"Lỗi khi lưu hồ sơ: {exc}")
 
 
 async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if update.effective_message is None:
+    if update.effective_message is None or not update.effective_message.photo:
         return ConversationHandler.END
-    if not update.effective_message.photo:
-        await update.effective_message.reply_text("Khong tim thay hinh anh trong tin nhan.")
-        return ConversationHandler.END
-    await update.effective_message.reply_text("Da nhan hinh anh, dang quet GCN bang Gemini...")
+
+    media_group_id = update.effective_message.media_group_id
+    if not media_group_id:
+        asyncio.create_task(_handle_single_photo_message(update, context))
+        return ASK_MISSING_FIELD
+
+    # Xử lý Album ảnh (Media Group)
+    if "media_groups" not in context.bot_data:
+        context.bot_data["media_groups"] = {}
+    
+    if media_group_id not in context.bot_data["media_groups"]:
+        context.bot_data["media_groups"][media_group_id] = []
+        asyncio.create_task(_wait_and_process_media_group(media_group_id, context))
+    
+    context.bot_data["media_groups"][media_group_id].append(update)
+    return ASK_MISSING_FIELD
+
+async def _wait_and_process_media_group(media_group_id: str, context: ContextTypes.DEFAULT_TYPE):
+    await asyncio.sleep(1.5)
+    updates = context.bot_data["media_groups"].pop(media_group_id, [])
+    if updates:
+        await _handle_media_group_photos(updates, context)
+
+async def _handle_single_photo_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.effective_message.reply_text("Đã nhận hình ảnh, đang quét GCN bằng AI...")
     try:
         settings = _settings_from_context(context)
         photo = update.effective_message.photo[-1]
@@ -1129,17 +1393,87 @@ async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYP
             file_name=f"{photo.file_unique_id}.jpg",
             settings=settings,
         )
+        return await _process_extraction_result(update, context, record_id, extraction, settings)
     except Exception as exc:
-        await update.effective_message.reply_text(f"Quet GCN that bai: {exc}")
+        await update.effective_message.reply_text(f"Quét GCN thất bại: {exc}")
         return ConversationHandler.END
 
+async def _handle_media_group_photos(updates: list[Update], context: ContextTypes.DEFAULT_TYPE):
+    first_update = updates[0]
+    await first_update.effective_message.reply_text(f"Đã nhận album gồm {len(updates)} ảnh. Đang ghép thành file PDF và quét bằng AI...")
+    
+    try:
+        settings = _settings_from_context(context)
+        # Sắp xếp theo message_id để đảm bảo đúng thứ tự trang
+        updates.sort(key=lambda u: u.effective_message.message_id)
+        
+        image_paths = []
+        for i, up in enumerate(updates):
+            photo = up.effective_message.photo[-1]
+            temp_path = _unique_upload_path(settings.upload_dir, f"part_{i}_{photo.file_unique_id}.jpg")
+            await _download_telegram_file(photo, temp_path)
+            image_paths.append(temp_path)
+            
+        # Ghép thành PDF
+        merged_pdf_name = f"merged_{uuid4().hex[:8]}.pdf"
+        merged_pdf_path = _unique_upload_path(settings.upload_dir, merged_pdf_name)
+        
+        await to_thread(_merge_images_to_pdf, image_paths, merged_pdf_path)
+        
+        # Xóa các file ảnh tạm
+        for p in image_paths:
+            try: os.remove(p)
+            except: pass
+            
+        # Quét file PDF vừa ghép
+        extraction = await to_thread(
+            extract_land_certificate_with_gemini,
+            merged_pdf_path,
+            api_key=settings.gemini_api_key,
+            model=settings.gemini_model,
+        )
+        record_id = await save_record(settings.records_db_path, merged_pdf_path, extraction)
+        
+        return await _process_extraction_result(first_update, context, record_id, extraction, settings)
+        
+    except Exception as exc:
+        await first_update.effective_message.reply_text(f"Xử lý album ảnh thất bại: {exc}")
+        return ConversationHandler.END
+
+def _merge_images_to_pdf(image_paths: list[str], output_path: str) -> None:
+    doc = fitz.open()
+    for img_path in image_paths:
+        try:
+            img_doc = fitz.open(img_path)
+            pdf_bytes = img_doc.convert_to_pdf()
+            img_doc.close()
+            with fitz.open("pdf", pdf_bytes) as img_pdf:
+                doc.insert_pdf(img_pdf)
+        except Exception:
+            continue
+    doc.save(output_path)
+    doc.close()
+
+async def _process_extraction_result(update: Update, context: ContextTypes.DEFAULT_TYPE, record_id: int, extraction: any, settings: any) -> int:
     values = extraction_to_record_values(extraction)
+    
+    # Áp dụng auto-fill thông minh cho kết quả OCR
+    apply_smart_autofill(values, context)
+    
+    # Lưu các giá trị tự động điền/ngẫu nhiên vào database
+    await update_record_fields(settings.records_db_path, record_id, values)
+    
     _set_conversation_record(
         context,
         record_id=record_id,
         db_path=settings.records_db_path,
         values=values,
     )
+    
+    record = _get_conversation_record(context)
+    if record is not None:
+        record["form_fields"] = build_form_field_queue(values)
+        
     await update.effective_message.reply_text(format_extraction_response(record_id, extraction))
     return await _ask_next_missing_field(update, context)
 
@@ -1164,28 +1498,22 @@ async def handle_pdf_document(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.effective_message.reply_text(f"Quet GCN that bai: {exc}")
         return ConversationHandler.END
 
-    values = extraction_to_record_values(extraction)
-    _set_conversation_record(
-        context,
-        record_id=record_id,
-        db_path=settings.records_db_path,
-        values=values,
-    )
-    await update.effective_message.reply_text(format_extraction_response(record_id, extraction))
-    return await _ask_next_missing_field(update, context)
+    return await _process_extraction_result(update, context, record_id, extraction, settings)
 
 
 async def handle_missing_field_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = (update.effective_message.text or "").strip()
     record = _get_conversation_record(context)
     if record is None or update.effective_message is None:
         return ConversationHandler.END
-    text = (update.effective_message.text or "").strip()
     form_fields = record.get("form_fields")
     if isinstance(form_fields, list) and form_fields:
         field, _label = form_fields[0]
         field = str(field)
         values = dict(record["values"])
         pending_dropdown = record.get("pending_dropdown")
+        
+        # Xử lý chọn từ dropdown (trả lời bằng số)
         if isinstance(pending_dropdown, dict) and pending_dropdown.get("field") == field:
             matches = pending_dropdown.get("matches")
             if isinstance(matches, list) and text.isdigit():
@@ -1196,71 +1524,108 @@ async def handle_missing_field_reply(update: Update, context: ContextTypes.DEFAU
                     record.pop("pending_dropdown", None)
                     record["values"] = values
                     record["form_fields"] = form_fields[1:]
-                    record["missing_fields"] = manual_missing_required_fields(values) if record.get("manual_entry") else missing_required_fields(values)
                     return await _ask_next_missing_field(update, context)
-                await update.effective_message.reply_text("S\u1ed1 th\u1ee9 t\u1ef1 kh\u00f4ng h\u1ee3p l\u1ec7. Vui l\u00f2ng ch\u1ecdn l\u1ea1i ho\u1eb7c nh\u1eadp t\u1eeb kh\u00f3a kh\u00e1c.")
+                await update.effective_message.reply_text("Số thứ tự không hợp lệ. Vui lòng chọn lại hoặc nhập từ khóa khác.")
                 return ASK_MISSING_FIELD
             record.pop("pending_dropdown", None)
 
         if text not in ("-", "."):
-            if field in TELEGRAM_DROPDOWN_FIELDS:
+            # 1. Xử lý logic Auto-fill và Matching cho từng trường
+            if field == "customer_type":
+                values[field] = _normalize_customer_type(text)
+                if values[field] == "organization" and not record.get("manual_entry"):
+                    values["customer_info"] = ""
+                    values["customer_address"] = ""
+            elif field == "contract_number":
+                values[field] = expand_contract_number(text)
+            elif field == "asset_description":
+                values[field] = text
+                apply_smart_autofill(values, context) # Tách thửa/tờ nếu nhập rút gọn
+            elif field in TELEGRAM_DROPDOWN_FIELDS:
                 options = _dropdown_options_from_context(context, field)
-                matches = search_dropdown_options(text, options)
-                if len(matches) == 1:
-                    values[field] = matches[0]
-                elif len(matches) > 1:
-                    record["pending_dropdown"] = {"field": field, "matches": matches}
-                    choices = "\n".join(f"{index}. {option}" for index, option in enumerate(matches, start=1))
-                    header = f"Tìm thấy {len(matches)} kết quả phù hợp:\n"
-                    footer = "\n\nTrả lời số thứ tự để chọn, nhập từ khóa khác để tìm lại, hoặc nhập '.' để bỏ qua."
-                    full_msg = header + choices + footer
-                    # Telegram giới hạn 4096 ký tự/tin nhắn → chia nhỏ nếu cần
-                    MAX_MSG_LEN = 4000
-                    if len(full_msg) <= MAX_MSG_LEN:
-                        await update.effective_message.reply_text(full_msg)
+                match_found = False
+                
+                # Matching 2 bước cho Nguồn/đối tác
+                if field == "source" and "," in text:
+                    parts = [p.strip() for p in text.split(",")]
+                    if len(parts) >= 2:
+                        org_query, person_query = parts[0], parts[1]
+                        
+                        # 1. Dò theo tên nhân viên trước (lấy nhiều kết quả hơn để lọc tiếp)
+                        person_matches = search_dropdown_options(person_query, options, limit=50)
+                        
+                        if person_matches:
+                            # 2. Dò lại theo chi nhánh ngân hàng (tổ chức)
+                            filtered = search_dropdown_options(org_query, person_matches, limit=10)
+                            
+                            # Nếu lọc theo tổ chức không ra, thử giữ nguyên kết quả dò theo tên nhân viên
+                            if not filtered:
+                                filtered = person_matches[:10]
+                                
+                            if len(filtered) == 1:
+                                values[field] = filtered[0]
+                                match_found = True
+                            elif len(filtered) > 1:
+                                filtered = filtered[:10]
+                                record["pending_dropdown"] = {"field": field, "matches": filtered}
+                                truncated_choices = [f"{i}. {opt[:100]}..." if len(opt) > 100 else f"{i}. {opt}" for i, opt in enumerate(filtered, 1)]
+                                choices = "\n".join(truncated_choices)
+                                await update.effective_message.reply_text(f"Tìm thấy {len(filtered)} kết quả cho '{text}':\n{choices}\n\nTrả lời số để chọn.")
+                                return ASK_MISSING_FIELD
+                
+                if not match_found:
+                    # Matching thông thường
+                    matches = search_dropdown_options(text, options)
+                    if len(matches) == 1:
+                        values[field] = matches[0]
+                    elif len(matches) > 1:
+                        matches = matches[:10]
+                        record["pending_dropdown"] = {"field": field, "matches": matches}
+                        truncated_choices = [f"{i}. {opt[:100]}..." if len(opt) > 100 else f"{i}. {opt}" for i, opt in enumerate(matches, 1)]
+                        choices = "\n".join(truncated_choices)
+                        await update.effective_message.reply_text(f"Tìm thấy {len(matches)} kết quả phù hợp:\n{choices}\n\nTrả lời số để chọn.")
+                        return ASK_MISSING_FIELD
                     else:
-                        lines = choices.split("\n")
-                        chunk = header
-                        for line in lines:
-                            if len(chunk) + len(line) + 1 > MAX_MSG_LEN:
-                                await update.effective_message.reply_text(chunk)
-                                chunk = ""
-                            chunk += line + "\n"
-                        if chunk.strip():
-                            await update.effective_message.reply_text(chunk + footer)
-                        else:
-                            await update.effective_message.reply_text(footer)
-                    return ASK_MISSING_FIELD
-                else:
-                    values[field] = text
-                    if options:
-                        await update.effective_message.reply_text("Kh\u00f4ng t\u00ecm th\u1ea5y trong danh s\u00e1ch, bot s\u1ebd l\u01b0u theo n\u1ed9i dung anh nh\u1eadp.")
+                        values[field] = text
+            elif field == "customer_info" and values.get("customer_type") == "organization":
+                values[field] = text
+                org_msg = await find_and_fill_organization_info(values, context)
+                if org_msg:
+                    await update.effective_message.reply_text(org_msg, parse_mode="Markdown")
             else:
-                values[field] = _normalize_customer_type(text) if field == "customer_type" else text
+                values[field] = text
+
+            # 2. Đồng bộ các trường GCN ẩn
             synced_values = sync_hidden_gcn_fields_from_form(values)
-            sync_updates = {
-                sync_field: synced_values.get(sync_field, "")
-                for sync_field in HIDDEN_GCN_FIELDS
-                if synced_values.get(sync_field, "") != values.get(sync_field, "")
-            }
+            sync_updates = {f: synced_values[f] for f in HIDDEN_GCN_FIELDS if synced_values.get(f) != values.get(f)}
             values = synced_values
-            await update_record_fields(
-                str(record["db_path"]),
-                int(record["record_id"]),
-                {field: values[field], **sync_updates},
-            )
+            
+            # 3. Lưu vào database
+            db_updates = {field: values[field], **sync_updates}
+            if field == "asset_description":
+                from .database_manager import TRACKING_RECORD_TEXT_COLUMNS
+                db_updates.update({f: values[f] for f in values if f in TRACKING_RECORD_TEXT_COLUMNS})
+            await update_record_fields(str(record["db_path"]), int(record["record_id"]), db_updates)
+            
         record["values"] = values
         remaining_fields = form_fields[1:]
+        
+        # 4. Chuyển đổi hàng đợi nếu là Tổ chức
         if field == "customer_type":
-            organization_queue = [(item_field, label) for item_field, label, _default in TELEGRAM_ORGANIZATION_FIELDS]
-            remaining_fields = [
-                item for item in remaining_fields if item[0] not in {org_field for org_field, _label in organization_queue}
-            ]
-            if values.get("customer_type") == "organization":
-                remaining_fields.extend(organization_queue)
+            is_org = values.get("customer_type") == "organization"
+            if is_org:
+                remaining_fields = build_form_field_queue(values)
+                # Bỏ trường customer_type vừa nhập
+                remaining_fields = [f for f in remaining_fields if f[0] != "customer_type"]
+        
+        # 5. Skip các trường đã được điền tự động (chỉ cho Tổ chức)
+        if values.get("customer_type") == "organization":
+            remaining_fields = [f for f in remaining_fields if not str(values.get(f[0], "")).strip()]
+
         record["form_fields"] = remaining_fields
-        record["missing_fields"] = manual_missing_required_fields(values) if record.get("manual_entry") else missing_required_fields(values)
         return await _ask_next_missing_field(update, context)
+
+
 
     missing_fields = record.get("missing_fields")
     if not isinstance(missing_fields, list) or not missing_fields:
@@ -1452,15 +1817,18 @@ async def handle_post_confirm_action(update: Update, context: ContextTypes.DEFAU
             except Exception as e:
                 await context.application.bot.send_message(chat_id=chat_id, text=f"📧 Gửi Mail Hành chính cho bản ghi #{record_id} thất bại: {e}")
                 
-        create_task(asyncio.gather(
-            _run_mail(),
-            _run_web_automation_task(
-                application=context.application,
-                chat_id=chat_id,
-                record_id=record_id,
-                settings=settings,
+        async def _run_all():
+            await asyncio.gather(
+                _run_mail(),
+                _run_web_automation_task(
+                    application=context.application,
+                    chat_id=chat_id,
+                    record_id=record_id,
+                    settings=settings,
+                )
             )
-        ))
+        
+        create_task(_run_all())
         return
         
     if action == DONE_AUTOMATION_CALLBACK_PREFIX:
@@ -1491,6 +1859,8 @@ def build_telegram_application(token: str) -> Application:
         ],
         states={
             ASK_MISSING_FIELD: [
+                MessageHandler(filters.PHOTO, handle_photo_message),
+                MessageHandler(filters.Document.PDF, handle_pdf_document),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_missing_field_reply),
             ],
             CONFIRMING: [
@@ -1513,6 +1883,8 @@ def build_telegram_application(token: str) -> Application:
     telegram_app.add_handler(CommandHandler("send_mail", send_mail_by_contract_command))
     telegram_app.add_handler(CommandHandler("tra_cuu", search_case_by_contract_command))
     telegram_app.add_handler(CommandHandler("search", search_case_by_contract_command))
+    telegram_app.add_handler(get_sobo_conversation_handler())
+    telegram_app.add_handler(get_phathanh_conversation_handler())
     telegram_app.add_handler(conversation)
     telegram_app.add_handler(
         CallbackQueryHandler(
@@ -1571,7 +1943,34 @@ async def telegram_webhook(request: Request) -> dict[str, bool]:
         raise HTTPException(status_code=503, detail="Telegram bot chua san sang.")
 
     payload = await request.json()
+    
     update = Update.de_json(payload, telegram_app.bot)
-    await telegram_app.process_update(update)
+    try:
+        await telegram_app.process_update(update)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        
     return {"ok": True}
+
+
+@app.get("/preview")
+async def preview_html():
+    from fastapi.responses import HTMLResponse
+    preview_file = Path("src/templates/preview_phathanh.html")
+    if preview_file.exists():
+        content = preview_file.read_text(encoding="utf-8")
+        # Replace the CID with /logo.jpg so it loads in ordinary web browsers
+        content = content.replace("cid:logo_cenvalue", "/logo.jpg")
+        return HTMLResponse(content=content)
+    return HTMLResponse(content="<h1>Chưa tạo file xem trước. Anh vui lòng chạy lại script hoặc kiểm tra nhé.</h1>", status_code=404)
+
+
+@app.get("/logo.jpg")
+async def serve_logo():
+    from fastapi.responses import FileResponse
+    logo_path = Path("src/templates/logo.jpg")
+    if logo_path.exists():
+        return FileResponse(logo_path, media_type="image/jpeg")
+    raise HTTPException(status_code=404, detail="Logo not found")
 

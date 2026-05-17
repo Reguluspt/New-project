@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter, quote_sheetname, range_boundaries
 
 
@@ -210,7 +211,12 @@ def fill_template(
             continue
         if key == "valuation_fee_number":
             value = safe_int(str(value))
-        ws[resolve_write_cell(ws, cell)] = value
+        target_cell = ws[resolve_write_cell(ws, cell)]
+        target_cell.value = value
+        # Bật wrap_text cho các ô chứa ký tự xuống dòng (đa tài sản)
+        if isinstance(value, str) and "\n" in value:
+            target_cell.alignment = Alignment(vertical="top", wrap_text=True)
 
     wb.save(output)
     return output
+

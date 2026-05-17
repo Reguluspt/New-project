@@ -21,7 +21,13 @@ UNPAID_PAYMENT_STATUS = "Chưa thanh toán"
 WEB_DELETED_STATUS = "CANCELLED"
 
 
+_SYNC_COLUMNS_INITIALIZED = {}
+
 def _ensure_sync_columns(db_path: str | Path) -> None:
+    path_key = str(db_path)
+    if _SYNC_COLUMNS_INITIALIZED.get(path_key):
+        return
+        
     init_db(db_path)
     with sqlite3.connect(db_path) as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)").fetchall()}
@@ -31,6 +37,7 @@ def _ensure_sync_columns(db_path: str | Path) -> None:
             conn.execute("ALTER TABLE cases ADD COLUMN telegram_record_status TEXT")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cases_telegram_record_id ON cases(telegram_record_id)")
         conn.commit()
+    _SYNC_COLUMNS_INITIALIZED[path_key] = True
 
 
 def _case_id_for_record(conn: sqlite3.Connection, record: dict[str, str]) -> int | None:
@@ -156,11 +163,14 @@ def sync_record_rows_to_cases(records: list[dict[str, str]], cases_db_path: str 
         record_id = str(record.get("id") or "").strip()
         if not record_id:
             continue
+        
         case_values = record_to_case_values(record)
         with sqlite3.connect(cases_db_path) as conn:
             case_id = _case_id_for_record(conn, record)
 
         if case_id is None:
+            if str(record.get("status") or "").strip() == "CANCELLED":
+                continue
             case_id = create_case(cases_db_path, case_values)
         else:
             update_case(cases_db_path, case_id, case_values)

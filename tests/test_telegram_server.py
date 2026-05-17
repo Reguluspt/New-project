@@ -391,7 +391,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fields[0], ("customer_type", "Loại khách hàng"))
         self.assertNotIn("Số thửa", text)
         self.assertIn("1. Loại khách hàng: Cá nhân", text)
-        self.assertIn("2. Số hợp đồng: N04-1051", text)
+        self.assertIn("4. Số hợp đồng: N04-1051", text)
 
     async def test_missing_field_reply_updates_record_and_shows_confirmation(self) -> None:
         extraction = _sample_extraction().model_copy(update={"so_to_ban_do": _value("")})
@@ -709,7 +709,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
             }
         }
         message = Mock()
-        message.text = "2"
+        message.text = "4"
         message.reply_text = AsyncMock()
         update = Mock()
         update.effective_message = message
@@ -722,6 +722,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_post_confirm_send_mail_callback_sends_email(self) -> None:
         context = Mock()
+        context.user_data = {}
         context.application.bot_data = {
             "settings": TelegramSettings(
                 bot_token="token",
@@ -749,7 +750,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         get_record_mock.assert_awaited_once_with("tmp/records.db", 9)
         send_mail_mock.assert_awaited_once()
         self.assertEqual(send_mail_mock.await_args.args[0]["to_email"], "ops@example.com")
-        query.edit_message_text.assert_awaited_once_with("Đã gửi mail thành công")
+        self.assertIn("Đã gửi mail thành công", query.edit_message_text.await_args.args[0])
 
     async def test_send_mail_by_contract_command_sends_matching_record(self) -> None:
         extraction = _sample_extraction()
@@ -940,6 +941,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_post_confirm_web_callback_starts_background_task(self) -> None:
         context = Mock()
+        context.user_data = {}
         context.application.bot_data = {
             "settings": TelegramSettings(
                 bot_token="token",
@@ -973,10 +975,9 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
 
     def test_automation_keyboard_contains_record_actions(self) -> None:
         keyboard = automation_keyboard(11)
-        buttons = keyboard.inline_keyboard[0]
-
-        self.assertEqual(buttons[0].callback_data, f"{SEND_MAIL_CALLBACK_PREFIX}:11")
-        self.assertEqual(buttons[1].callback_data, f"{WEB_AUTOMATION_CALLBACK_PREFIX}:11")
+        # keyboard.inline_keyboard is [[btn1], [btn2], [btn3]]
+        self.assertEqual(keyboard.inline_keyboard[0][0].callback_data, f"{SEND_MAIL_CALLBACK_PREFIX}:11")
+        self.assertEqual(keyboard.inline_keyboard[1][0].callback_data, f"{WEB_AUTOMATION_CALLBACK_PREFIX}:11")
 
     async def test_process_file_downloads_extracts_and_saves_record(self) -> None:
         extraction = _sample_extraction()

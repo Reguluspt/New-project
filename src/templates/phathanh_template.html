@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #000000; }
+    .container { max-width: 800px; margin: 0 auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .greeting { font-size: 15px; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+    th, td { border: 1px solid #bdc3c7; padding: 10px; text-align: left; vertical-align: middle; }
+    
+    .title-thanhly { background-color: #FFC000; color: #000000; font-weight: bold; text-align: center; text-transform: uppercase; font-size: 14px; padding: 12px; }
+    .title-khachhang { background-color: #E2EFDA; color: #000000; font-weight: bold; text-align: center; text-transform: uppercase; font-size: 14px; padding: 10px; }
+    
+    .section-header { background-color: #E2EFDA; font-weight: bold; text-align: center; color: #000000; }
+    .col-header { background-color: #ffffff; font-weight: bold; text-align: center; color: #000000; }
+    
+    .label-cell { background-color: #ffffff; font-weight: bold; width: 130px; }
+    .value-cell { background-color: #ffffff; }
+    
+    .signature { margin-top: 30px; border-top: 1px solid #e0e0e0; padding-top: 20px; }
+    .sig-table { border: none !important; width: 100%; border-collapse: collapse; background: none; margin: 0; }
+    .sig-cell-logo { border: none !important; width: 110px; vertical-align: middle; padding: 0 15px 0 0; background: none; }
+    .sig-cell-info { border: none !important; border-left: 2px solid #17b978 !important; padding-left: 15px; vertical-align: middle; background: none; line-height: 1.6; font-family: Arial, sans-serif; }
+</style>
+</head>
+<body>
+    <div class="container">
+        <div class="greeting">
+            <p>Dear all,</p>
+            <p>Mọi người cho phát hành chứng thư giúp mình nhé, mình cảm ơn!</p>
+        </div>
+        
+        <table>
+            <colgroup>
+                <col style="width: 13%;">
+                <col style="width: 4%;">
+                <col style="width: 35%;">
+                <col style="width: 9%;">
+                <col style="width: 13%;">
+                <col style="width: 16%;">
+                <col style="width: 10%;">
+            </colgroup>
+            <!-- Row 0: THÔNG TIN THANH LÝ HỢP ĐỒNG -->
+            <tr>
+                <th colspan="7" class="title-thanhly">THÔNG TIN THANH LÝ HỢP ĐỒNG</th>
+            </tr>
+            <!-- Row 1: THÔNG TIN KHÁCH HÀNG -->
+            <tr>
+                <th colspan="7" class="title-khachhang">THÔNG TIN KHÁCH HÀNG</th>
+            </tr>
+            <!-- Row 2: Khách hàng yêu cầu -->
+            <tr>
+                <td colspan="2" class="label-cell">Khách hàng yêu cầu*:</td>
+                <td colspan="5" class="value-cell"><strong>{{ customer_name }}</strong></td>
+            </tr>
+            <!-- Row 3: Địa chỉ liên lạc -->
+            <tr>
+                <td colspan="2" class="label-cell">Địa chỉ liên lạc*:</td>
+                <td colspan="5" class="value-cell">{{ customer_address }}{{ customer_extra_html }}</td>
+            </tr>
+            <!-- Row 4: Section titles GIAO NHẬN & CÔNG NỢ -->
+            <tr>
+                <th colspan="4" class="section-header">GIAO NHẬN</th>
+                <th colspan="3" class="section-header">CÔNG NỢ</th>
+            </tr>
+            <!-- Row 5: Column headers -->
+            <tr>
+                <td class="col-header">Hình thức</td>
+                <td class="col-header">SL</td>
+                <td class="col-header">Người nhận</td>
+                <td class="col-header">Ngày nhận</td>
+                <td class="col-header">Hình thức</td>
+                <td class="col-header">Thông tin CK</td>
+                <td class="col-header">Ngày CK</td>
+            </tr>
+            <!-- Row 6: Data values -->
+            <tr>
+                <td class="value-cell" style="text-align: center;">Chuyển phát</td>
+                <td class="value-cell" style="text-align: center;">2</td>
+                <td class="value-cell" style="font-size: 14px; line-height: 1.3; padding: 8px 10px;">{{ recipient_info }}</td>
+                <td class="value-cell" style="text-align: center;">{{ date_receive }}</td>
+                <td class="value-cell" style="text-align: center;">Chuyển khoản</td>
+                <td class="value-cell" style="text-align: center; font-size: 14px;">Chuyên viên kinh doanh thu</td>
+                <td class="value-cell" style="text-align: center;">{{ date_payment }}</td>
+            </tr>
+            <!-- Row 7: Ghi chú (left section) & Blank billing columns (right section) -->
+            <tr>
+                <td colspan="4" class="value-cell"><strong>Ghi chú:</strong> {{ personal_note }}</td>
+                <td colspan="3" class="value-cell" style="background-color: #ffffff;"></td>
+            </tr>
+        </table>
+
+        <!-- Restored Premium Signature layout as in user screenshot -->
+        <div class="signature">
+            <table class="sig-table">
+                <tr style="border: none !important; background: none;">
+                    <td class="sig-cell-logo">
+                        <img src="cid:logo_cenvalue" alt="Cenvalue Logo" style="width: 100px; height: auto; display: block;" />
+                    </td>
+                    <td class="sig-cell-info">
+                        <div style="font-size: 15px; font-weight: bold; color: #1e3d59;">CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ (CENVALUE)</div>
+                        <div style="font-size: 13px; color: #555555; margin-top: 4px;">
+                            <strong>VP TẠI GIA LAI:</strong> 90/60/3 Trường Chinh, phường Pleiku, tỉnh Gia Lai
+                        </div>
+                        <div style="font-size: 13px; color: #555555; margin-top: 2px;">
+                            <strong>Hotline:</strong> 0905.226.968 | <strong>Website:</strong> <a href="http://www.cenvalue.vn" target="_blank" style="color: #17b978; text-decoration: none; font-weight: bold;">www.cenvalue.vn</a>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

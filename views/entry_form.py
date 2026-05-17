@@ -19,6 +19,7 @@ from src.database_manager import create_outbound_tracking_record, resolve_record
 from src.excel_writer import fill_template
 from src.mail_service import send_appraisal_email
 from src.sqlite_store import DEFAULT_CASE_STATUS, create_case, display_cases, recent_cases, update_case
+from src.web_automation import run_company_web_entry
 
 
 def _hidden_gcn_value(session_key: str, extracted_value) -> str:
@@ -68,42 +69,114 @@ def render(
     case_status = DEFAULT_CASE_STATUS
     payment_status = UNPAID_STATUS
 
-    with st.expander("Thông tin bổ sung cho form Excel", expanded=True):
-        customer_type = st.selectbox(
-            "Loại khách hàng",
-            ["individual", "organization"],
-            format_func=lambda value: "Cá nhân" if value == "individual" else "Tổ chức",
-            key="entry_customer_type",
-        )
-        contract_number = st.text_input("Số hợp đồng", key="entry_contract_number")
-        asset_type = selectbox_from_excel("Loại tài sản", "asset_type", excel_dropdown_options, "entry_asset_type")
-        asset_description = st.text_area(
-            "Tài sản thẩm định giá",
-            height=88,
-            key="entry_asset_description",
-            on_change=sync_form_to_gcn_from_fields,
-        )
-        preliminary_status = selectbox_from_excel("Sơ bộ", "preliminary_status", excel_dropdown_options, "entry_preliminary_status")
-        valuation_purpose = selectbox_from_excel("Mục đích thẩm định", "valuation_purpose", excel_dropdown_options, "entry_valuation_purpose")
-        source = selectbox_from_excel("Nguồn/đối tác", "source", excel_dropdown_options, "entry_source")
-        customer_info = st.text_input("Tên khách hàng", key="entry_customer_info", on_change=sync_form_to_gcn_from_fields)
-        customer_address = st.text_input("Địa chỉ khách hàng", key="entry_customer_address", on_change=sync_form_to_gcn_from_fields)
-        customer_citizen_id = st.text_input("Số CCCD/CMND", key="entry_citizen_id", on_change=sync_form_to_gcn_from_fields)
-        valuation_fee_number = st.text_input("Phí thẩm định", key="entry_valuation_fee_number", on_change=_format_fee_input)
-        advance_payment = st.text_input("Tạm ứng", key="entry_advance_payment")
-        valuation_staff = selectbox_from_excel("Chuyên viên nghiệp vụ", "valuation_staff", excel_dropdown_options, "entry_valuation_staff")
-        personal_note = st.text_area("Ghi chú cá nhân", height=68, key="entry_personal_note")
-        with st.expander("Thông tin riêng cho khách hàng tổ chức", expanded=customer_type == "organization"):
-            org_col1, org_col2 = st.columns(2)
-            with org_col1:
-                tax_code = st.text_input("Mã số thuế", key="entry_tax_code")
-                representative_name = st.text_input("Người đại diện", key="entry_representative_name")
-                representative_position = st.text_input("Chức vụ người đại diện", key="entry_representative_position")
-            with org_col2:
-                handover_contact_name = st.text_input("Người nhận bàn giao", key="entry_handover_contact_name")
-                handover_contact_position = st.text_input("Chức vụ người nhận bàn giao", key="entry_handover_contact_position")
-                handover_contact_phone = st.text_input("Điện thoại người nhận bàn giao", key="entry_handover_contact_phone")
-            authorization_note = st.text_area("Căn cứ/giấy ủy quyền đại diện", height=70, key="entry_authorization_note")
+    # --- Khởi tạo giá trị mặc định cho các trường tổ chức (để output_values luôn có) ---
+    tax_code = ""
+    representative_name = ""
+    representative_position = ""
+    handover_contact_name = ""
+    handover_contact_position = ""
+    handover_contact_phone = ""
+    authorization_note = ""
+
+    tab_ca_nhan, tab_to_chuc = st.tabs(["🧑 Khách hàng Cá nhân", "🏢 Khách hàng Tổ chức"])
+
+    with tab_ca_nhan:
+        import random
+        random_phone = f"09{random.randint(10000000, 99999999)}"
+        
+        ind_col_top1, ind_col_top2 = st.columns(2)
+        with ind_col_top1:
+            contract_number_ind = st.text_input("Số hợp đồng", key="entry_contract_number_ind")
+        with ind_col_top2:
+            contract_date_ind = st.text_input("Ngày hợp đồng", key="entry_contract_date_ind", placeholder="VD: 06/10/2025")
+        customer_info_ind = st.text_input("Tên khách hàng", key="entry_customer_info_ind")
+        ind_col1, ind_col2, ind_col3 = st.columns(3)
+        with ind_col1:
+            customer_address_ind = st.text_input("Địa chỉ khách hàng", key="entry_customer_address_ind")
+        with ind_col2:
+            customer_citizen_id_ind = st.text_input("Số CCCD/CMND", key="entry_citizen_id_ind")
+        with ind_col3:
+            customer_phone_ind = st.text_input("Số điện thoại", value=random_phone, key="entry_phone_ind")
+
+    def _on_org_select():
+        selected = st.session_state.get("entry_org_searchbox")
+        if selected and selected != "-- Chọn từ danh bạ hoặc nhập mới --":
+            from src.sqlite_store import get_all_organizations
+            orgs = get_all_organizations(sqlite_db_path)
+            auto_org = next((o for o in orgs if f"{o['name']} ({o.get('tax_code', '')})" == selected), None)
+            if auto_org:
+                st.session_state.entry_customer_info_org = auto_org.get("name", "")
+                st.session_state.entry_customer_address_org = auto_org.get("address", "")
+                st.session_state.entry_tax_code = auto_org.get("tax_code", "")
+                st.session_state.entry_representative_name = auto_org.get("representative", "")
+                st.session_state.entry_representative_position = auto_org.get("position", "")
+
+    with tab_to_chuc:
+        org_col_top1, org_col_top2 = st.columns(2)
+        with org_col_top1:
+            contract_number_org = st.text_input("Số hợp đồng", key="entry_contract_number_org")
+        with org_col_top2:
+            contract_date_org = st.text_input("Ngày hợp đồng", key="entry_contract_date_org", placeholder="VD: 06/10/2025")
+        
+        from src.sqlite_store import get_all_organizations
+        orgs = get_all_organizations(sqlite_db_path)
+        org_options = ["-- Chọn từ danh bạ hoặc nhập mới --"] + [f"{o['name']} ({o.get('tax_code', '')})" for o in orgs]
+        st.selectbox("Tìm kiếm từ danh bạ (Mã số thuế / Tên)", org_options, key="entry_org_searchbox", on_change=_on_org_select)
+        
+        customer_info_org = st.text_input("Tên công ty / tổ chức", key="entry_customer_info_org")
+        customer_address_org = st.text_input("Địa chỉ công ty", key="entry_customer_address_org")
+        org_col1, org_col2 = st.columns(2)
+        with org_col1:
+            tax_code = st.text_input("Mã số thuế", key="entry_tax_code")
+            representative_name = st.text_input("Người đại diện", key="entry_representative_name")
+            representative_position = st.text_input("Chức vụ người đại diện", key="entry_representative_position")
+        with org_col2:
+            handover_contact_name = st.text_input("Người nhận bàn giao", key="entry_handover_contact_name")
+            handover_contact_position = st.text_input("Chức vụ người nhận bàn giao", key="entry_handover_contact_position")
+            handover_contact_phone = st.text_input("Điện thoại người nhận bàn giao", key="entry_handover_contact_phone")
+        authorization_note = st.text_area("Căn cứ/giấy ủy quyền đại diện", height=70, key="entry_authorization_note")
+
+    # --- Xác định loại khách hàng và gộp thông tin ---
+    if customer_info_org:
+        customer_type = "organization"
+        customer_info = customer_info_org
+        customer_address = customer_address_org
+        customer_phone = ""
+        customer_citizen_id = ""
+        contract_number = contract_number_org
+        contract_date = contract_date_org
+    else:
+        customer_type = "individual"
+        customer_info = customer_info_ind
+        customer_address = customer_address_ind
+        customer_phone = customer_phone_ind
+        customer_citizen_id = customer_citizen_id_ind
+        contract_number = contract_number_ind
+        contract_date = contract_date_ind
+
+    # --- Thông tin Nghiệp vụ ---
+    st.subheader("Thông tin Nghiệp vụ")
+    asset_description = st.text_area("Tài sản thẩm định giá", height=88, key="entry_asset_description")
+    asset_type = selectbox_from_excel("Loại tài sản", "asset_type", excel_dropdown_options, "entry_asset_type")
+    preliminary_status = selectbox_from_excel("Sơ bộ", "preliminary_status", excel_dropdown_options, "entry_preliminary_status")
+    valuation_purpose = selectbox_from_excel("Mục đích thẩm định", "valuation_purpose", excel_dropdown_options, "entry_valuation_purpose")
+    source = selectbox_from_excel("Nguồn/đối tác", "source", excel_dropdown_options, "entry_source")
+    valuation_fee_number = st.text_input("Phí thẩm định", key="entry_valuation_fee_number", on_change=_format_fee_input)
+    advance_payment = st.text_input("Tạm ứng", key="entry_advance_payment")
+    valuation_staff = selectbox_from_excel("Chuyên viên nghiệp vụ", "valuation_staff", excel_dropdown_options, "entry_valuation_staff")
+    personal_note = st.text_area("Ghi chú cá nhân", height=68, key="entry_personal_note")
+
+    # --- Thông tin Tài sản (GCN) — ẩn trong expander mặc định đóng ---
+    with st.expander("📄 Thông tin GCN trích xuất (từ AI)", expanded=False):
+        gcn_col1, gcn_col2 = st.columns(2)
+        with gcn_col1:
+            so_thua = st.text_area("Số thửa đất", value=so_thua, height=68, key="entry_so_thua")
+            land_address = st.text_area("Địa chỉ thửa đất", value=land_address, height=68, key="entry_land_address")
+            owner_name = st.text_area("Chủ sở hữu cuối cùng", value=owner_name, height=68, key="entry_owner_name")
+        with gcn_col2:
+            so_to = st.text_area("Số tờ bản đồ", value=so_to, height=68, key="entry_so_to")
+            owner_address = st.text_area("Địa chỉ chủ sở hữu", value=owner_address, height=68, key="entry_owner_address")
+            citizen_id = st.text_area("CCCD Chủ sở hữu", value=citizen_id, height=68, key="entry_owner_citizen_id")
 
     output_values = {
         "customer_type": customer_type,
@@ -111,12 +184,14 @@ def render(
         "execution_month": execution_month,
         "payment_status": payment_status,
         "contract_number": contract_number,
+        "contract_date": contract_date,
         "asset_type": asset_type,
         "asset_description": asset_description,
         "preliminary_status": preliminary_status,
         "valuation_purpose": valuation_purpose,
         "source": source,
         "customer_info": customer_info,
+        "customer_phone": customer_phone,
         "customer_address": customer_address,
         "citizen_id": customer_citizen_id,
         "valuation_fee_number": valuation_fee_number,
@@ -138,7 +213,7 @@ def render(
         "handover_contact_phone": handover_contact_phone,
     }
 
-    save_col, export_col, mail_col = st.columns(3)
+    save_col, export_col, mail_col, web_col = st.columns(4)
     with save_col:
         if st.button("Lưu hồ sơ vào SQLite", width="stretch"):
             try:
@@ -172,6 +247,17 @@ def render(
 
     with mail_col:
         mail_clicked = st.button("Gửi mail yêu cầu định giá", width="stretch", icon=":material/mail:")
+
+    with web_col:
+        web_clicked = st.button("Gửi yêu cầu lên Web", width="stretch", icon=":material/language:")
+
+    if web_clicked:
+        try:
+            with st.spinner("Đang mở trình duyệt để nhập Web..."):
+                result = asyncio.run(run_company_web_entry(output_values, web_url=""))
+            st.success(result)
+        except Exception as exc:
+            st.error(f"Nhập Web thất bại: {exc}")
 
     if mail_clicked:
         try:

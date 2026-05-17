@@ -85,6 +85,31 @@ def render_document_comparisons(comparisons: list[dict[str, object]], prefix: st
                 )
 
 
+def missing_mandatory_data_fields(case: dict[str, object], customer_type: str) -> list[str]:
+    mandatory = {
+        "customer_info": "Tên khách hàng",
+        "customer_address": "Địa chỉ khách hàng",
+        "asset_description": "Mô tả tài sản",
+        "valuation_purpose": "Mục đích thẩm định",
+        "valuation_fee_number": "Phí thẩm định",
+    }
+    if customer_type == "organization":
+        mandatory.update(
+            {
+                "tax_code": "Mã số thuế",
+                "representative_name": "Người đại diện",
+                "representative_position": "Chức vụ người đại diện",
+            }
+        )
+
+    missing = []
+    for field, label in mandatory.items():
+        value = str(case.get(field) or "").strip()
+        if not value or value == "0":
+            missing.append(label)
+    return missing
+
+
 def document_action_error(
     *,
     case: dict[str, object] | None,
@@ -97,7 +122,16 @@ def document_action_error(
     if not case:
         return "Không tìm thấy hồ sơ."
     if actual_customer_type != expected_customer_type:
-        return "Hồ sơ này đang là khách hàng tổ chức." if expected_customer_type == "individual" else "Hồ sơ này đang là khách hàng cá nhân."
+        return (
+            "Hồ sơ này đang là khách hàng tổ chức."
+            if expected_customer_type == "individual"
+            else "Hồ sơ này đang là khách hàng cá nhân."
+        )
+
+    missing_fields = missing_mandatory_data_fields(case, actual_customer_type)
+    if missing_fields:
+        return f"Thiếu dữ liệu hồ sơ bắt buộc: {', '.join(missing_fields)}."
+
     if template_errors:
         return "Template đang thiếu placeholder bắt buộc."
     if require_pdf and not soffice_path:

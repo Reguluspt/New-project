@@ -229,7 +229,7 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
         html = message.get_payload()[1].get_payload(decode=True).decode("utf-8")
         self.assertIn("CT-2026-0007", html)
         self.assertNotIn("N04-0007", html)
-        self.assertIn("Nhờ Sơn phân chuyên viên định giá tài sản", html)
+        self.assertIn("Em phân chuyên viên định giá tài sản", html)
         self.assertNotIn("Số chứng thư", html)
 
     async def test_update_matched_record_sets_contract_and_ready_status(self) -> None:

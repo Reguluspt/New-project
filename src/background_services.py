@@ -202,11 +202,36 @@ def start_mail_listener_if_enabled() -> int | None:
     )
 
 
+def start_streamlit_if_enabled() -> int | None:
+    if not _truthy_env("AUTO_START_STREAMLIT", True):
+        return None
+    port = os.getenv("STREAMLIT_PORT", "8501")
+    address = os.getenv("STREAMLIT_ADDRESS", "0.0.0.0")
+    return _start_hidden_process(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            "app.py",
+            "--server.port",
+            str(port),
+            "--server.address",
+            str(address),
+        ],
+        pid_path=PROJECT_ROOT / "streamlit.pid",
+        stdout_path=PROJECT_ROOT / "streamlit_stdout.log",
+        stderr_path=PROJECT_ROOT / "streamlit_stderr.log",
+        command_hint="streamlit run app.py",
+    )
+
+
 def ensure_background_services() -> dict[str, int | None]:
     if not _truthy_env("AUTO_START_BACKGROUND_SERVICES", True):
-        return {"telegram": None, "mail_listener": None, "ngrok": None}
+        return {"telegram": None, "mail_listener": None, "ngrok": None, "streamlit": None}
     return {
         "telegram": start_telegram_webhook_if_enabled(),
         "mail_listener": start_mail_listener_if_enabled(),
         "ngrok": start_ngrok_if_enabled(),
+        "streamlit": start_streamlit_if_enabled(),
     }

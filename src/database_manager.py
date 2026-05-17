@@ -13,6 +13,26 @@ from .contracts import short_contract_number
 
 SENT_TO_PROFESSIONAL_STATUS = "SENT_TO_PROFESSIONAL"
 READY_FOR_WEB_STATUS = "S\u1eb5n s\u00e0ng nh\u1eadp web"
+
+
+async def find_organization_by_query(db_path: str | Path, query: str) -> list[dict[str, Any]]:
+    db_path = resolve_records_db_path(db_path)
+    search = str(query or "").strip().casefold()
+    if not search:
+        return []
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """
+            SELECT * FROM organizations
+            WHERE LOWER(name) LIKE ?
+               OR LOWER(abbreviation) LIKE ?
+               OR LOWER(tax_code) LIKE ?
+            """,
+            (f"%{search}%", f"%{search}%", f"%{search}%"),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_RECORDS_DB = PROJECT_ROOT / "data" / "telegram_records.db"
 
@@ -31,6 +51,7 @@ TRACKING_RECORD_TEXT_COLUMNS = {
     "source",
     "customer_info",
     "customer_address",
+    "customer_phone",
     "citizen_id",
     "valuation_fee_number",
     "advance_payment",
@@ -110,14 +131,18 @@ async def ensure_mail_workflow_schema(db_path: str | Path) -> None:
         await db.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_records_outbound_message_id
-            ON records(outbound_message_id)
-            """
-        )
+                ON records(outbound_message_id)
+                """
+            )
         await db.commit()
-
+_TRACKING_SCHEMA_INITIALIZED = {}
 
 async def ensure_tracking_record_schema(db_path: str | Path) -> None:
     db_path = resolve_records_db_path(db_path)
+    path_key = str(db_path)
+    if _TRACKING_SCHEMA_INITIALIZED.get(path_key):
+        return
+        
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(db_path, timeout=30) as db:
         await db.execute("PRAGMA busy_timeout = 30000")
@@ -139,7 +164,84 @@ async def ensure_tracking_record_schema(db_path: str | Path) -> None:
                 default_sql = "'individual'" if column == "customer_type" else "''"
                 await db.execute(f"ALTER TABLE records ADD COLUMN {column} TEXT NOT NULL DEFAULT {default_sql}")
         await db.commit()
+    
+    # Ensure organizations table exists
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS organizations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_code TEXT,
+                name TEXT NOT NULL,
+                abbreviation TEXT,
+                address TEXT,
+                representative TEXT,
+                position TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.commit()
+
     await ensure_mail_workflow_schema(db_path)
+
+    # Khởi tạo bảng danh bạ chuyển phát
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS delivery_contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                short_name TEXT NOT NULL,
+                full_details TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.commit()
+
+    _TRACKING_SCHEMA_INITIALIZED[path_key] = True
+
+
+async def add_delivery_contact(db_path: str | Path, short_name: str, full_details: str) -> int:
+    db_path = resolve_records_db_path(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        cursor = await db.execute(
+            "INSERT INTO delivery_contacts (short_name, full_details) VALUES (?, ?)",
+            (short_name.strip(), full_details.strip())
+        )
+        await db.commit()
+        return int(cursor.lastrowid)
+
+
+async def get_all_delivery_contacts(db_path: str | Path) -> list[dict[str, Any]]:
+    db_path = resolve_records_db_path(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM delivery_contacts ORDER BY short_name ASC")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def search_delivery_contacts(db_path: str | Path, query: str) -> list[dict[str, Any]]:
+    db_path = resolve_records_db_path(db_path)
+    # Tách từ khóa bằng dấu phẩy hoặc khoảng trắng, lọc rỗng
+    keywords = [kw for kw in re.split(r'[,\s]+', query.strip().lower()) if kw]
+    if not keywords:
+        return []
+    # Mỗi từ khóa phải xuất hiện trong short_name (AND)
+    conditions = " AND ".join("LOWER(short_name) LIKE ?" for _ in keywords)
+    params = tuple(f"%{kw}%" for kw in keywords)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            f"SELECT * FROM delivery_contacts WHERE {conditions} ORDER BY short_name ASC",
+            params,
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
 
 
 def _tracking_value(values: Mapping[str, Any], field: str) -> str:
@@ -233,6 +335,43 @@ async def get_record_by_contract_number(db_path: str | Path, contract_query: str
     if not query:
         return None
     await ensure_tracking_record_schema(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        # Tìm kiếm theo số hợp đồng đầy đủ hoặc rút gọn
+        cursor = await db.execute(
+            "SELECT * FROM records WHERE contract_number LIKE ? OR contract_number LIKE ? ORDER BY id DESC LIMIT 1",
+            (f"%{query}%", f"%{query}%")
+        )
+        row = await cursor.fetchone()
+    if row:
+        return {key: str(row[key] or "") for key in row.keys()}
+    return None
+
+
+async def get_case_by_contract_number(cases_db_path: str | Path, contract_query: str) -> dict[str, str] | None:
+    """Tìm kiếm hồ sơ trong database của phần mềm (cases.db)"""
+    query = (contract_query or "").strip()
+    if not query:
+        return None
+    
+    if not Path(cases_db_path).exists():
+        return None
+
+    async with aiosqlite.connect(cases_db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        # Tìm kiếm trong bảng cases của phần mềm
+        cursor = await db.execute(
+            "SELECT * FROM cases WHERE contract_number LIKE ? ORDER BY id DESC LIMIT 1",
+            (f"%{query}%",)
+        )
+        row = await cursor.fetchone()
+    
+    if row:
+        # Map các trường của phần mềm về format chung của bot
+        data = {key: str(row[key] or "") for key in row.keys()}
+        # Đảm bảo có các trường cần thiết cho phát hành
+        return data
+    return None
     short_query = short_contract_number(query)
     async with aiosqlite.connect(db_path, timeout=30) as db:
         db.row_factory = aiosqlite.Row

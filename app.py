@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -28,6 +29,9 @@ from views import entry as entry_view
 from views import settings as settings_view
 from views import sidebar as sidebar_view
 from views import templates as templates_view
+from views import organizations_view as organizations_view
+from views import delivery_view as delivery_view
+from src.backup_service import create_backup
 
 
 def main() -> None:
@@ -35,14 +39,47 @@ def main() -> None:
     load_dotenv()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Global OAuth2 Authorization Callback Handler
+    if "oauth_success_provider" in st.session_state:
+        prov = st.session_state.pop("oauth_success_provider")
+        st.toast(f"🎉 Liên kết thành công tài khoản {prov.upper()}!", icon="✅")
+        st.success(f"🎉 Chúc mừng! Kết nối thành công tài khoản {prov.upper()} OAuth2.")
+        st.balloons()
+
+    code = st.query_params.get("code")
+    state = st.query_params.get("state")
+    oauth_provider = st.query_params.get("oauth_provider") or state
+    redirect_uri = "http://localhost:8501/"
+    if code and oauth_provider:
+        try:
+            from src.oauth2_service import exchange_code_for_tokens
+            exchange_code_for_tokens(oauth_provider, code, redirect_uri)
+            st.session_state["oauth_success_provider"] = oauth_provider
+            st.query_params.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Kết nối OAuth2 thất bại: {e}")
+            st.info("💡 Gợi ý: Hãy kiểm tra lại Client Secret hoặc Redirect URI trên Google Cloud Console xem đã khớp 100% với 'http://localhost:8501/' chưa.")
+
+    # Silent backup once per session
+    if "startup_backup_done" not in st.session_state:
+        try:
+            create_backup(DATA_DIR)
+            st.session_state["startup_backup_done"] = True
+        except Exception as exc:
+            # Ghi nhận lỗi nhưng không chặn người dùng tiếp tục
+            print(f"[{datetime.now()}] Lỗi sao lưu tự động: {exc}")
+
     ensure_background_services()
     records_db_path = Path(get_db_path())
     log_records_db_path("streamlit_app", records_db_path)
     st.set_page_config(
-        page_title="Há»‡ thá»‘ng tháº©m Ä‘á»‹nh ná»™i bá»™",
+        page_title="Hệ thống thẩm định nội bộ",
         layout="wide",
         initial_sidebar_state="collapsed",
     )
+
     render_app_theme()
 
     template_config = load_template_config(TEMPLATE_CONFIG_PATH, DEFAULT_TEMPLATE_CONFIG)
@@ -55,7 +92,7 @@ def main() -> None:
         excel_dropdown_options = load_dropdown_options(excel_template_path) if excel_template_path.exists() else {}
     except Exception as exc:
         excel_dropdown_options = {}
-        st.warning(f"KhÃ´ng Ä‘á»c Ä‘Æ°á»£c danh sÃ¡ch chá»n tá»« file Excel máº«u: {exc}")
+        st.warning(f"Không đọc được danh sách chọn từ file Excel mẫu: {exc}")
 
     sidebar_state = sidebar_view.render(
         ai_config=ai_config,
@@ -82,8 +119,8 @@ def main() -> None:
         st.session_state.uploaded_signature = ""
     ensure_entry_form_defaults()
 
-    dashboard_tab, entry_tab, manage_tab, template_tab, settings_tab = st.tabs(
-        ["Dashboard", "Nhap Ho So", "Quan Ly Ho So", "Templates", "Cau Hinh"]
+    dashboard_tab, entry_tab, manage_tab, org_tab, delivery_tab, template_tab, settings_tab = st.tabs(
+        ["🏠 Dashboard", "📝 Nhập hồ sơ", "📋 Quản lý hồ sơ", "🏢 Danh bạ Tổ chức", "🚚 Danh bạ Chuyển phát", "📂 Templates", "⚙️ Cấu hình"]
     )
 
     with dashboard_tab:
@@ -108,6 +145,12 @@ def main() -> None:
             individual_template_dir,
             organization_template_dir,
         )
+
+    with org_tab:
+        organizations_view.render(sqlite_db_path, api_key, model)
+
+    with delivery_tab:
+        delivery_view.render(records_db_path)
 
     with template_tab:
         templates_view.render(

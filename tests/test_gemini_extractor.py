@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.gemini_extractor import extract_land_certificate_with_gemini, gemini_response_json_schema
-from src.models import ExtractedValue, LandCertificateExtraction
+from src.models import ExtractedValue, LandCertificateExtraction, LandCertificateMultiExtraction
 
 
 def _value(value: str = "") -> ExtractedValue:
@@ -57,7 +57,9 @@ class GeminiExtractorTests(unittest.TestCase):
                     model="gemini-test",
                 )
 
-        self.assertIs(result, extraction)
+        self.assertIsInstance(result, LandCertificateMultiExtraction)
+        self.assertEqual(len(result.assets), 1)
+        self.assertIs(result.assets[0], extraction)
         config = client.models.generate_content.call_args.kwargs["config"]
         self.assertIsNone(config.response_schema)
         self.assertIsInstance(config.response_json_schema, dict)

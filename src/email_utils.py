@@ -1,0 +1,216 @@
+import logging
+import os
+import smtplib
+from dataclasses import dataclass
+from email.message import EmailMessage
+from email.utils import formataddr
+
+from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+@dataclass(frozen=True)
+class SoboEmailResult:
+    success: bool
+    user_message: str = ""
+    technical_error: str = ""
+
+    def __bool__(self) -> bool:
+        return self.success
+
+
+def _load_env() -> None:
+    load_dotenv(os.path.join(PROJECT_ROOT, "API.env"))
+    load_dotenv()
+
+
+def _smtp_auth_error_message() -> str:
+    return (
+        "Gmail tu choi dang nhap SMTP. Vui long kiem tra lai tai khoan gui "
+        "va tao/cap nhat Gmail App Password trong API.env."
+    )
+
+
+async def send_sobo_email_with_result(
+    to_email: str,
+    subject: str,
+    body: str,
+    html_body: str = None,
+    attachment_path: str = None,
+    cc_emails: list[str] = None,
+) -> SoboEmailResult:
+    _load_env()
+    host = os.getenv("SMTP_HOST", os.getenv("MAIL_SERVER", os.getenv("EMAIL_HOST", "smtp.gmail.com"))).strip()
+    port = int(os.getenv("SMTP_PORT", os.getenv("MAIL_PORT", os.getenv("EMAIL_PORT", "587"))))
+    user = os.getenv("SMTP_USERNAME", os.getenv("MAIL_USERNAME", os.getenv("EMAIL_USER", ""))).strip()
+    password = os.getenv("SMTP_PASSWORD", os.getenv("MAIL_PASSWORD", os.getenv("EMAIL_PASSWORD", ""))).strip().replace(" ", "")
+    mail_from_name = os.getenv("MAIL_FROM", "").strip()
+
+    if not user or not password:
+        message = "Chua cau hinh MAIL_USERNAME/SMTP_USERNAME hoac MAIL_PASSWORD/SMTP_PASSWORD trong API.env."
+        logger.error(message)
+        return SoboEmailResult(False, message)
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+
+    if mail_from_name and "@" not in mail_from_name:
+        msg["From"] = formataddr((mail_from_name, user))
+    else:
+        msg["From"] = mail_from_name or user
+
+    msg["To"] = to_email
+    if cc_emails:
+        msg["Cc"] = ", ".join(cc_emails)
+    msg.set_content(body)
+
+    if html_body:
+        msg.add_alternative(html_body, subtype="html")
+        
+        logo_path = os.path.join(PROJECT_ROOT, "src", "templates", "cen_value_logo.png")
+        if os.path.exists(logo_path):
+            try:
+                with open(logo_path, "rb") as f:
+                    msg.get_payload()[1].add_related(f.read(), maintype="image", subtype="png", cid="<cen_value_logo>", filename="cen_value_logo.png")
+            except Exception as e:
+                logger.error(f"Loi khi dinh kem logo: {e}")
+
+    if attachment_path and os.path.exists(attachment_path):
+        filename = os.path.basename(attachment_path)
+        try:
+            with open(attachment_path, "rb") as f:
+                file_data = f.read()
+                maintype = "application"
+                if filename.lower().endswith(".pdf"):
+                    subtype = "pdf"
+                elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                    maintype = "image"
+                    subtype = filename.lower().split(".")[-1]
+                    if subtype == "jpg":
+                        subtype = "jpeg"
+                else:
+                    subtype = "octet-stream"
+
+                msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
+        except Exception as e:
+            logger.error(f"Loi khi doc file dinh kem {attachment_path}: {e}")
+
+    try:
+        logger.info(f"Dang gui email so bo toi {to_email}...")
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port) as server:
+                server.login(user, password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port) as server:
+                server.starttls()
+                server.login(user, password)
+                server.send_message(msg)
+        logger.info("Gui email thanh cong.")
+        return SoboEmailResult(True)
+    except smtplib.SMTPAuthenticationError as e:
+        message = _smtp_auth_error_message()
+        logger.error(f"Loi xac thuc SMTP khi gui email: {e}")
+        return SoboEmailResult(False, message, str(e))
+    except Exception as e:
+        logger.error(f"Loi khi gui email: {e}")
+        return SoboEmailResult(False, f"Viec gui email that bai: {e}", str(e))
+
+
+async def send_sobo_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    html_body: str = None,
+    attachment_path: str = None,
+    cc_emails: list[str] = None,
+) -> bool:
+    result = await send_sobo_email_with_result(
+        to_email,
+        subject,
+        body,
+        html_body=html_body,
+        attachment_path=attachment_path,
+        cc_emails=cc_emails,
+    )
+    return result.success
+
+
+def format_recipient_info(text: str) -> str:
+    if not text:
+        return ""
+    import re
+    # Normalize spaces and newlines
+    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    
+    # Try to find keywords for "Địa chỉ" and "Điện thoại"
+    addr_match = re.search(r"(?:Địa chỉ|Đ\/c|Đc)[:\s]*", text, re.IGNORECASE)
+    phone_match = re.search(r"(?:Điện thoại|Đt|Sđt|Sđt:|Mobile|Hotline|Tel)[:\s]*", text, re.IGNORECASE)
+    
+    parts = []
+    
+    # If both matches exist
+    if addr_match and phone_match:
+        addr_start = addr_match.start()
+        phone_start = phone_match.start()
+        
+        if addr_start < phone_start:
+            name = text[:addr_start].strip(", \n\t")
+            addr = text[addr_start:phone_start].strip(", \n\t")
+            phone = text[phone_start:].strip(", \n\t")
+        else:
+            name = text[:phone_start].strip(", \n\t")
+            phone = text[phone_start:addr_start].strip(", \n\t")
+            addr = text[addr_start:].strip(", \n\t")
+            
+        if name:
+            parts.append(name)
+        if addr:
+            # Ensure proper prefix
+            if not addr.lower().startswith("địa chỉ"):
+                addr = "Địa chỉ: " + addr
+            parts.append(addr)
+        if phone:
+            # Ensure proper prefix
+            if not any(phone.lower().startswith(x) for x in ["điện thoại", "đt", "sđt", "mobile", "hotline", "tel"]):
+                phone = "Điện thoại: " + phone
+            parts.append(phone)
+            
+    elif addr_match:
+        addr_start = addr_match.start()
+        name = text[:addr_start].strip(", \n\t")
+        addr = text[addr_start:].strip(", \n\t")
+        if name:
+            parts.append(name)
+        if addr:
+            if not addr.lower().startswith("địa chỉ"):
+                addr = "Địa chỉ: " + addr
+            parts.append(addr)
+            
+    elif phone_match:
+        phone_start = phone_match.start()
+        name = text[:phone_start].strip(", \n\t")
+        phone = text[phone_start:].strip(", \n\t")
+        if name:
+            parts.append(name)
+        if phone:
+            if not any(phone.lower().startswith(x) for x in ["điện thoại", "đt", "sđt", "mobile", "hotline", "tel"]):
+                phone = "Điện thoại: " + phone
+            parts.append(phone)
+    else:
+        # If no keywords but has comma-separated pieces:
+        # e.g., "Company A, 90 Truong Chinh, 0905226968"
+        subparts = [p.strip() for p in text.split(",") if p.strip()]
+        if len(subparts) >= 3:
+            last_part = subparts[-1]
+            digits_only = "".join([c for c in last_part if c.isdigit()])
+            if len(digits_only) >= 9:
+                name = ", ".join(subparts[:-2])
+                addr = "Địa chỉ: " + subparts[-2]
+                phone = "Điện thoại: " + last_part
+                return f"{name}\n{addr}\n{phone}"
+        return text
+        
+    return "\n".join(parts)

@@ -24,6 +24,7 @@ from src.database_manager import create_outbound_tracking_record, resolve_record
 from src.mail_service import send_appraisal_email
 from src.pdf_exporter import find_soffice_path
 from src.sqlite_store import update_case
+from src.web_automation import run_company_web_entry
 
 
 def _ensure_output_dir_state() -> Path:
@@ -98,9 +99,13 @@ async def _tracked_case_mail_payload(case: dict[str, object]) -> dict[str, objec
     return payload
 
 
+async def _do_send_case_mail(case: dict[str, object]) -> MailSendResult:
+    mail_payload = await _tracked_case_mail_payload(case)
+    return await send_appraisal_email(mail_payload)
+
+
 def _send_case_mail(case: dict[str, object]) -> None:
-    mail_payload = asyncio.run(_tracked_case_mail_payload(case))
-    result = asyncio.run(send_appraisal_email(mail_payload))
+    result = asyncio.run(_do_send_case_mail(case))
     st.success(f"Đã gửi mail yêu cầu định giá tới {result.to_email}.")
     if result.cc_emails:
         st.caption(f"CC: {', '.join(result.cc_emails)}")
@@ -185,6 +190,126 @@ def _persist_before_action(
         return False
 
 
+def _render_file_actions(paths: list[Path]) -> None:
+    if not paths:
+        return
+    st.write("---")
+    st.markdown("**Các file đã xuất:**")
+    for path in paths:
+        col_text, col_btn = st.columns([4, 1])
+        with col_text:
+            st.caption(f"{path.name}")
+        with col_btn:
+            if st.button("Mở file", key=f"open_file_{path.name}_{path.stat().st_mtime}", width="stretch"):
+                try:
+                    os.startfile(str(path))
+                except Exception as exc:
+                    st.error(f"Không thể mở file: {exc}")
+
+
+def handle_quick_action(
+    action: dict[str, object],
+    *,
+    selected_id: int,
+    refreshed_case: dict[str, object] | None,
+    individual_templates_dir: Path,
+    organization_templates_dir: Path,
+    db_path: Path | None = None,
+) -> None:
+    output_base_dir = _ensure_output_dir_state()
+    selected_folder = _selected_case_folder(output_base_dir, selected_id=selected_id, case=refreshed_case or {})
+    export_case = _case_for_export(refreshed_case, selected_folder)
+
+    if not export_case:
+        st.error("Không tìm thấy hồ sơ để thực hiện thao tác.")
+        return
+
+    action_type = action.get("type")
+
+    if action_type == "mail":
+        if _persist_before_action(
+            db_path=db_path,
+            selected_id=selected_id,
+            output_base_dir=output_base_dir,
+            selected_folder=selected_folder,
+            export_case=export_case,
+        ):
+            try:
+                _send_case_mail(export_case)
+            except Exception as exc:
+                st.error(f"Gửi mail thất bại: {exc}")
+
+    elif action_type == "mail_phathanh":
+        if _persist_before_action(
+            db_path=db_path,
+            selected_id=selected_id,
+            output_base_dir=output_base_dir,
+            selected_folder=selected_folder,
+            export_case=export_case,
+        ):
+            try:
+                from src.email_reply_service import send_phathanh_email_for_case
+                with st.spinner("Đang gửi mail phát hành chứng thư..."):
+                    to_email = asyncio.run(send_phathanh_email_for_case(export_case))
+                st.success(f"Đã gửi mail phát hành chứng thư thành công tới {to_email}.")
+            except Exception as exc:
+                st.error(f"Gửi mail phát hành thất bại: {exc}")
+
+    elif action_type == "web":
+        if _persist_before_action(
+            db_path=db_path,
+            selected_id=selected_id,
+            output_base_dir=output_base_dir,
+            selected_folder=selected_folder,
+            export_case=export_case,
+        ):
+            try:
+                import sys
+
+                if sys.platform == "win32":
+                    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+                with st.spinner("Đang mở trình duyệt để nhập Web..."):
+                    result = asyncio.run(run_company_web_entry(export_case, web_url=""))
+                st.success(result)
+            except Exception as exc:
+                st.error(f"Nhập Web thất bại: {exc}")
+
+    elif action_type == "export":
+        customer_type = (refreshed_case.get("customer_type") or "individual") if refreshed_case else "individual"
+        templates_dir = individual_templates_dir if customer_type == "individual" else organization_templates_dir
+        template_errors = collect_template_errors(templates_dir, customer_type)
+
+        error = document_action_error(
+            case=export_case,
+            expected_customer_type=customer_type,
+            actual_customer_type=customer_type,
+            template_errors=template_errors,
+        )
+        if error:
+            st.error(error)
+            for item in template_errors:
+                st.caption(item)
+        elif _persist_before_action(
+            db_path=db_path,
+            selected_id=selected_id,
+            output_base_dir=output_base_dir,
+            selected_folder=selected_folder,
+            export_case=export_case,
+        ):
+            try:
+                paths = export_case_documents(
+                    export_case,
+                    customer_type=customer_type,
+                    templates_dir=templates_dir,
+                    case_files_dir=output_base_dir,
+                )
+                st.success(f"Đã xuất nhanh bộ hồ sơ {customer_type}.")
+                _render_file_actions(paths)
+                _open_folder(selected_folder)
+            except Exception as exc:
+                st.error(f"Xuất hồ sơ thất bại: {exc}")
+
+
 def render(
     *,
     selected_id: int,
@@ -230,6 +355,8 @@ def render(
             width="stretch",
         )
     mail_clicked = st.button("Gửi mail yêu cầu định giá", width="stretch", icon=":material/mail:")
+    mail_phathanh_clicked = st.button("Gửi mail phát hành chứng thư", width="stretch", icon=":material/forward_to_inbox:")
+    web_clicked = st.button("Gửi yêu cầu định giá lên Web", width="stretch", icon=":material/language:")
     package_clicked = st.button("Đóng gói ZIP hồ sơ", width="stretch")
 
     if mail_clicked:
@@ -246,6 +373,43 @@ def render(
                 _send_case_mail(export_case)
             except Exception as exc:
                 st.error(f"Gửi mail thất bại: {exc}")
+
+    if mail_phathanh_clicked:
+        if not export_case:
+            st.error("Không tìm thấy hồ sơ để phát hành.")
+        elif _persist_before_action(
+            db_path=db_path,
+            selected_id=selected_id,
+            output_base_dir=output_base_dir,
+            selected_folder=selected_folder,
+            export_case=export_case,
+        ):
+            try:
+                from src.email_reply_service import send_phathanh_email_for_case
+                with st.spinner("Đang gửi mail phát hành chứng thư..."):
+                    to_email = asyncio.run(send_phathanh_email_for_case(export_case))
+                st.success(f"Đã gửi mail phát hành chứng thư thành công tới {to_email}.")
+            except Exception as exc:
+                st.error(f"Gửi mail phát hành thất bại: {exc}")
+
+    if web_clicked:
+        if not export_case:
+            st.error("Không tìm thấy hồ sơ để gửi lên Web.")
+        elif _persist_before_action(
+            db_path=db_path,
+            selected_id=selected_id,
+            output_base_dir=output_base_dir,
+            selected_folder=selected_folder,
+            export_case=export_case,
+        ):
+            try:
+                if sys.platform == "win32":
+                    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+                with st.spinner("Đang mở trình duyệt để nhập Web..."):
+                    result = asyncio.run(run_company_web_entry(export_case, web_url=""))
+                st.success(result)
+            except Exception as exc:
+                st.error(f"Nhập Web thất bại: {exc}")
 
     if preview_individual_clicked:
         error = document_action_error(
@@ -331,8 +495,8 @@ def render(
                     case_files_dir=output_base_dir,
                 )
                 st.success("Đã xuất bộ hồ sơ cá nhân.")
-                for path in paths:
-                    st.caption(str(path))
+                _render_file_actions(paths)
+                _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Xuất hồ sơ thất bại: {exc}")
 
@@ -365,8 +529,8 @@ def render(
                     case_files_dir=output_base_dir,
                 )
                 st.success("Đã duyệt bộ cá nhân và xuất PDF.")
-                for path in word_paths + pdf_paths:
-                    st.caption(str(path))
+                _render_file_actions(word_paths + pdf_paths)
+                _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Duyệt và xuất PDF thất bại: {exc}")
 
@@ -454,8 +618,8 @@ def render(
                     case_files_dir=output_base_dir,
                 )
                 st.success("Đã xuất bộ hồ sơ tổ chức.")
-                for path in paths:
-                    st.caption(str(path))
+                _render_file_actions(paths)
+                _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Xuất hồ sơ tổ chức thất bại: {exc}")
 
@@ -488,8 +652,8 @@ def render(
                     case_files_dir=output_base_dir,
                 )
                 st.success("Đã duyệt bộ tổ chức và xuất PDF.")
-                for path in word_paths + pdf_paths:
-                    st.caption(str(path))
+                _render_file_actions(word_paths + pdf_paths)
+                _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Duyệt và xuất PDF thất bại: {exc}")
 
@@ -507,5 +671,6 @@ def render(
                 archive_path = package_case_documents(selected_folder)
                 st.success("Đã tạo gói ZIP hồ sơ.")
                 st.caption(str(archive_path))
+                _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Đóng gói ZIP thất bại: {exc}")

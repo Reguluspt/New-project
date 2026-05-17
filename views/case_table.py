@@ -12,7 +12,7 @@ from src.case_excel_export import export_case_rows_to_excel
 from src.case_files import case_folder
 from src.contracts import short_contract_number
 from src.database_manager import get_db_path
-from src.record_case_sync import sync_case_to_record
+from src.record_case_sync import sync_case_to_record, sync_case_delete_to_record
 from src.case_filters import (
     CUSTOMER_TYPE_LABELS,
     SORT_FIELD_OPTIONS,
@@ -32,6 +32,7 @@ from src.sqlite_store import (
     DEFAULT_PAYMENT_STATUS,
     get_case,
     update_case,
+    delete_case,
 )
 from views.case_dialogs import open_case_edit_dialog
 
@@ -52,8 +53,6 @@ def _next_case_status(status: object) -> tuple[str, str]:
     current = _row_text(status, DEFAULT_CASE_STATUS)
     if current == DEFAULT_CASE_STATUS:
         return "Hoàn thành", "Hoàn thành"
-    if current == "Hoàn thành":
-        return CANCELED_CASE_STATUS, CANCELED_CASE_STATUS
     return DEFAULT_CASE_STATUS, DEFAULT_CASE_STATUS
 
 
@@ -96,7 +95,12 @@ CASE_GRID_COLUMNS = [
     ("status", "Trạng thái", 0.85),
     ("note", "Ghi chú", 1.25),
     ("view", "Xem", 0.2),
+    ("export", "Xuất", 0.2),
+    ("mail", "Mail", 0.2),
+    ("mail_phathanh", "Mail PH", 0.2),
+    ("web", "Web", 0.2),
     ("edit", "Sửa", 0.2),
+    ("del", "Xóa", 0.2),
 ]
 
 
@@ -132,7 +136,6 @@ def _render_column_width_controls() -> list[float]:
                     label,
                     min_value=0.15,
                     max_value=2.5,
-                    value=float(st.session_state.get(f"case_col_width_{key}", default)),
                     step=0.05,
                     key=f"case_col_width_{key}",
                 )
@@ -229,9 +232,38 @@ def _render_case_grid_styles(widths: list[float]) -> None:
     )
 
 
+@st.dialog("Xác nhận xóa hồ sơ")
+def _render_delete_confirmation_dialog(db_path: Path, records_db_path: Path, case_id: int) -> None:
+    case = get_case(db_path, case_id)
+    if not case:
+        st.error("Không tìm thấy hồ sơ để xóa.")
+        if st.button("Đóng"):
+            st.rerun()
+        return
+
+    st.warning(f"Bạn có chắc chắn muốn xóa hồ sơ #{case_id}?")
+    st.write(f"**Số HĐ:** {short_contract_number(case.get('contract_number'), fallback='Chưa có')}")
+    st.write(f"**Khách hàng:** {case.get('customer_info') or 'Chưa có'}")
+    st.caption("Hành động này sẽ xóa vĩnh viễn hồ sơ và cập nhật trạng thái bên bảng records (nếu có).")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Xóa vĩnh viễn", type="primary", width="stretch"):
+            asyncio.run(sync_case_delete_to_record(records_db_path, db_path, case_id))
+            delete_case(db_path, case_id)
+            if st.session_state.get("active_case_id") == case_id:
+                st.session_state["active_case_id"] = None
+            st.success(f"Đã xóa hồ sơ #{case_id}")
+            st.rerun()
+    with col2:
+        if st.button("Hủy bỏ", width="stretch"):
+            st.rerun()
+
+
 def _render_case_row(
     *,
     db_path: Path,
+    records_db_path: Path,
     row: dict[str, object],
     active_case_id: int | None,
     widths: list[float],
@@ -243,6 +275,14 @@ def _render_case_row(
     is_active = row_id == active_case_id
     is_canceled = row_status == CANCELED_CASE_STATUS
 
+    def _format_multiline(text_val: object, fallback: str) -> str:
+        text_str = str(text_val or "").strip()
+        if not text_str:
+            return fallback
+        if "\n" in text_str:
+            return "\n".join(f"- {line.strip()}" for line in text_str.split("\n") if line.strip())
+        return text_str
+
     with st.container(border=True):
         cols = st.columns(widths)
         cols[0].markdown(f"**#{row_id}**")
@@ -252,7 +292,7 @@ def _render_case_row(
         cols[2].markdown(f"**{_row_text(row.get('customer_info'), 'Chưa có khách hàng')}**")
         cols[2].caption(CUSTOMER_TYPE_LABELS.get(str(row.get("customer_type") or "individual"), "Cá nhân"))
         cols[3].write(_row_text(row.get("citizen_id"), "-"))
-        cols[4].write(_row_text(row.get("asset_type") or row.get("asset_description"), "Chưa có tài sản"))
+        cols[4].markdown(_format_multiline(row.get("asset_description") or row.get("asset_type"), "Chưa có tài sản"))
         cols[5].markdown(f"**{format_money(row.get('valuation_fee_number'))}**")
         if cols[6].button(
             _row_text(row.get("payment_status"), DEFAULT_PAYMENT_STATUS),
@@ -288,7 +328,48 @@ def _render_case_row(
             st.session_state["active_case_id"] = row_id
             st.session_state["case_documents_dialog_open"] = True
             st.rerun()
+
         if cols[10].button(
+            " ",
+            key=f"quick_export_{row_id}",
+            width="content",
+            icon=":material/download:",
+            help="Xuất nhanh bộ hồ sơ Word",
+        ):
+            st.session_state["quick_action"] = {"type": "export", "case_id": row_id}
+            st.rerun()
+
+        if cols[11].button(
+            " ",
+            key=f"quick_mail_{row_id}",
+            width="content",
+            icon=":material/mail:",
+            help="Gửi mail yêu cầu định giá",
+        ):
+            st.session_state["quick_action"] = {"type": "mail", "case_id": row_id}
+            st.rerun()
+
+        if cols[12].button(
+            " ",
+            key=f"quick_mail_phathanh_{row_id}",
+            width="content",
+            icon=":material/forward_to_inbox:",
+            help="Gửi mail phát hành chứng thư",
+        ):
+            st.session_state["quick_action"] = {"type": "mail_phathanh", "case_id": row_id}
+            st.rerun()
+
+        if cols[13].button(
+            " ",
+            key=f"quick_web_{row_id}",
+            width="content",
+            icon=":material/language:",
+            help="Gửi yêu cầu định giá lên Web",
+        ):
+            st.session_state["quick_action"] = {"type": "web", "case_id": row_id}
+            st.rerun()
+
+        if cols[14].button(
             " ",
             key=f"edit_case_{row_id}",
             width="content",
@@ -297,15 +378,25 @@ def _render_case_row(
         ):
             st.session_state["active_case_id"] = row_id
             open_case_edit_dialog(db_path, row_id)
+            
+        if cols[15].button(
+            " ",
+            key=f"delete_case_{row_id}",
+            width="content",
+            icon=":material/delete:",
+            help="Xóa hồ sơ này khỏi dữ liệu",
+        ):
+            st.session_state["confirm_delete_case_id"] = row_id
+            st.rerun()
 
 
-def _render_case_grid(db_path: Path, rows: list[dict[str, object]], active_case_id: int | None, widths: list[float]) -> None:
+def _render_case_grid(db_path: Path, records_db_path: Path, rows: list[dict[str, object]], active_case_id: int | None, widths: list[float]) -> None:
     _render_case_grid_styles(widths)
     st.markdown("**Danh mục hồ sơ và thao tác nhanh**")
     st.caption("Bấm trực tiếp vào trạng thái thanh toán hoặc trạng thái hồ sơ để đổi nhanh. Bấm icon mắt để chọn hồ sơ cho khung xem/xuất tài liệu bên dưới.")
     header_cells = "\n".join(
         f'                <div class="case-grid-action-header">{html.escape(label)}</div>'
-        if key in {"view", "edit"}
+        if key in {"view", "export", "mail", "mail_phathanh", "web", "edit", "del"}
         else f"                <div>{html.escape(label)}</div>"
         for key, label, _default in CASE_GRID_COLUMNS
     )
@@ -320,11 +411,11 @@ def _render_case_grid(db_path: Path, rows: list[dict[str, object]], active_case_
         unsafe_allow_html=True,
     )
     for row in rows:
-        _render_case_row(db_path=db_path, row=row, active_case_id=active_case_id, widths=widths)
+        _render_case_row(db_path=db_path, records_db_path=records_db_path, row=row, active_case_id=active_case_id, widths=widths)
 
 
 
-def render(db_path: Path) -> dict[str, object] | None:
+def render(db_path: Path, records_db_path: Path) -> dict[str, object] | None:
     filter_options = load_filter_options(db_path)
     query = str(st.session_state.get("case_search_query", ""))
     note_query = str(st.session_state.get("case_note_query", ""))
@@ -349,7 +440,6 @@ def render(db_path: Path) -> dict[str, object] | None:
     sort_direction = "desc" if sort_direction_label == "Giảm dần" else "asc"
     total_matches = count_filtered_cases(db_path, query, filters, note_query=note_query)
 
-    st.subheader("Tìm kiếm hồ sơ")
     search_col, note_search_col = st.columns(2)
     with search_col:
         query = st.text_input(
@@ -365,52 +455,64 @@ def render(db_path: Path) -> dict[str, object] | None:
             key="case_note_query",
             help="Chỉ tìm trong cột Ghi chú cá nhân.",
         )
-    filter_col1, filter_col2, filter_col3 = st.columns(3)
-    with filter_col1:
-        selected_execution_month = st.selectbox(
-            "Lọc theo tháng thực hiện",
-            filter_options["execution_month"],
-            key="case_execution_month_filter",
-        )
-    with filter_col2:
-        selected_payment_status = st.selectbox(
-            "Lọc theo trạng thái thanh toán",
-            filter_options["payment_status"],
-            key="case_payment_status_filter",
-        )
-    with filter_col3:
-        selected_case_status = st.selectbox(
-            "Lọc theo trạng thái hồ sơ",
-            filter_options["case_status"],
-            key="case_status_filter",
-        )
-    shortcut_col1, shortcut_col2 = st.columns([1, 3])
-    with shortcut_col1:
-        if st.button("Chỉ xem hồ sơ Hủy", key="case_shortcut_canceled", width="stretch"):
-            st.session_state["case_status_filter"] = CANCELED_CASE_STATUS
-            st.rerun()
-    with shortcut_col2:
-        st.caption("Nút shortcut này đặt bộ lọc trạng thái hồ sơ về `Hủy` để rà soát nhanh các hồ sơ đã hủy.")
-    advanced_col1, advanced_col2, advanced_col3 = st.columns(3)
-    with advanced_col1:
-        selected_source = st.selectbox(
-            "Lọc theo nguồn/ngân hàng",
-            filter_options["source"],
-            key="case_source_filter",
-        )
-    with advanced_col2:
-        selected_customer_type = st.selectbox(
-            "Lọc theo loại khách hàng",
-            filter_options["customer_type"],
-            format_func=lambda value: CUSTOMER_TYPE_LABELS.get(value, value),
-            key="case_customer_type_filter",
-        )
-    with advanced_col3:
-        selected_business_staff = st.selectbox(
-            "Lọc theo chuyên viên kinh doanh",
-            filter_options["business_staff"],
-            key="case_business_staff_filter",
-        )
+
+    with st.expander("🔍 Bộ lọc & Sắp xếp nâng cao", expanded=False):
+        filter_col1, filter_col2, filter_col3 = st.columns(3)
+        with filter_col1:
+            selected_execution_month = st.selectbox(
+                "Lọc theo tháng thực hiện",
+                filter_options["execution_month"],
+                key="case_execution_month_filter",
+            )
+        with filter_col2:
+            selected_payment_status = st.selectbox(
+                "Lọc theo trạng thái thanh toán",
+                filter_options["payment_status"],
+                key="case_payment_status_filter",
+            )
+        with filter_col3:
+            selected_case_status = st.selectbox(
+                "Lọc theo trạng thái hồ sơ",
+                filter_options["case_status"],
+                key="case_status_filter",
+            )
+        advanced_col1, advanced_col2, advanced_col3 = st.columns(3)
+        with advanced_col1:
+            selected_source = st.selectbox(
+                "Lọc theo nguồn/ngân hàng",
+                filter_options["source"],
+                key="case_source_filter",
+            )
+        with advanced_col2:
+            selected_customer_type = st.selectbox(
+                "Lọc theo loại khách hàng",
+                filter_options["customer_type"],
+                format_func=lambda value: CUSTOMER_TYPE_LABELS.get(value, value),
+                key="case_customer_type_filter",
+            )
+        with advanced_col3:
+            selected_business_staff = st.selectbox(
+                "Lọc theo chuyên viên kinh doanh",
+                filter_options["business_staff"],
+                key="case_business_staff_filter",
+            )
+        sort_col1, sort_col2 = st.columns(2)
+        with sort_col1:
+            sort_label = st.selectbox(
+                "Sắp xếp theo",
+                list(SORT_FIELD_OPTIONS.keys()),
+                index=list(SORT_FIELD_OPTIONS.keys()).index(sort_label),
+                key="case_sort_field_v2",
+            )
+        with sort_col2:
+            sort_direction_label = st.radio(
+                "Chiều sắp xếp",
+                ["Giảm dần", "Tăng dần"],
+                horizontal=True,
+                index=0 if sort_direction_label == "Giảm dần" else 1,
+                key="case_sort_direction_v2",
+            )
+
     filters = build_filters(
         selected_execution_month=selected_execution_month,
         selected_payment_status=selected_payment_status,
@@ -419,22 +521,6 @@ def render(db_path: Path) -> dict[str, object] | None:
         selected_customer_type=selected_customer_type,
         selected_business_staff=selected_business_staff,
     )
-    sort_col1, sort_col2 = st.columns(2)
-    with sort_col1:
-        sort_label = st.selectbox(
-            "Sắp xếp theo",
-            list(SORT_FIELD_OPTIONS.keys()),
-            index=list(SORT_FIELD_OPTIONS.keys()).index(sort_label),
-            key="case_sort_field_v2",
-        )
-    with sort_col2:
-        sort_direction_label = st.radio(
-            "Chiều sắp xếp",
-            ["Giảm dần", "Tăng dần"],
-            horizontal=True,
-            index=0 if sort_direction_label == "Giảm dần" else 1,
-            key="case_sort_direction_v2",
-        )
     sort_field = SORT_FIELD_OPTIONS[sort_label]
     sort_direction = "desc" if sort_direction_label == "Giảm dần" else "asc"
     total_matches = count_filtered_cases(db_path, query, filters, note_query=note_query)
@@ -459,8 +545,12 @@ def render(db_path: Path) -> dict[str, object] | None:
         page_size = st.selectbox("Số dòng/trang", [50, 100, 200, 500], index=1, key="case_page_size")
     total_pages = max(1, (total_matches + page_size - 1) // page_size)
     with size_col:
-        current_page = min(int(st.session_state.get("case_page_number", 1)), total_pages)
-        st.session_state["case_page_number"] = current_page
+        st_page_number = int(st.session_state.get("case_page_number", 1))
+        if st_page_number > total_pages:
+            st.session_state["case_page_number"] = total_pages
+        elif st_page_number < 1:
+            st.session_state["case_page_number"] = 1
+
         page_number = st.number_input(
             "Trang",
             min_value=1,
@@ -469,7 +559,9 @@ def render(db_path: Path) -> dict[str, object] | None:
             key="case_page_number",
         )
     with info_col:
-        st.caption(f"Tổng hồ sơ phù hợp: {total_matches}")
+        st.write("")
+        st.write("")
+        st.caption(f"Tổng hồ sơ phù hợp: **{total_matches}**")
 
     rows = search_page(
         db_path,
@@ -493,19 +585,11 @@ def render(db_path: Path) -> dict[str, object] | None:
     all_columns = display_columns(rows)
     default_columns = st.session_state.get("case_visible_columns", all_columns)
     valid_default_columns = [column for column in default_columns if column in all_columns] or all_columns
-    visible_columns = st.multiselect(
-        "Chọn cột xuất Excel",
-        all_columns,
-        default=valid_default_columns,
-        key="case_visible_columns",
-    )
-    if not visible_columns:
-        st.warning("Cần chọn ít nhất một cột để xuất Excel.")
-        visible_columns = all_columns
+    visible_columns = st.session_state.get("case_visible_columns", valid_default_columns)
 
     st.caption(f"Đang hiển thị trang {int(page_number)}/{total_pages}")
     widths = _render_column_width_controls()
-    _render_case_grid(db_path, rows, active_case_id, widths)
+    _render_case_grid(db_path, records_db_path, rows, active_case_id, widths)
 
     batch_options = {
         f"#{row['id']} | {short_contract_number(row.get('contract_number'), fallback='Chưa có số HĐ')} | {row.get('customer_info') or 'Chưa có khách hàng'}": row["id"]
@@ -520,19 +604,49 @@ def render(db_path: Path) -> dict[str, object] | None:
     selected_batch_ids = [batch_options[label] for label in selected_batch_labels]
     batch_col1, batch_col2 = st.columns(2)
     with batch_col1:
-        if st.button("Hủy nhiều hồ sơ", key="batch_cancel_cases", width="stretch", icon=":material/block:", disabled=not selected_batch_ids):
+        if st.button("Xóa nhiều hồ sơ", key="batch_delete_cases", width="stretch", icon=":material/delete:", disabled=not selected_batch_ids):
             for case_id in selected_batch_ids:
-                update_case(db_path, int(case_id), {"case_status": CANCELED_CASE_STATUS, "cancel_reason": ""})
-                asyncio.run(sync_case_to_record(get_db_path(), db_path, int(case_id)))
-            st.success(f"Đã hủy {len(selected_batch_ids)} hồ sơ.")
+                asyncio.run(sync_case_delete_to_record(records_db_path, db_path, int(case_id)))
+                delete_case(db_path, int(case_id))
+            st.success(f"Đã xóa {len(selected_batch_ids)} hồ sơ.")
             st.rerun()
     with batch_col2:
-        if st.button("Khôi phục nhiều hồ sơ", key="batch_restore_cases", width="stretch", icon=":material/undo:", disabled=not selected_batch_ids):
+        if st.button("Đồng bộ từ Danh bạ", key="batch_sync_orgs", width="stretch", icon=":material/sync:", disabled=not selected_batch_ids):
+            from src.sqlite_store import get_all_organizations
+            from src.document_exporter import clean_customer_name
+            orgs = get_all_organizations(db_path)
+            org_map = {clean_customer_name(o["name"]).lower(): o for o in orgs if o.get("name")}
+            synced_count = 0
             for case_id in selected_batch_ids:
-                update_case(db_path, int(case_id), {"case_status": DEFAULT_CASE_STATUS, "cancel_reason": ""})
-                asyncio.run(sync_case_to_record(get_db_path(), db_path, int(case_id)))
-            st.success(f"Đã khôi phục {len(selected_batch_ids)} hồ sơ.")
+                c = get_case(db_path, int(case_id))
+                if not c: continue
+                c_name = clean_customer_name(c.get("customer_info") or "").lower()
+                if c_name in org_map:
+                    org = org_map[c_name]
+                    update_data = {
+                        "customer_address": org.get("address") or c.get("customer_address") or "",
+                        "tax_code": org.get("tax_code") or c.get("tax_code") or "",
+                        "representative_name": org.get("representative") or c.get("representative_name") or "",
+                        "representative_position": org.get("position") or c.get("representative_position") or "",
+                    }
+                    update_case(db_path, int(case_id), update_data)
+                    synced_count += 1
+            st.success(f"Đã đồng bộ {synced_count}/{len(selected_batch_ids)} hồ sơ từ danh bạ.")
+            import time
+            time.sleep(1)
             st.rerun()
+
+    st.write("---")
+    st.markdown("**Xuất dữ liệu Excel**")
+    visible_columns = st.multiselect(
+        "Chọn cột xuất Excel",
+        all_columns,
+        default=valid_default_columns,
+        key="case_visible_columns",
+    )
+    if not visible_columns:
+        st.warning("Cần chọn ít nhất một cột để xuất Excel.")
+        visible_columns = all_columns
 
     export_count = count_filtered_cases(db_path, query, filters, note_query=note_query)
     export_filtered_rows = export_rows_for_filters(
@@ -559,6 +673,9 @@ def render(db_path: Path) -> dict[str, object] | None:
     )
     st.caption(f"File xuất: {export_path}")
     st.caption(f"Phạm vi xuất: {export_label} | Tổng dòng: {len(export_filtered_rows)}")
+
+    if st.session_state.get("confirm_delete_case_id"):
+        _render_delete_confirmation_dialog(db_path, records_db_path, int(st.session_state.pop("confirm_delete_case_id")))
 
     selected_id = int(st.session_state["active_case_id"])
     case = get_case(db_path, selected_id)

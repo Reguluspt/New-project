@@ -365,6 +365,13 @@ class CaseExportsTests(unittest.TestCase):
             self.assertEqual(load_case_output_dir(config_path, default_dir=default_dir), selected_dir)
 
     def test_document_action_error_validates_customer_type_and_pdf_tool(self) -> None:
+        sample_case = {
+            "customer_info": "Khách A",
+            "customer_address": "Địa chỉ A",
+            "asset_description": "Tài sản A",
+            "valuation_purpose": "Mục đích A",
+            "valuation_fee_number": 1000000,
+        }
         self.assertEqual(
             document_action_error(
                 case={"id": 1},
@@ -376,7 +383,7 @@ class CaseExportsTests(unittest.TestCase):
         )
         self.assertEqual(
             document_action_error(
-                case={"id": 1},
+                case=sample_case,
                 expected_customer_type="individual",
                 actual_customer_type="individual",
                 template_errors=[],
@@ -387,7 +394,7 @@ class CaseExportsTests(unittest.TestCase):
         )
         self.assertIsNone(
             document_action_error(
-                case={"id": 1},
+                case=sample_case,
                 expected_customer_type="individual",
                 actual_customer_type="individual",
                 template_errors=[],

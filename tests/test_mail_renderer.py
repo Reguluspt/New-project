@@ -105,7 +105,7 @@ class MailRendererTests(unittest.IsolatedAsyncioTestCase):
             }
         )
 
-        self.assertEqual(data.contract_id, "N04-1051")
+        self.assertEqual(data.contract_id, "010/2026/N04-1051/DN")
         self.assertEqual(data.recipient_name, "Nguyen Van A")
         self.assertEqual(data.asset_description, "Thua dat tai Dak Lak")
         self.assertEqual(data.fee_valuation, "2.200.000")

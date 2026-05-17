@@ -31,6 +31,7 @@ CASE_FIELDS = [
     "valuation_purpose",
     "source",
     "customer_info",
+    "customer_phone",
     "customer_address",
     "citizen_id",
     "valuation_fee_number",
@@ -64,6 +65,7 @@ OPTIONAL_COLUMNS = {
     "execution_month": "TEXT",
     "payment_status": "TEXT DEFAULT 'Đã thanh toán'",
     "contract_date": "TEXT",
+    "customer_phone": "TEXT",
     "certificate_date": "TEXT",
     "case_folder": "TEXT",
     "original_file_path": "TEXT",
@@ -150,8 +152,6 @@ def connect(db_path: str | Path) -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.create_function("CASEFOLD", 1, lambda value: str(value or "").casefold(), deterministic=True)
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
     try:
         yield conn
         conn.commit()
@@ -162,8 +162,16 @@ def connect(db_path: str | Path) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+_DB_INITIALIZED = {}
+
 def init_db(db_path: str | Path) -> None:
+    path_key = str(db_path)
+    if _DB_INITIALIZED.get(path_key):
+        return
+        
     with connect(db_path) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS cases (
@@ -230,6 +238,101 @@ def init_db(db_path: str | Path) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_customer ON cases(customer_info)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_citizen ON cases(citizen_id)")
 
+        # Create organizations table
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS organizations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tax_code TEXT,
+                name TEXT NOT NULL,
+                abbreviation TEXT,
+                address TEXT,
+                representative TEXT,
+                position TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_organizations_tax_code ON organizations(tax_code)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_organizations_name ON organizations(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_organizations_abbreviation ON organizations(abbreviation)")
+        
+    _DB_INITIALIZED[path_key] = True
+
+
+def get_all_organizations(db_path: str | Path) -> list[dict[str, Any]]:
+    with connect(db_path) as conn:
+        cursor = conn.execute("SELECT * FROM organizations ORDER BY name ASC")
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def find_organization_by_query(db_path: str | Path, query: str) -> list[dict[str, Any]]:
+    search = str(query or "").strip().casefold()
+    if not search:
+        return []
+    with connect(db_path) as conn:
+        cursor = conn.execute(
+            """
+            SELECT * FROM organizations
+            WHERE CASEFOLD(name) LIKE :search
+               OR CASEFOLD(abbreviation) LIKE :search
+               OR CASEFOLD(tax_code) LIKE :search
+            """,
+            {"search": f"%{search}%"},
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def add_organization(db_path: str | Path, data: dict[str, Any]) -> int:
+    now = datetime.now().isoformat()
+    with connect(db_path) as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO organizations (
+                tax_code, name, abbreviation, address, representative, position, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data.get("tax_code", ""),
+                data.get("name", ""),
+                data.get("abbreviation", ""),
+                data.get("address", ""),
+                data.get("representative", ""),
+                data.get("position", ""),
+                now,
+                now,
+            ),
+        )
+        return cursor.lastrowid
+
+
+def update_organization(db_path: str | Path, org_id: int, data: dict[str, Any]) -> None:
+    now = datetime.now().isoformat()
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE organizations
+            SET tax_code = ?, name = ?, abbreviation = ?, address = ?, representative = ?, position = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                data.get("tax_code", ""),
+                data.get("name", ""),
+                data.get("abbreviation", ""),
+                data.get("address", ""),
+                data.get("representative", ""),
+                data.get("position", ""),
+                now,
+                org_id,
+            ),
+        )
+
+
+def delete_organization(db_path: str | Path, org_id: int) -> None:
+    with connect(db_path) as conn:
+        conn.execute("DELETE FROM organizations WHERE id = ?", (org_id,))
+
 
 def _normalize_case(values: dict[str, Any]) -> dict[str, Any]:
     normalized = {field: values.get(field, "") for field in CASE_FIELDS}
@@ -265,16 +368,19 @@ def create_case(db_path: str | Path, values: dict[str, Any]) -> int:
 
 def update_case(db_path: str | Path, case_id: int, values: dict[str, Any]) -> None:
     init_db(db_path)
-    existing = get_case(db_path, case_id)
-    if existing is None:
-        raise ValueError(f"Khong tim thay ho so id={case_id}")
-    merged = {field: existing.get(field, "") for field in CASE_FIELDS}
-    merged.update(values)
-    data = _normalize_case(merged)
-    data["updated_at"] = datetime.now().isoformat(timespec="seconds")
-    data["id"] = case_id
-    assignments = ", ".join(f"{field} = :{field}" for field in [*CASE_FIELDS, "updated_at"])
     with connect(db_path) as conn:
+        row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"Khong tim thay ho so id={case_id}")
+        existing = dict(row)
+        
+        merged = {field: existing.get(field, "") for field in CASE_FIELDS}
+        merged.update(values)
+        data = _normalize_case(merged)
+        data["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        data["id"] = case_id
+        
+        assignments = ", ".join(f"{field} = :{field}" for field in [*CASE_FIELDS, "updated_at"])
         cursor = conn.execute(f"UPDATE cases SET {assignments} WHERE id = :id", data)
         if cursor.rowcount == 0:
             raise ValueError(f"Khong tim thay ho so id={case_id}")
@@ -622,6 +728,12 @@ def monthly_revenue_breakdown(
 def display_cases(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     display = []
     for row in rows:
+        def _format_multiline(text: Any) -> str:
+            text_str = str(text or "")
+            if "\n" in text_str:
+                return "\n".join(f"- {line.strip()}" for line in text_str.split("\n") if line.strip())
+            return text_str
+
         display.append(
             {
                 "ID": row.get("id") or "",
@@ -639,14 +751,14 @@ def display_cases(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "Nguồn/ngân hàng": row.get("source") or "",
                 "Phí thẩm định": format_money(row.get("valuation_fee_number")),
                 "Sơ bộ": row.get("preliminary_status") or "",
-                "Số thửa đất": row.get("so_thua_dat") or "",
-                "Số tờ bản đồ": row.get("so_to_ban_do") or "",
-                "Địa chỉ thửa đất": row.get("dia_chi_thua_dat") or "",
-                "Chủ sở hữu cuối cùng": row.get("owner_name") or "",
+                "Số thửa đất": _format_multiline(row.get("so_thua_dat")),
+                "Số tờ bản đồ": _format_multiline(row.get("so_to_ban_do")),
+                "Địa chỉ thửa đất": _format_multiline(row.get("dia_chi_thua_dat")),
+                "Chủ sở hữu cuối cùng": _format_multiline(row.get("owner_name")),
                 "Loại tài sản": row.get("asset_type") or "",
                 "Thời gian dự kiến hoàn thành": row.get("expected_finish_date") or "",
                 "Tạm ứng": row.get("advance_payment") or "",
-                "Tài sản thẩm định giá": row.get("asset_description") or "",
+                "Tài sản thẩm định giá": _format_multiline(row.get("asset_description")),
                 "Mục đích thẩm định": row.get("valuation_purpose") or "",
                 "Ghi chú cá nhân": row.get("personal_note") or "",
                 "Chi phí khảo sát": row.get("survey_cost") or "",
@@ -681,7 +793,8 @@ def _normalize_header(value: Any) -> str:
 def _detect_header_row(ws: Worksheet) -> int | None:
     best_row = None
     best_score = 0
-    for row_idx in range(1, min(ws.max_row, 6) + 1):
+    # Kiểm tra 10 dòng đầu tiên thay vì 6 để tăng khả năng tìm thấy header
+    for row_idx in range(1, min(ws.max_row, 10) + 1):
         normalized_cells = [_normalize_header(cell.value) for cell in ws[row_idx]]
         score = 0
         for aliases in HEADER_ALIASES.values():
@@ -690,7 +803,7 @@ def _detect_header_row(ws: Worksheet) -> int | None:
         if score > best_score:
             best_row = row_idx
             best_score = score
-    return best_row if best_row is not None and best_score >= 5 else None
+    return best_row if best_row is not None and best_score >= 4 else None
 
 
 def _build_sheet_mapping(ws: Worksheet, header_row: int) -> dict[str, int]:
@@ -725,9 +838,11 @@ def _looks_like_contract_number(value: Any) -> bool:
     text = str(value or "").strip().upper()
     if not text:
         return False
+    # Chấp nhận các chuỗi có ít nhất 1 chữ số và chứa dấu gạch chéo hoặc gạch ngang
+    # Hoặc chuỗi bắt đầu bằng chữ và có số (ví dụ: V05-123)
     return bool(
-        re.search(r"\d{3,}/\d{4}/[A-Z]\d{2}[-.]\d+", text)
-        or re.search(r"[A-Z]\d{4}[-.]\d+", text)
+        re.search(r"\d+.*[/\\-].*\d+", text)
+        or re.search(r"[A-Z]+\d+", text)
     )
 
 

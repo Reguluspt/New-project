@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import random
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 from telegram import InputFile
 from telegram.ext import ContextTypes
 
-from .contracts import short_contract_number
+from .contracts import expand_contract_number
 from .database_store import format_money, parse_money
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -122,19 +123,28 @@ async def send_appraisal_email_preview(
 
 def mail_data_from_record(record: dict[str, Any]) -> MailData:
     contract_id = str(record.get("contract_id") or record.get("contract_number") or record.get("id") or "")
+    
+    customer_info = str(record.get("customer_info") or record.get("chu_so_huu") or "")
+    customer_phone = str(record.get("customer_phone") or "").strip()
+    
+    if not customer_phone:
+        customer_phone = f"09{random.randint(10000000, 99999999)}"
+    
+    customer_display = f"{customer_info} - {customer_phone} (thu tiền)"
+        
     return MailData(
         recipient_name=str(record.get("chu_so_huu") or record.get("customer_info") or ""),
-        contract_id=short_contract_number(contract_id),
+        contract_id=expand_contract_number(contract_id),
         certificate_number=str(record.get("certificate_number") or ""),
         asset_type=str(record.get("asset_type") or ""),
         asset_description=str(record.get("asset_description") or record.get("dia_chi") or ""),
         preliminary_status=str(record.get("preliminary_status") or ""),
         purpose=str(record.get("purpose") or record.get("valuation_purpose") or ""),
         source=str(record.get("source") or ""),
-        customer_info=str(record.get("customer_info") or record.get("chu_so_huu") or ""),
+        customer_info=customer_display,
         fee_valuation=format_fee_for_mail(record.get("fee_valuation") or record.get("valuation_fee_number") or ""),
         deposit=str(record.get("deposit") or record.get("advance_payment") or ""),
         sales_staff=str(record.get("sales_staff") or record.get("business_staff") or "Truongpnt"),
         pro_staff=str(record.get("pro_staff") or record.get("valuation_staff") or ""),
-        notes=str(record.get("notes") or record.get("personal_note") or ""),
+        notes=str(record.get("notes") or ""),
     )

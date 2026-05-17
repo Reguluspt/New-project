@@ -396,14 +396,17 @@ def _decode_part(part: Message) -> str:
 
 
 def _decode_header_value(value: object) -> str:
-    raw = str(value or "")
-    if not raw:
+    if not value:
         return ""
+    # Convert to string and aggressively remove all newlines/tabs before decoding
+    # to avoid issues with folded headers from raw message.get()
+    raw = str(value).replace("\r", "").replace("\n", "").replace("\t", " ")
     try:
         decoded = str(make_header(decode_header(raw)))
     except Exception:
         decoded = raw
-    return re.sub(r"[\r\n]+", " ", decoded).strip()
+    # Final cleanup of any characters that could break EmailMessage headers
+    return re.sub(r"[\r\n\t]+", " ", decoded).strip()
 
 
 def parse_incoming_email(raw: bytes, *, uid: str = "") -> IncomingEmail:
@@ -626,6 +629,36 @@ async def send_thread_reply(
     smtp_settings: GmailSmtpSettings,
     cc_list: list[str],
 ) -> None:
+    from .oauth2_service import is_oauth_enabled, send_email_via_oauth2
+    
+    provider = None
+    if is_oauth_enabled("google"):
+        provider = "google"
+    elif is_oauth_enabled("outlook"):
+        provider = "outlook"
+
+    if provider:
+        to_email, cc = _reply_recipients(incoming, cc_list)
+        mail_data = mail_data_from_record(dict(record)).model_copy(update={"greeting_name": "Sơn"})
+        html = render_appraisal_email(mail_data)
+        subject = _reply_subject(incoming.subject)
+        
+        try:
+            print(f"Sending thread reply using OAuth2 API for provider: {provider}")
+            await send_email_via_oauth2(
+                provider=provider,
+                from_email=smtp_settings.mail_from or smtp_settings.username,
+                to_email=to_email,
+                subject=subject,
+                html_body=html,
+                cc_emails=cc,
+                reply_to_msg_id=incoming.message_id,
+                references=incoming.references
+            )
+            return
+        except Exception as exc:
+            print(f"OAuth2 thread reply failed: {exc}, falling back to SMTP.")
+
     message = build_reply_message(
         incoming=incoming,
         record=record,
@@ -656,14 +689,14 @@ def build_professional_forward_message(
     settings: MailListenerSettings,
 ) -> EmailMessage:
     if not settings.professional_dept_email:
-        raise RuntimeError("Thi\u1ebfu PROFESSIONAL_DEPT_EMAIL \u0111\u1ec3 chuy\u1ec3n ti\u1ebfp cho b\u1ed9 ph\u1eadn nghi\u1ec7p v\u1ee5.")
+        raise RuntimeError("Thiếu PROFESSIONAL_DEPT_EMAIL để chuyển tiếp cho bộ phận nghiệp vụ.")
     record_with_certificate = dict(record)
     record_with_certificate["contract_number"] = certificate_number
     mail_data = mail_data_from_record(record_with_certificate).model_copy(
         update={
-            "greeting_name": "S\u01a1n",
+            "greeting_name": "Kiệt",
             "contract_id": certificate_number,
-            "intro_text": "Nh\u1edd S\u01a1n ph\u00e2n chuy\u00ean vi\u00ean \u0111\u1ecbnh gi\u00e1 t\u00e0i s\u1ea3n theo th\u00f4ng tin b\u00ean d\u01b0\u1edbi gi\u00fap m\u00ecnh nh\u00e9, c\u1ea3m \u01a1n S\u01a1n!",
+            "intro_text": "Em phân chuyên viên định giá tài sản theo thông tin bên dưới giúp anh nhé, cảm ơn em!",
         }
     )
     html = render_appraisal_email(mail_data)
@@ -678,7 +711,7 @@ def build_professional_forward_message(
     if incoming.message_id:
         message["In-Reply-To"] = incoming.message_id
         message["References"] = f"{incoming.references} {incoming.message_id}".strip()
-    message.set_content("Email n\u00e0y c\u1ea7n tr\u00ecnh \u0111\u1ecdc HTML \u0111\u1ec3 xem b\u1ea3ng th\u00f4ng tin h\u1ed3 s\u01a1.")
+    message.set_content("Email này cần trình đọc HTML để xem bảng thông tin hồ sơ.")
     message.add_alternative(html, subtype="html")
     return message
 
@@ -691,6 +724,46 @@ async def send_professional_forward(
     smtp_settings: GmailSmtpSettings,
     settings: MailListenerSettings,
 ) -> None:
+    from .oauth2_service import is_oauth_enabled, send_email_via_oauth2
+    
+    provider = None
+    if is_oauth_enabled("google"):
+        provider = "google"
+    elif is_oauth_enabled("outlook"):
+        provider = "outlook"
+
+    if provider:
+        if not settings.professional_dept_email:
+            raise RuntimeError("Thiếu PROFESSIONAL_DEPT_EMAIL để chuyển tiếp cho bộ phận nghiệp vụ.")
+        record_with_certificate = dict(record)
+        record_with_certificate["contract_number"] = certificate_number
+        mail_data = mail_data_from_record(record_with_certificate).model_copy(
+            update={
+                "greeting_name": "Kiệt",
+                "contract_id": certificate_number,
+                "intro_text": "Em phân chuyên viên định giá tài sản theo thông tin bên dưới giúp anh nhé, cảm ơn em!",
+            }
+        )
+        html = render_appraisal_email(mail_data)
+        cc_list = _dedupe_emails([settings.admin_email, *(settings.monitor_cc_list or [])])
+        subject = _reply_subject(incoming.subject)
+        
+        try:
+            print(f"Sending professional forward using OAuth2 API for provider: {provider}")
+            await send_email_via_oauth2(
+                provider=provider,
+                from_email=smtp_settings.mail_from or smtp_settings.username,
+                to_email=settings.professional_dept_email,
+                subject=subject,
+                html_body=html,
+                cc_emails=cc_list,
+                reply_to_msg_id=incoming.message_id,
+                references=incoming.references
+            )
+            return
+        except Exception as exc:
+            print(f"OAuth2 professional forward failed: {exc}, falling back to SMTP.")
+
     message = build_professional_forward_message(
         incoming=incoming,
         record=record,
@@ -728,6 +801,16 @@ async def process_certificate_reply(incoming: IncomingEmail, *, settings: MailLi
             subject=incoming.subject,
             from_email=incoming.from_email,
             reason="not_admin_sender",
+        )
+        return None
+
+    if "[sơ bộ]" in incoming.subject.lower():
+        append_listener_log(
+            "skipped",
+            uid=incoming.uid,
+            subject=incoming.subject,
+            from_email=incoming.from_email,
+            reason="sobo_email_ignored",
         )
         return None
 
@@ -950,6 +1033,44 @@ def _extract_imap_ids(data: list[object]) -> list[str]:
 
 
 async def poll_unseen_once(settings: MailListenerSettings) -> int:
+    from .oauth2_service import is_oauth_enabled, fetch_emails_via_oauth2
+    
+    provider = None
+    if is_oauth_enabled("google"):
+        provider = "google"
+    elif is_oauth_enabled("outlook"):
+        provider = "outlook"
+
+    if provider:
+        try:
+            print(f"Polling unseen emails via OAuth2 API for provider: {provider}")
+            oauth_emails = await fetch_emails_via_oauth2(provider, limit=15)
+            processed = 0
+            for item in oauth_emails:
+                raw = item["raw_bytes"]
+                uid = item["uid"]
+                incoming = parse_incoming_email(raw, uid=uid)
+                if await was_email_processed(settings.records_db_path, incoming, mailbox=provider):
+                    continue
+                if settings.subject_filter:
+                    haystack = f"{incoming.subject}\n{incoming.text}".casefold()
+                    if settings.subject_filter.casefold() not in haystack:
+                        continue
+                match = await process_incoming_email(raw, uid=uid, settings=settings)
+                result = "replied" if match is not None and match.score > MATCH_THRESHOLD else "skipped"
+                await mark_email_processed(
+                    settings.records_db_path,
+                    incoming,
+                    mailbox=provider,
+                    result=result,
+                    record_id=match.record.get("id") if match is not None else None,
+                    score=round(match.score, 3) if match is not None else None,
+                )
+                processed += 1
+            return processed
+        except Exception as exc:
+            print(f"OAuth2 poll failed: {exc}, falling back to IMAP.")
+
     client = aioimaplib.IMAP4_SSL(settings.imap_host, settings.imap_port)
     await client.wait_hello_from_server()
     await client.login(settings.imap_username, settings.imap_password)

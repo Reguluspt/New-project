@@ -43,13 +43,31 @@ def parse_money(value: Any) -> int | None:
         return None
     if isinstance(value, (int, float)):
         return int(value)
-    text = str(value).strip()
+    text = str(value).strip().lower()
     if not text:
         return None
-    digits = "".join(ch for ch in text if ch.isdigit())
-    if not digits:
+
+    multiplier = 1
+    if "tỷ" in text:
+        multiplier = 1000000000
+    elif "triệu" in text or "tr" in text:
+        multiplier = 1000000
+
+    # Giữ lại số và dấu chấm/phẩy để xử lý số thập phân (vd: 1.5 triệu)
+    clean_text = "".join(ch for ch in text if ch.isdigit() or ch in ".,")
+    if not clean_text:
         return None
-    return int(digits)
+
+    try:
+        # Thay thế dấu phẩy bằng dấu chấm để chuyển thành float
+        val_float = float(clean_text.replace(",", "."))
+        return int(val_float * multiplier)
+    except (ValueError, TypeError):
+        # Fallback: chỉ lấy các chữ số nếu parse float thất bại
+        digits = "".join(ch for ch in clean_text if ch.isdigit())
+        if not digits:
+            return None
+        return int(digits) * multiplier
 
 
 def format_money(value: Any) -> str:
@@ -193,7 +211,12 @@ def append_case_to_database(
     }
 
     for key, col in DATABASE_COLUMNS.items():
-        ws.cell(target_row, col).value = row_values[key]
+        cell = ws.cell(target_row, col)
+        cell.value = row_values[key]
+        # Bật wrap_text cho ô chứa ký tự xuống dòng (đa tài sản)
+        if isinstance(row_values[key], str) and "\n" in row_values[key]:
+            from openpyxl.styles import Alignment
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
 
     wb.save(path)
     return path, ws.title, target_row

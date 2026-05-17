@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import re
 import html
 from datetime import datetime
@@ -7,12 +8,80 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.oxml.ns import qn
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 from .case_files import case_folder, sanitize_folder_name
 from .database_store import format_money, money_to_vietnamese_words, parse_money
 from .template_manager import PLACEHOLDER_PATTERN, iter_paragraphs, read_docx_text
+
+
+# --- Các trường tài sản có thể chứa nhiều dòng (đa tài sản) ---
+MULTILINE_CONTEXT_KEYS = {
+    "TAI_SAN_THAM_DINH",
+    "DIA_CHI_TAI_SAN",
+}
+
+
+def _expand_multiline_paragraph(paragraph: Paragraph) -> None:
+    """Nếu paragraph chứa ký tự xuống dòng, tách thành nhiều paragraph con
+    với gạch đầu dòng (- ). Giữ nguyên format (font, size) của run gốc."""
+    full_text = paragraph.text
+    if "\n" not in full_text:
+        return
+
+    lines = [line.strip() for line in full_text.split("\n") if line.strip()]
+    if len(lines) <= 1:
+        return
+
+    # Lấy element gốc và parent
+    p_element = paragraph._element
+    parent = p_element.getparent()
+    if parent is None:
+        return
+
+    # Lưu lại thông tin format từ run đầu tiên
+    ref_run = paragraph.runs[0] if paragraph.runs else None
+
+    # Đặt nội dung paragraph hiện tại = dòng đầu tiên (có gạch đầu dòng)
+    first_line = f"- {lines[0]}"
+    if paragraph.runs:
+        paragraph.runs[0].text = first_line
+        for run in paragraph.runs[1:]:
+            run.text = ""
+    else:
+        paragraph.add_run(first_line)
+
+    # Tạo các paragraph mới cho các dòng còn lại, chèn ngay sau paragraph hiện tại
+    insert_after = p_element
+    for line in lines[1:]:
+        new_p = copy.deepcopy(p_element)
+        # Xóa hết run cũ trong bản sao
+        for r in new_p.findall(qn("w:r")):
+            new_p.remove(r)
+        # Tạo run mới
+        new_run = copy.deepcopy(ref_run._element) if ref_run is not None else None
+        if new_run is not None:
+            # Xóa text cũ trong run
+            for t in new_run.findall(qn("w:t")):
+                new_run.remove(t)
+            from docx.oxml import OxmlElement
+            t_elem = OxmlElement("w:t")
+            t_elem.set(qn("xml:space"), "preserve")
+            t_elem.text = f"- {line}"
+            new_run.append(t_elem)
+            new_p.append(new_run)
+        else:
+            from docx.oxml import OxmlElement
+            new_run_elem = OxmlElement("w:r")
+            t_elem = OxmlElement("w:t")
+            t_elem.set(qn("xml:space"), "preserve")
+            t_elem.text = f"- {line}"
+            new_run_elem.append(t_elem)
+            new_p.append(new_run_elem)
+        insert_after.addnext(new_p)
+        insert_after = new_p
 
 
 CONTRACT_DOC_SUFFIX = "/HĐTĐG"
@@ -212,7 +281,9 @@ def _fee_words(case: dict[str, Any]) -> str:
 def build_placeholder_context(case: dict[str, Any], *, organization: bool = False) -> dict[str, str]:
     customer_info = str(case.get("customer_info") or "").strip()
     customer_name = clean_customer_name(customer_info)
-    phone = extract_phone(customer_info)
+    phone = str(case.get("customer_phone") or "").strip()
+    if not phone:
+        phone = extract_phone(customer_info)
     contract_number = str(case.get("contract_number") or "").strip()
     source = str(case.get("source") or "").strip()
     purpose = str(case.get("valuation_purpose") or "").strip()
@@ -387,6 +458,14 @@ def _render_paragraph_html(paragraph: Paragraph, context: dict[str, str]) -> str
     if not rendered.strip():
         return f'<p style="{paragraph_style}">&nbsp;</p>'
 
+    # Nếu kết quả chứa xuống dòng (đa tài sản), render dưới dạng danh sách gạch đầu dòng
+    if "\n" in rendered:
+        lines = [line.strip() for line in rendered.split("\n") if line.strip()]
+        if len(lines) > 1:
+            run_style = _run_style_css(paragraph.runs[0]) if paragraph.runs else ""
+            items = "".join(f'<li style="{run_style}">{html.escape(line)}</li>' for line in lines)
+            return f'<ul style="{paragraph_style}margin-left:18px;padding-left:0;">{items}</ul>'
+
     parts: list[str] = []
     rendered_run_texts: list[str] = []
     for run in paragraph.runs:
@@ -551,8 +630,14 @@ def render_docx_template(
 ) -> Path:
     document = Document(str(template_path))
     context = build_placeholder_context(case, organization=organization)
-    for paragraph in iter_paragraphs(document):
+    # Thu thập tất cả paragraph trước để tránh vấn đề khi thêm paragraph mới
+    all_paragraphs = list(iter_paragraphs(document))
+    for paragraph in all_paragraphs:
         _replace_in_paragraph(paragraph, context)
+
+    # Sau khi thay thế, tách các paragraph chứa \n thành danh sách gạch đầu dòng
+    for paragraph in all_paragraphs:
+        _expand_multiline_paragraph(paragraph)
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)

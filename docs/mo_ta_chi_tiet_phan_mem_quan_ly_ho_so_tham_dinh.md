@@ -26,7 +26,7 @@ Các nhóm có thể sử dụng trong tương lai:
 
 ## 3. Luồng nghiệp vụ tổng thể
 
-### 3.1. Luồng tạo hồ sơ mới
+### 3.1. Luồng tạo hồ sơ mới qua Web/App
 
 1. Người dùng mở màn hình Nhập/Quét hồ sơ.
 2. Tải lên file PDF hoặc ảnh giấy chứng nhận quyền sử dụng đất.
@@ -53,7 +53,23 @@ Các nhóm có thể sử dụng trong tương lai:
 9. File gốc PDF/ảnh được lưu vào thư mục hồ sơ.
 10. Người dùng xuất Excel, Word, PDF hoặc ZIP khi cần.
 
-### 3.2. Luồng quản lý hồ sơ đã lưu
+### 3.2. Luồng tạo hồ sơ mới qua Telegram Bot
+
+1. Người dùng gửi Ảnh / PDF hoặc gõ lệnh `/nhap` vào Bot Telegram.
+2. Bot lưu tạm file và hỏi: "Hồ sơ này bao gồm 1 tài sản hay nhiều tài sản?".
+3. **Nếu chọn "1 Tài sản":**
+   - Bot gọi Gemini để trích xuất dữ liệu.
+   - Bot lần lượt hỏi người dùng điền các thông tin nghiệp vụ còn thiếu.
+   - Xác nhận lưu thành 1 bản ghi vào hệ thống.
+4. **Nếu chọn "Nhiều tài sản" (Luồng upload nhiều file):**
+   - Bot gọi Gemini quét file đầu tiên và lưu danh sách tài sản trích xuất được.
+   - Bot hỏi có muốn quét thêm file GCN nào nữa không.
+   - Nếu có, Bot chờ file tiếp theo và lặp lại quá trình quét, gộp chung tài sản.
+   - Nếu không, Bot sẽ chuyển sang hỏi các thông tin chung (Khách hàng, Số hợp đồng, Mục đích, Phí...) và **bỏ qua** việc hỏi chi tiết từng tài sản để tiết kiệm thời gian.
+   - Xác nhận và lưu thành 1 bản ghi lớn chứa nhiều tài sản. Nếu cần sửa chi tiết từng tài sản, người dùng sẽ thao tác trên phần mềm Web/App.
+5. Sau khi hoàn tất tạo hồ sơ, Bot cung cấp các phím bấm nhanh để gửi Email nội bộ, nhập Web hoặc thực hiện cả hai.
+
+### 3.3. Luồng quản lý hồ sơ đã lưu
 
 1. Người dùng mở trang Quản lý hồ sơ.
 2. Bảng hồ sơ hiển thị dữ liệu từ SQLite.
@@ -79,7 +95,7 @@ Các nhóm có thể sử dụng trong tương lai:
 6. Bảng có thể tùy chỉnh cột hiển thị và độ rộng cột. Cấu hình độ rộng cột được lưu lại cho phiên sử dụng sau.
 7. Người dùng có thể xuất đúng bảng đang lọc ra Excel.
 
-### 3.3. Luồng xuất bộ hồ sơ
+### 3.4. Luồng xuất bộ hồ sơ
 
 1. Người dùng bấm nút xem/xuất ở một hồ sơ.
 2. Popup xuất hồ sơ mở ra.
@@ -299,6 +315,22 @@ Chức năng:
 - Tự nhận diện tháng thực hiện từ tên sheet hoặc số hợp đồng.
 - Tránh import trùng hồ sơ.
 - Dữ liệu sau import có thể tìm kiếm, lọc, thống kê và xuất hồ sơ.
+
+### 4.7. Telegram Bot
+
+Phần mềm tích hợp bot Telegram như một kênh nhập liệu di động và phản hồi nhanh:
+
+Chức năng:
+
+- **Tiếp nhận hồ sơ**: Người dùng gửi Ảnh/PDF giấy chứng nhận qua Telegram.
+- **Phân nhánh thông minh**: Hỏi số lượng tài sản trước khi quét.
+  - Xử lý 1 tài sản nhanh gọn.
+  - Hỗ trợ luồng quét nhiều tài sản từ nhiều file liên tiếp mà không bắt người dùng nhập tay các chi tiết lặp lại.
+- **Trích xuất dữ liệu bằng Gemini**: Bot gửi file cho Gemini để lấy các thông tin số tờ, số thửa, chủ sở hữu... và hiển thị kết quả cho người dùng.
+- **Nhập liệu linh hoạt**: Hỏi lần lượt các trường còn thiếu hoặc hỗ trợ sửa dữ liệu thông qua chat.
+- **Hỗ trợ biểu mẫu thủ công**: Lệnh `/nhapthucong` cung cấp biểu mẫu text để nhập nhanh.
+- **Thao tác hậu kỳ**: Có các nút chức năng để gửi Email yêu cầu định giá hoặc nhập tự động vào hệ thống Web công ty sau khi tạo xong hồ sơ.
+- **Tra cứu và tìm kiếm**: Tra cứu nhanh hồ sơ bằng lệnh `/tra_cuu [Số hợp đồng]`.
 
 ## 5. Dữ liệu đang quản lý
 

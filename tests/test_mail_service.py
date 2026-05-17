@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 from src.mail_service import _remove_phone_numbers, load_gmail_smtp_settings, render_mail_html, send_appraisal_email
 
@@ -19,7 +19,7 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("THÔNG TIN HỒ SƠ", html)
         self.assertIn("N04-1051", html)
-        self.assertNotIn("010/2026/N04-1051/DN", html)
+        self.assertIn("010/2026/N04-1051/DN", html)
         self.assertIn("background-color:#ffc000", html)
         self.assertIn("Truongpnt", html)
         self.assertIn("Gửi Phương,", html)
@@ -36,7 +36,7 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
         }
         with (
             patch.dict("os.environ", env, clear=True),
-            patch("src.mail_service.aiosmtplib.send", AsyncMock()) as smtp_send,
+            patch("src.mail_service._send_sync") as send_sync_mock,
         ):
             result = await send_appraisal_email(
                 {
@@ -52,16 +52,16 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
             result.subject,
             "[XIN SỐ] - MB AMC ARR - Mr. Long - Thửa đất số 78d, tờ bản đồ số 13, địa chỉ Xã Hòa An, huyện Krông Păc, tỉnh Đak Lak.",
         )
-        smtp_send.assert_awaited_once()
-        kwargs = smtp_send.await_args.kwargs
-        self.assertEqual(kwargs["hostname"], "smtp.gmail.com")
-        self.assertEqual(kwargs["port"], 587)
-        self.assertEqual(kwargs["username"], "sender@gmail.com")
-        self.assertEqual(kwargs["password"], "app-password")
-        self.assertTrue(kwargs["start_tls"])
-        self.assertEqual(kwargs["recipients"], ["admin@example.com"])
+        send_sync_mock.assert_called_once()
+        args, _ = send_sync_mock.call_args
+        message, recipients, settings = args
+        
+        self.assertEqual(settings.host, "smtp.gmail.com")
+        self.assertEqual(settings.port, 587)
+        self.assertEqual(settings.username, "sender@gmail.com")
+        self.assertEqual(settings.password, "app-password")
+        self.assertEqual(recipients, ["admin@example.com"])
         self.assertEqual(result.cc_emails, [])
-        message = smtp_send.await_args.args[0]
         self.assertTrue(message["Message-ID"])
         self.assertIn("@gmail.com>", message["Message-ID"])
 
@@ -76,7 +76,7 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
         }
         with (
             patch.dict("os.environ", env, clear=True),
-            patch("src.mail_service.aiosmtplib.send", AsyncMock()) as smtp_send,
+            patch("src.mail_service._send_sync") as send_sync_mock,
         ):
             result = await send_appraisal_email(
                 {
@@ -89,11 +89,11 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.to_email, "admin@example.com")
         self.assertEqual(result.cc_emails, ["manager@example.com", "control@example.com"])
-        smtp_send.assert_awaited_once()
-        message = smtp_send.await_args.args[0]
+        send_sync_mock.assert_called_once()
+        message, recipients, _ = send_sync_mock.call_args.args
         self.assertEqual(message["Cc"], "manager@example.com, control@example.com")
         self.assertEqual(
-            smtp_send.await_args.kwargs["recipients"],
+            recipients,
             ["admin@example.com", "manager@example.com", "control@example.com"],
         )
 

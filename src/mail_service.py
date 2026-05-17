@@ -100,7 +100,7 @@ def load_gmail_smtp_settings() -> GmailSmtpSettings:
 
 
 def _mail_data_from_payload(data_dict: Mapping[str, Any]) -> MailData:
-    direct_fields = set(MailData.model_fields)
+    direct_fields = set(MailData.model_fields) - {"customer_info"}
     direct_payload = {
         field: str(data_dict.get(field) or "")
         for field in direct_fields

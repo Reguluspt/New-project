@@ -6,7 +6,7 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from .models import LandCertificateExtraction
+from .models import LandCertificateMultiExtraction
 
 
 EXTRACTION_INSTRUCTIONS = """
@@ -63,33 +63,36 @@ def extract_land_certificate(
     *,
     api_key: str,
     model: str,
-) -> LandCertificateExtraction:
+) -> LandCertificateMultiExtraction:
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(path)
 
     client = OpenAI(api_key=api_key)
-    response = client.responses.parse(
+    response = client.beta.chat.completions.parse(
         model=model,
-        instructions=EXTRACTION_INSTRUCTIONS,
-        input=[
+        messages=[
+            {
+                "role": "system",
+                "content": EXTRACTION_INSTRUCTIONS,
+            },
             {
                 "role": "user",
                 "content": [
                     _content_for_file(path),
                     {
-                        "type": "input_text",
+                        "type": "text",
                         "text": (
-                            "Hay doc file GCN nay va tra ve dung schema. "
-                            "Tap trung vao so thua, so to ban do, dia chi thua dat, "
-                            "chu so huu cuoi cung, dia chi va CCCD/CMND cua nguoi do."
+                            "Hay dem so luong tai san (GCN) co trong tai lieu. Trich xuat tra ve danh sach cac tai san. "
+                            "Luu y co the 1 file chua nhieu GCN hoac nhieu trang gop lai thanh nhieu tai san. "
+                            "Tap trung vao so thua, so to ban do, dia chi thua dat, chu so huu cuoi cung, dia chi va CCCD/CMND cua nguoi do."
                         ),
                     },
                 ],
             }
         ],
-        text_format=LandCertificateExtraction,
+        response_format=LandCertificateMultiExtraction,
         temperature=0,
         store=False,
     )
-    return response.output_parsed
+    return response.choices[0].message.parsed

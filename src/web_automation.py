@@ -72,7 +72,7 @@ def _bank_web_value(raw_source: str) -> str:
     if not source:
         return "KHN"
     rules = [
-        ("mb amc", "MB AMC "),
+        ("mb amc", "MB AMC"),
         ("vcb", "VIETCOMBANK"),
         ("vietcombank", "VIETCOMBANK"),
         ("vietinbank", "VIETINBANK"),
@@ -455,7 +455,6 @@ async def _select_ng_dropdown_by_label(page, label: str, value: str) -> bool:
     await page.wait_for_timeout(500)
     logger.info("Dropdown '%s' typed '%s' and pressed Enter", label, value)
     return True
-    return False
 
 
 async def _select_ng_dropdown_matching_text(page, label: str, source_text: str) -> bool:
@@ -471,7 +470,6 @@ async def _select_ng_dropdown_matching_text(page, label: str, source_text: str) 
     await page.wait_for_timeout(500)
     logger.info("Dropdown '%s' typed '%s' and pressed Enter", label, source_text)
     return True
-    return False
 
 
 async def _select_random_ng_option_containing(page, label: str, needles: list[str]) -> bool:
@@ -565,8 +563,9 @@ async def fill_basic_info(page, data: Mapping[str, str]) -> None:
     logger.info("Điền Số điện thoại (Fixed): 0905226968")
 
     # Email (Fixed)
-    await page.locator("#input-email").fill("truongpham.sacc@gmail.com")
-    logger.info("Điền Email (Fixed): truongpham.sacc@gmail.com")
+    admin_email = os.getenv("ADMIN_EMAIL", "truongpham.sacc@gmail.com")
+    await page.locator("#input-email").fill(admin_email)
+    logger.info(f"Điền Email (Env): {admin_email}")
 
     # Địa chỉ (Dynamic)
     dia_chi = str(data.get("customer_address") or "").strip()
@@ -835,12 +834,30 @@ async def fill_credit_and_submit(page, data: Mapping[str, str]) -> str:
         logger.warning("Không thể điền Số điện thoại tín dụng: %s", exc)
 
     try:
-        await page.locator("#input-emailTinDung").fill("truongpham.sacc@gmail.com")
-        logger.info("Dien Email tin dung (Fixed): truongpham.sacc@gmail.com")
+        admin_email = os.getenv("ADMIN_EMAIL", "truongpham.sacc@gmail.com")
+        await page.locator("#input-emailTinDung").fill(admin_email)
+        logger.info(f"Dien Email tin dung (Env): {admin_email}")
     except Exception as exc:
         logger.warning("Khong the dien Email tin dung: %s", exc)
 
     # ── 3. THÔNG TIN HỢP ĐỒNG ──────────────────────────────────────────
+
+    # Số hợp đồng (Dynamic)
+    contract_number = str(data.get("contract_number") or "").strip()
+    if contract_number:
+        try:
+            input_so_hop_dong = page.locator("#input-soHopDong")
+            if await input_so_hop_dong.count() > 0:
+                await input_so_hop_dong.fill(contract_number, timeout=5000)
+            else:
+                input_fallback = page.locator("xpath=//label[contains(text(), 'Số hợp đồng')]/following-sibling::*//input | //label[contains(text(), 'Số hợp đồng')]/..//input[not(@type='hidden')]").first
+                if await input_fallback.count() > 0:
+                    await input_fallback.fill(contract_number, timeout=5000)
+                else:
+                    await page.get_by_label("Số hợp đồng").fill(contract_number, timeout=5000)
+            logger.info("Điền Số hợp đồng: %s", contract_number)
+        except Exception as exc:
+            logger.warning("Không tìm thấy ô Số hợp đồng trên form: %s", exc)
 
     # Phí thẩm định (Fixed)
     fee_filled = False
@@ -993,7 +1010,7 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
     if not (record.get("customer_info") or record.get("customer_name")): missing.append("Họ tên (customer_info)")
     if not record.get("customer_address"): missing.append("Địa chỉ (customer_address)")
     if not (record.get("asset_description") or record.get("city")): missing.append("Tỉnh/ thành phố (asset_description)")
-    if not record.get("file_path"): missing.append("Tài liệu/Pháp lý (file_path)")
+    # File path validation removed since we upload a blank PDF if it's missing
     if not record.get("valuation_purpose"): missing.append("Mục đích thẩm định (valuation_purpose)")
     
     if missing:
@@ -1006,42 +1023,95 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
     except ImportError as exc:
         raise RuntimeError("Chưa cài Playwright. Chạy: pip install playwright && playwright install chromium") from exc
 
-    page = None
+    # Xử lý cắt chuỗi (split) để tính số lượng tài sản N
+    raw_asset_descriptions = [p.strip() for p in str(record.get("asset_description") or "").split("\n") if p.strip()]
+    raw_dia_chis = [p.strip() for p in str(record.get("dia_chi") or "").split("\n") if p.strip()]
+    N = max(len(raw_asset_descriptions), len(raw_dia_chis), 1)
+
+    logger.info("Phát hiện %d tài sản trong hồ sơ #%s", N, record_id)
+
+    def get_split_value(raw_val: str, index: int) -> str:
+        parts = [p.strip() for p in (raw_val or "").split("\n") if p.strip()]
+        if not parts:
+            return ""
+        if index < len(parts):
+            return parts[index]
+        return parts[-1]
     browser = None
+    page = None
     try:
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(headless=False)
+            # Tự động chọn headless=True trên Linux/VPS, hoặc cho phép tuỳ cấu hình qua env PLAYWRIGHT_HEADLESS
+            is_headless = os.getenv("PLAYWRIGHT_HEADLESS", "true" if os.name != "nt" else "false").strip().casefold() in ("true", "1", "yes")
+            browser = await playwright.chromium.launch(headless=is_headless)
             context = await browser.new_context()
             
-            # --- 1. Mở trang và Đăng nhập ---
-            # Chúng ta sẽ truyền trực tiếp URL vào start_browser_and_login
-            # thay vì phải tải lại từ settings. Sửa lại start_browser_and_login 
-            # một chút để hỗ trợ tham số. Tuy nhiên, ta gọi luôn code của nó ở đây
-            # hoặc tạm thời gán biến môi trường.
-            # Do start_browser_and_login đọc từ settings, ta sẽ tạm thời override settings
-            # nếu cần, hoặc ta truyền luôn.
-            
-            # Khởi tạo page và đăng nhập
-            page = await start_browser_and_login(context)
-            
-            # --- 2. Điền thông tin ---
-            await fill_basic_info(page, record)
-            await fill_asset_info(page, record)
-            
-            # --- 3. Tài liệu, Tín dụng & Gửi ---
-            result_msg = await fill_credit_and_submit(page, record)
-            
-            # --- 4. Cập nhật DB & Báo cáo thành công ---
+            results_msg = []
+
+            for i in range(N):
+                logger.info("Đang xử lý tài sản %d/%d của hồ sơ #%s", i + 1, N, record_id)
+                sub_record = dict(record)
+                
+                # Thông tin tài sản lấy theo index `i`
+                sub_record["asset_description"] = get_split_value(str(record.get("asset_description") or ""), i)
+                sub_record["dia_chi"] = get_split_value(str(record.get("dia_chi") or ""), i)
+                sub_record["so_thua"] = get_split_value(str(record.get("so_thua") or ""), i)
+                sub_record["so_to"] = get_split_value(str(record.get("so_to") or ""), i)
+
+                # Thông tin chung giữ nguyên nhưng cần gộp thành 1 dòng (tránh lỗi web)
+                for common_field in ["customer_info", "customer_address", "citizen_id", "chu_so_huu"]:
+                    if sub_record.get(common_field):
+                        sub_record[common_field] = sub_record[common_field].replace("\n", ", ")
+
+                try:
+                    # --- 1. Mở trang và Đăng nhập ---
+                    page = await start_browser_and_login(context)
+                    
+                    # --- 2. Điền thông tin ---
+                    await fill_basic_info(page, sub_record)
+                    await fill_asset_info(page, sub_record)
+                    
+                    # --- 3. Tài liệu, Tín dụng & Gửi ---
+                    res = await fill_credit_and_submit(page, sub_record)
+                    results_msg.append(f"- Tài sản {i + 1}: {res}")
+                except Exception as exc:
+                    import traceback
+                    tb_str = traceback.format_exc()
+                    err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id} (Tài sản {i + 1}/{N}): {type(exc).__name__}: {exc}\nChi tiết:\n{tb_str}"
+                    logger.error(err_msg)
+                    
+                    if page:
+                        try:
+                            error_dir = PROJECT_ROOT / "logs" / "errors"
+                            error_dir.mkdir(parents=True, exist_ok=True)
+                            import time
+                            timestamp = int(time.time())
+                            screenshot_path = error_dir / f"error_web_entry_{record_id}_asset_{i+1}_{timestamp}.png"
+                            await page.screenshot(path=str(screenshot_path), full_page=True)
+                            logger.info("Đã lưu ảnh màn hình lỗi tại: %s", screenshot_path)
+                            err_msg += f"\nẢnh lỗi: {screenshot_path.name}"
+                        except Exception as ss_exc:
+                            logger.error("Không thể chụp ảnh màn hình: %s", ss_exc)
+                            
+                    await notify_telegram(err_msg)
+                    raise RuntimeError(err_msg) from exc
+                finally:
+                    if page:
+                        await page.close()
+
+            # --- 4. Cập nhật DB & Báo cáo thành công (Chỉ khi tất cả đều thành công) ---
             from .database_manager import update_record_status
             await update_record_status(settings.records_db_path, record_id, "COMPLETED_ON_WEB")
             
-            success_text = f"✅ Đã nhập Web C.Ty thành công hồ sơ #{record_id}.\n{result_msg}"
+            success_text = f"✅ Đã nhập Web C.Ty thành công hồ sơ #{record_id} ({N} tài sản).\n" + "\n".join(results_msg)
             await notify_telegram(success_text)
             
             return success_text
 
     except Exception as exc:
-        err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id}: {exc}"
+        import traceback
+        tb_str = traceback.format_exc()
+        err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id}: {type(exc).__name__}: {exc}\nChi tiết:\n{tb_str}"
         logger.error(err_msg)
         
         # Chụp ảnh màn hình nếu page đang mở
