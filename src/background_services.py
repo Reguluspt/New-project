@@ -150,9 +150,13 @@ def ngrok_args() -> list[str]:
 
 
 def start_ngrok_if_enabled() -> int | None:
+    endpoint_url = _ngrok_url_from_env()
+    # Tự động tắt ngrok nếu đã có tên miền HTTPS thực tế (không phải localhost/127.0.0.1)
+    if endpoint_url and not any(x in endpoint_url.lower() for x in ["localhost", "127.0.0.1"]):
+        return None
+
     if not _truthy_env("AUTO_START_NGROK", True):
         return None
-    endpoint_url = _ngrok_url_from_env()
     if _ngrok_public_url_online(endpoint_url):
         discovered_pid = _find_running_pid_by_hint("ngrok")
         if discovered_pid:
