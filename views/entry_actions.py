@@ -79,11 +79,17 @@ def run_ocr_extraction(
             api_key=api_key,
             model=model,
         )
-    apply_extraction_to_form(extraction)
+    if hasattr(extraction, "assets") and extraction.assets:
+        single_extraction = extraction.assets[0]
+    else:
+        from src.models import blank_extraction
+        single_extraction = blank_extraction()
+
+    apply_extraction_to_form(single_extraction)
     remember_ai_config()
     if metadata_updated:
         st.rerun()
-    return extraction
+    return single_extraction
 
 
 def render_ocr_action(
