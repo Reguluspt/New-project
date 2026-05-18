@@ -704,9 +704,23 @@ def render(
             export_case=export_case,
         ):
             try:
-                archive_path = package_case_documents(selected_folder)
-                st.success("Đã tạo gói ZIP hồ sơ.")
-                st.caption(str(archive_path))
+                with st.spinner("Đang đóng gói ZIP hồ sơ..."):
+                    archive_path = package_case_documents(selected_folder)
+                st.success("Đã tạo gói ZIP hồ sơ thành công! 🎉")
+                st.caption(f"Đường dẫn lưu trên VPS: {archive_path}")
+                
+                # Đọc dữ liệu file zip để phục vụ download trực tiếp
+                with open(archive_path, "rb") as f:
+                    zip_bytes = f.read()
+                
+                st.download_button(
+                    label="Tải về file ZIP ngay 📥",
+                    data=zip_bytes,
+                    file_name=archive_path.name,
+                    mime="application/zip",
+                    key=f"download_zip_{selected_id}_{archive_path.stat().st_mtime}",
+                    use_container_width=True
+                )
                 _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Đóng gói ZIP thất bại: {exc}")
