@@ -1,0 +1,23 @@
+Traceback (most recent call last):
+  File "C:\Users\Truon\Documents\New project\main.py", line 131, in <module>
+    asyncio.run(main())
+    ~~~~~~~~~~~^^^^^^^^
+  File "C:\Users\Truon\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 204, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\Truon\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\Truon\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "C:\Users\Truon\Documents\New project\main.py", line 123, in main
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Truon\Documents\New project\main.py", line 77, in run_telegram_webhook
+    await run_subprocess(
+    ...<11 lines>...
+    )
+  File "C:\Users\Truon\Documents\New project\main.py", line 46, in run_subprocess
+    raise RuntimeError(f"{name} stopped with exit code {return_code}")
+RuntimeError: telegram stopped with exit code 4294967295

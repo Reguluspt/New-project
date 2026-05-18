@@ -115,8 +115,7 @@ def load_web_automation_settings() -> WebAutomationSettings:
     ``records_db_path`` is resolved through :func:`get_db_path` so that every
     component in the project points at the same absolute SQLite file.
     """
-    load_dotenv(PROJECT_ROOT / "API.env")
-    load_dotenv()
+    load_dotenv(PROJECT_ROOT / "API.env", override=True)
 
     internal_web_url = os.getenv("INTERNAL_WEB_URL", "").strip()
     web_username = os.getenv("WEB_USERNAME", "").strip()

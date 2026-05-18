@@ -107,7 +107,6 @@ def _load_env() -> None:
     if "unittest" in sys.modules or "pytest" in sys.modules:
         return
     load_dotenv(PROJECT_ROOT / "API.env", override=True)
-    load_dotenv(override=True)
 
 
 def _int_env(name: str, default: int) -> int:

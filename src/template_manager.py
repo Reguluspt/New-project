@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from datetime import datetime
@@ -183,6 +184,7 @@ def load_template_config(config_path: str | Path, defaults: dict[str, Any]) -> d
         return dict(defaults)
 
     merged = dict(defaults)
+    root_dir = Path(__file__).resolve().parent.parent
     for key, value in data.items():
         if key not in merged:
             continue
@@ -191,7 +193,28 @@ def load_template_config(config_path: str | Path, defaults: dict[str, Any]) -> d
         elif isinstance(merged[key], dict) and isinstance(value, dict):
             merged[key] = {str(k): str(v) for k, v in value.items()}
         elif isinstance(merged[key], str) and isinstance(value, str):
-            merged[key] = value
+            val_str = str(value)
+            if "\\" in val_str or "/" in val_str or ":" in val_str:
+                val_path = Path(val_str)
+                # Check if it doesn't exist, or looks like a Windows path on Linux
+                is_cross_os = ":" in val_str and os.name == "posix"
+                if is_cross_os or not val_path.exists():
+                    unified = val_str.replace("\\", "/")
+                    parts = unified.split("/")
+                    healed = False
+                    for marker in ["samples", "data", "outputs", "exports"]:
+                        if marker in parts:
+                            idx = parts.index(marker)
+                            rel_path = "/".join(parts[idx:])
+                            healed_path = root_dir / rel_path
+                            if healed_path.exists():
+                                val_str = str(healed_path)
+                                healed = True
+                                break
+                    if not healed and is_cross_os:
+                        # Fallback to default if cross-OS absolute path cannot be healed
+                        val_str = str(defaults.get(key, ""))
+            merged[key] = val_str
     return merged
 
 

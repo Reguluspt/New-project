@@ -1,0 +1,13 @@
+build/
+data/oauth_config.json
+*.env
+*.pid
+*.log
+__pycache__/
+.pytest_cache/
+.vscode/
+.idea/
+*.rar
+*.zip
+*.db
+*.xlsx

@@ -1,0 +1,195 @@
+[
+  {
+    "text": "Trân trọng!",
+    "runs": [
+      {
+        "text": "Trân trọng!",
+        "bold": null,
+        "italic": true,
+        "font": "Calibri",
+        "color": "006FC9"
+      }
+    ]
+  },
+  {
+    "text": "Phạm Ngọc Thanh Trường",
+    "runs": [
+      {
+        "text": "Phạm Ngọc Thanh Trường",
+        "bold": true,
+        "italic": null,
+        "font": "Calibri",
+        "color": "FF6600"
+      }
+    ]
+  },
+  {
+    "text": "Trưởng phòng kinh doanh khu vực Tây Nguyên",
+    "runs": [
+      {
+        "text": "Trưởng phòng kinh doanh khu vực Tây Nguyên",
+        "bold": true,
+        "italic": null,
+        "font": "Calibri",
+        "color": "006666"
+      }
+    ]
+  },
+  {
+    "text": "Mobile: 0905.22.69.68 - 0913.503.051",
+    "runs": [
+      {
+        "text": "Mobile: 0905.22.69.68 - 0913.503.051",
+        "bold": null,
+        "italic": null,
+        "font": "Calibri",
+        "color": "006666"
+      }
+    ]
+  },
+  {
+    "text": "Email: truongpnt@cenvalue.vn",
+    "runs": [
+      {
+        "text": "Email:",
+        "bold": null,
+        "italic": null,
+        "font": "Calibri",
+        "color": "006666"
+      },
+      {
+        "text": " ",
+        "bold": null,
+        "italic": null,
+        "font": "Calibri",
+        "color": "003300"
+      }
+    ]
+  },
+  {
+    "text": " ",
+    "runs": [
+      {
+        "text": " ",
+        "bold": null,
+        "italic": null,
+        "font": "Calibri",
+        "color": "1F497D"
+      },
+      {
+        "text": "",
+        "bold": null,
+        "italic": null,
+        "font": "Arial",
+        "color": "212121"
+      }
+    ]
+  },
+  {
+    "text": "CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ - CEN VALUE",
+    "runs": [
+      {
+        "text": "CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ - CEN ",
+        "bold": true,
+        "italic": null,
+        "font": "Calibri",
+        "color": "006666"
+      },
+      {
+        "text": "VALUE",
+        "bold": true,
+        "italic": null,
+        "font": "Calibri",
+        "color": "FF6600"
+      }
+    ]
+  },
+  {
+    "text": "Trụ sở chính",
+    "runs": [
+      {
+        "text": "Trụ sở chính",
+        "bold": null,
+        "italic": null,
+        "font": "Tahoma",
+        "color": "006666"
+      }
+    ]
+  },
+  {
+    "text": "Địa chỉ: Tầng 4, Tòa nhà Golden Palm, số 21 Lê Văn Lương, Nhân Chính, Thanh Xuân, Hà Nội",
+    "runs": [
+      {
+        "text": "Địa chỉ: Tầng 4, Tòa nhà Golden Palm, số 21 Lê Văn Lương, Nhân Chính, Thanh Xuân, Hà Nội",
+        "bold": null,
+        "italic": null,
+        "font": "Tahoma",
+        "color": "006666"
+      }
+    ]
+  },
+  {
+    "text": "Tel: (+8424) 32222 786 (Ext: 235) - Fax: (+8424) 32222 787",
+    "runs": [
+      {
+        "text": "Tel: (+8424) 32222 786 (Ext: 235) - Fax: (+8424) 32222 787",
+        "bold": null,
+        "italic": null,
+        "font": "Tahoma",
+        "color": "006666"
+      }
+    ]
+  },
+  {
+    "text": "Chi nhánh tại Đà Nẵng",
+    "runs": [
+      {
+        "text": "Chi nhánh tại Đà Nẵng",
+        "bold": null,
+        "italic": null,
+        "font": "Tahoma",
+        "color": "006666"
+      }
+    ]
+  },
+  {
+    "text": "Địa chỉ:  Tầng 2, Số 06 Đường Trần Phú, Q. Hải Châu, Tp Đà Nẵng",
+    "runs": [
+      {
+        "text": "Địa chỉ:  Tầng 2, Số 06 Đường Trần Phú, Q. Hải Châu, Tp Đà Nẵng",
+        "bold": null,
+        "italic": null,
+        "font": "Tahoma",
+        "color": "006666"
+      }
+    ]
+  },
+  {
+    "text": "Tel:  (0236) 3 65 66 61",
+    "runs": [
+      {
+        "text": "Tel:  (0236) 3 65 66 61",
+        "bold": null,
+        "italic": null,
+        "font": "Tahoma",
+        "color": "006666"
+      }
+    ]
+  },
+  {
+    "text": "Website: http://www.thamdinhgiatheky.vn",
+    "runs": [
+      {
+        "text": "Website: ",
+        "bold": null,
+        "italic": null,
+        "font": "Tahoma",
+        "color": "00757B"
+      }
+    ]
+  },
+  {
+    "text": "",
+    "runs": []
+  }
+]

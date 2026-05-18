@@ -35,8 +35,7 @@ from src.backup_service import create_backup
 
 
 def main() -> None:
-    load_dotenv(Path(__file__).resolve().parent / "API.env")
-    load_dotenv()
+    load_dotenv(Path(__file__).resolve().parent / "API.env", override=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

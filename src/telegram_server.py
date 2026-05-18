@@ -7,6 +7,7 @@ import subprocess
 import sys
 import unicodedata
 import asyncio
+import logging
 import fitz
 from asyncio import create_task, to_thread
 from contextlib import asynccontextmanager
@@ -18,6 +19,7 @@ from typing import AsyncIterator
 from uuid import uuid4
 
 import aiosqlite
+logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from telegram import Document, InlineKeyboardButton, InlineKeyboardMarkup, PhotoSize, Update
@@ -215,8 +217,7 @@ class EmailDraft:
 def load_telegram_settings() -> TelegramSettings:
     explicit_records_db_path = os.getenv("RECORDS_DB_PATH", "").strip()
     explicit_legacy_records_db_path = os.getenv("TELEGRAM_RECORDS_DB", "").strip()
-    load_dotenv(os.path.join(PROJECT_ROOT, "API.env"))
-    load_dotenv()
+    load_dotenv(os.path.join(PROJECT_ROOT, "API.env"), override=True)
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     webhook_url = os.getenv("WEBHOOK_URL", "").strip()
     gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()

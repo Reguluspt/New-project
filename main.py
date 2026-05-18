@@ -17,8 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def load_shared_env() -> None:
-    load_dotenv(PROJECT_ROOT / "API.env")
-    load_dotenv(PROJECT_ROOT / ".env")
+    load_dotenv(PROJECT_ROOT / "API.env", override=True)
     os.environ["RECORDS_DB_PATH"] = get_db_path()
     # Đảm bảo subprocess cũng dùng UTF-8
     os.environ["PYTHONIOENCODING"] = "utf-8"

@@ -10,6 +10,11 @@
     "status": 0.5,
     "note": 1.25,
     "view": 0.2,
-    "edit": 0.2
+    "export": 0.2,
+    "mail": 0.2,
+    "mail_phathanh": 0.2,
+    "web": 0.2,
+    "edit": 0.2,
+    "del": 0.2
   }
 }

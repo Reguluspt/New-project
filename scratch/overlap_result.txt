@@ -1,0 +1,4 @@
+Subject tokens: {'trạm', 'trộn', 'lai', 'tông', 'bidv', 'xin', 'nam', 'cường', 'gia'}
+Record tokens: {'trạm', 'trộn', 'lai', 'tông', 'phùng', 'n05', 'văn', 'ánh', 'bidv', 'nam', '010', '0881', '2026', 'cường', 'gia'}
+Intersection: {'trạm', 'trộn', 'lai', 'tông', 'bidv', 'nam', 'cường', 'gia'}
+Score: 0.8888888888888888

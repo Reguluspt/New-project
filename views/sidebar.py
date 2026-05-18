@@ -74,7 +74,11 @@ def render(
                 st.success("Đã xóa API key đã lưu.")
                 st.rerun()
 
-        sqlite_db_path = Path(st.text_input("File cơ sở dữ liệu SQLite", value=str(SQLITE_DATABASE)))
+        raw_db_path = st.text_input("File cơ sở dữ liệu SQLite", value=str(SQLITE_DATABASE))
+        if ":" in raw_db_path and os.name == "posix":
+            sqlite_db_path = SQLITE_DATABASE
+        else:
+            sqlite_db_path = Path(raw_db_path)
         init_db(sqlite_db_path)
         st.caption(f"Form Excel: {excel_template_path}")
         st.caption(f"Mẫu Word cá nhân: {individual_template_dir}")

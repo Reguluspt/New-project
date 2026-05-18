@@ -22,8 +22,7 @@ class SoboEmailResult:
 
 
 def _load_env() -> None:
-    load_dotenv(os.path.join(PROJECT_ROOT, "API.env"))
-    load_dotenv()
+    load_dotenv(os.path.join(PROJECT_ROOT, "API.env"), override=True)
 
 
 def _smtp_auth_error_message() -> str:

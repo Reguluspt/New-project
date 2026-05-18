@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 
@@ -17,7 +18,57 @@ def load_case_output_dir(config_path: str | Path, *, default_dir: str | Path) ->
         return Path(default_dir)
 
     value = str(data.get(CONFIG_KEY) or "").strip()
-    return Path(value) if value else Path(default_dir)
+    if not value:
+        return Path(default_dir)
+
+    # Check if Windows absolute path on Linux
+    is_cross_os = ":" in value and os.name == "posix"
+    if is_cross_os:
+        # Try to heal using standard folder names
+        unified = value.replace("\\", "/")
+        parts = unified.split("/")
+        root_dir = Path(__file__).resolve().parent.parent
+        for marker in ["samples", "data", "outputs", "exports"]:
+            if marker in parts:
+                idx = parts.index(marker)
+                rel_path = "/".join(parts[idx:])
+                healed_path = root_dir / rel_path
+                try:
+                    healed_path.mkdir(parents=True, exist_ok=True)
+                    return healed_path
+                except Exception:
+                    pass
+        return Path(default_dir)
+
+    loaded_path = Path(value)
+    try:
+        if not loaded_path.exists():
+            # Try to heal or create it
+            unified = value.replace("\\", "/")
+            parts = unified.split("/")
+            root_dir = Path(__file__).resolve().parent.parent
+            healed = False
+            for marker in ["samples", "data", "outputs", "exports"]:
+                if marker in parts:
+                    idx = parts.index(marker)
+                    rel_path = "/".join(parts[idx:])
+                    healed_path = root_dir / rel_path
+                    try:
+                        healed_path.mkdir(parents=True, exist_ok=True)
+                        loaded_path = healed_path
+                        healed = True
+                        break
+                    except Exception:
+                        pass
+            if not healed:
+                try:
+                    loaded_path.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    return Path(default_dir)
+    except Exception:
+        return Path(default_dir)
+
+    return loaded_path
 
 
 def save_case_output_dir(config_path: str | Path, output_dir: str | Path) -> Path:

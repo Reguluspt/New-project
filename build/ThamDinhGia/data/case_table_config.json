@@ -1,0 +1,19 @@
+{
+  "column_widths": {
+    "id": 0.3,
+    "contract": 0.85,
+    "customer": 1.45,
+    "citizen": 0.4,
+    "asset": 1.6,
+    "fee": 0.5,
+    "payment": 0.55,
+    "status": 0.5,
+    "note": 1.25,
+    "view": 0.2,
+    "export": 0.2,
+    "mail": 0.2,
+    "web": 0.2,
+    "edit": 0.2,
+    "del": 0.2
+  }
+}

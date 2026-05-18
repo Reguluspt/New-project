@@ -31,6 +31,22 @@ def _read_pid(path: Path) -> int | None:
 def _is_pid_running(pid: int | None, command_hint: str | None = None) -> bool:
     if not pid:
         return False
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return False
+        if not command_hint:
+            return True
+        try:
+            cmdline_path = Path(f"/proc/{int(pid)}/cmdline")
+            if cmdline_path.exists():
+                cmdline = cmdline_path.read_text(encoding="utf-8", errors="replace").replace("\x00", " ")
+                return command_hint.casefold() in cmdline.casefold()
+        except Exception:
+            pass
+        return False
+
     try:
         output = subprocess.check_output(
             [
@@ -51,6 +67,26 @@ def _is_pid_running(pid: int | None, command_hint: str | None = None) -> bool:
 
 
 def _find_running_pid_by_hint(command_hint: str) -> int | None:
+    if os.name != "nt":
+        try:
+            for proc_dir in Path("/proc").glob("[0-9]*"):
+                try:
+                    pid = int(proc_dir.name)
+                    cmdline_path = proc_dir / "cmdline"
+                    if cmdline_path.exists():
+                        cmdline = cmdline_path.read_text(encoding="utf-8", errors="replace").replace("\x00", " ")
+                        try:
+                            proc_name = (proc_dir / "comm").read_text(encoding="utf-8", errors="replace").strip()
+                        except Exception:
+                            proc_name = ""
+                        if command_hint.casefold() in cmdline.casefold() and any(x in proc_name.lower() or x in cmdline.lower() for x in ["python", "ngrok"]):
+                            return pid
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return None
+
     try:
         escaped_hint = command_hint.replace("'", "''")
         script = (
