@@ -204,11 +204,32 @@ def _persist_before_action(
         return False
 
 
-def _render_file_actions(paths: list[Path]) -> None:
+def _render_file_actions(paths: list[Path], selected_folder: Path) -> None:
     if not paths:
         return
     st.write("---")
-    st.markdown("**Các file đã xuất:**")
+    
+    # Tự động đóng gói ZIP thư mục hồ sơ và chuẩn bị download trực tiếp
+    try:
+        with st.spinner("Đang tự động đóng gói trọn bộ ZIP..."):
+            archive_path = package_case_documents(selected_folder)
+        with open(archive_path, "rb") as f:
+            zip_bytes = f.read()
+        
+        st.success("Tự động đóng gói trọn bộ ZIP hoàn tất! 🎉")
+        st.download_button(
+            label="Tải về trọn bộ file ZIP 📥 (Nhanh nhất)",
+            data=zip_bytes,
+            file_name=archive_path.name,
+            mime="application/zip",
+            key=f"download_zip_auto_{selected_folder.name}_{archive_path.stat().st_mtime}",
+            use_container_width=True
+        )
+    except Exception as exc:
+        st.warning(f"Tự động đóng gói ZIP thất bại: {exc}")
+        
+    st.write("")
+    st.markdown("**Chi tiết từng file đã xuất:**")
     for path in paths:
         col_text, col_dl, col_open = st.columns([3, 1, 1])
         with col_text:
@@ -340,7 +361,7 @@ def handle_quick_action(
                     case_files_dir=output_base_dir,
                 )
                 st.success(f"Đã xuất nhanh bộ hồ sơ {customer_type}.")
-                _render_file_actions(paths)
+                _render_file_actions(paths, selected_folder)
                 _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Xuất hồ sơ thất bại: {exc}")
@@ -531,7 +552,7 @@ def render(
                     case_files_dir=output_base_dir,
                 )
                 st.success("Đã xuất bộ hồ sơ cá nhân.")
-                _render_file_actions(paths)
+                _render_file_actions(paths, selected_folder)
                 _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Xuất hồ sơ thất bại: {exc}")
@@ -565,7 +586,7 @@ def render(
                     case_files_dir=output_base_dir,
                 )
                 st.success("Đã duyệt bộ cá nhân và xuất PDF.")
-                _render_file_actions(word_paths + pdf_paths)
+                _render_file_actions(word_paths + pdf_paths, selected_folder)
                 _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Duyệt và xuất PDF thất bại: {exc}")
@@ -654,7 +675,7 @@ def render(
                     case_files_dir=output_base_dir,
                 )
                 st.success("Đã xuất bộ hồ sơ tổ chức.")
-                _render_file_actions(paths)
+                _render_file_actions(paths, selected_folder)
                 _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Xuất hồ sơ tổ chức thất bại: {exc}")
@@ -688,7 +709,7 @@ def render(
                     case_files_dir=output_base_dir,
                 )
                 st.success("Đã duyệt bộ tổ chức và xuất PDF.")
-                _render_file_actions(word_paths + pdf_paths)
+                _render_file_actions(word_paths + pdf_paths, selected_folder)
                 _open_folder(selected_folder)
             except Exception as exc:
                 st.error(f"Duyệt và xuất PDF thất bại: {exc}")
