@@ -1100,7 +1100,12 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
 
             # --- 4. Cập nhật DB & Báo cáo thành công (Chỉ khi tất cả đều thành công) ---
             from .database_manager import update_record_status
-            await update_record_status(settings.records_db_path, record_id, "COMPLETED_ON_WEB")
+            try:
+                # Chỉ cập nhật DB nếu record_id là số nguyên hợp lệ (hồ sơ từ Telegram/Email)
+                valid_id = int(str(record_id))
+                await update_record_status(settings.records_db_path, valid_id, "COMPLETED_ON_WEB")
+            except (ValueError, TypeError):
+                logger.info("Bỏ qua cập nhật trạng thái records.db vì record_id không hợp lệ: %s", record_id)
             
             success_text = f"✅ Đã nhập Web C.Ty thành công hồ sơ #{record_id} ({N} tài sản).\n" + "\n".join(results_msg)
             await notify_telegram(success_text)
