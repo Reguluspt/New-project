@@ -260,6 +260,49 @@ def _render_delete_confirmation_dialog(db_path: Path, records_db_path: Path, cas
             st.rerun()
 
 
+@st.dialog("Xem và xuất hồ sơ", width="large")
+def open_case_documents_dialog(
+    db_path: Path,
+    case_id: int,
+    individual_templates_dir: Path,
+    organization_templates_dir: Path,
+) -> None:
+    from views import case_documents
+    from src.sqlite_store import get_case
+    from src.case_files import case_folder
+    from src.app_config import CASE_FILES_DIR
+
+    refreshed_case = get_case(db_path, case_id)
+    if not refreshed_case:
+        st.error("Không tìm thấy hồ sơ.")
+        return
+
+    st.info(
+        "Hồ sơ đang chọn: "
+        f"#{case_id} - {short_contract_number(refreshed_case.get('contract_number'), fallback='Chưa có số HĐ')} - {refreshed_case.get('customer_info') or 'Chưa có khách hàng'}"
+    )
+
+    effective_case_folder = Path(
+        refreshed_case.get("case_folder")
+        or case_folder(
+            CASE_FILES_DIR,
+            case_id=case_id,
+            contract_number=refreshed_case.get("contract_number") or "",
+            customer_name=refreshed_case.get("customer_info") or "",
+        )
+    )
+
+    case_documents.render(
+        selected_id=case_id,
+        case=refreshed_case,
+        refreshed_case=refreshed_case,
+        effective_case_folder=effective_case_folder,
+        individual_templates_dir=individual_templates_dir,
+        organization_templates_dir=organization_templates_dir,
+        db_path=db_path,
+    )
+
+
 def _render_case_row(
     *,
     db_path: Path,
@@ -267,6 +310,8 @@ def _render_case_row(
     row: dict[str, object],
     active_case_id: int | None,
     widths: list[float],
+    individual_templates_dir: Path,
+    organization_templates_dir: Path,
 ) -> None:
     row_id = int(row["id"])
     row_status = row.get("case_status") or DEFAULT_CASE_STATUS
@@ -326,8 +371,12 @@ def _render_case_row(
             help="Chọn hồ sơ này để xem và xuất Word/PDF/ZIP",
         ):
             st.session_state["active_case_id"] = row_id
-            st.session_state["case_documents_dialog_open"] = True
-            st.rerun()
+            open_case_documents_dialog(
+                db_path,
+                row_id,
+                individual_templates_dir=individual_templates_dir,
+                organization_templates_dir=organization_templates_dir,
+            )
 
         if cols[10].button(
             " ",
@@ -390,7 +439,15 @@ def _render_case_row(
             st.rerun()
 
 
-def _render_case_grid(db_path: Path, records_db_path: Path, rows: list[dict[str, object]], active_case_id: int | None, widths: list[float]) -> None:
+def _render_case_grid(
+    db_path: Path,
+    records_db_path: Path,
+    rows: list[dict[str, object]],
+    active_case_id: int | None,
+    widths: list[float],
+    individual_templates_dir: Path,
+    organization_templates_dir: Path,
+) -> None:
     _render_case_grid_styles(widths)
     st.markdown("**Danh mục hồ sơ và thao tác nhanh**")
     st.caption("Bấm trực tiếp vào trạng thái thanh toán hoặc trạng thái hồ sơ để đổi nhanh. Bấm icon mắt để chọn hồ sơ cho khung xem/xuất tài liệu bên dưới.")
@@ -411,11 +468,163 @@ def _render_case_grid(db_path: Path, records_db_path: Path, rows: list[dict[str,
         unsafe_allow_html=True,
     )
     for row in rows:
-        _render_case_row(db_path=db_path, records_db_path=records_db_path, row=row, active_case_id=active_case_id, widths=widths)
+        _render_case_row(
+            db_path=db_path,
+            records_db_path=records_db_path,
+            row=row,
+            active_case_id=active_case_id,
+            widths=widths,
+            individual_templates_dir=individual_templates_dir,
+            organization_templates_dir=organization_templates_dir,
+        )
 
 
 
-def render(db_path: Path, records_db_path: Path) -> dict[str, object] | None:
+@st.fragment
+def _render_filtered_grid_fragment(
+    *,
+    db_path: Path,
+    records_db_path: Path,
+    query: str,
+    note_query: str,
+    filters: dict[str, object],
+    sort_field: str,
+    sort_direction: str,
+    page_size: int,
+    page_number: int,
+    total_pages: int,
+    total_matches: int,
+    individual_templates_dir: Path,
+    organization_templates_dir: Path,
+) -> None:
+    rows = search_page(
+        db_path,
+        query,
+        filters,
+        note_query=note_query,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
+        page_size=page_size,
+        page_number=int(page_number),
+    )
+    if not rows:
+        st.info("Không tìm thấy hồ sơ phù hợp.")
+        return
+
+    selected_ids = [int(row["id"]) for row in rows]
+    active_case_id = st.session_state.get("active_case_id")
+    active_case_id = int(active_case_id) if active_case_id in selected_ids else selected_ids[0]
+    st.session_state["active_case_id"] = active_case_id
+
+    all_columns = display_columns(rows)
+    default_columns = st.session_state.get("case_visible_columns", all_columns)
+    valid_default_columns = [column for column in default_columns if column in all_columns] or all_columns
+    visible_columns = st.session_state.get("case_visible_columns", valid_default_columns)
+
+    st.caption(f"Đang hiển thị trang {int(page_number)}/{total_pages}")
+    widths = _render_column_width_controls()
+    _render_case_grid(
+        db_path=db_path,
+        records_db_path=records_db_path,
+        rows=rows,
+        active_case_id=active_case_id,
+        widths=widths,
+        individual_templates_dir=individual_templates_dir,
+        organization_templates_dir=organization_templates_dir,
+    )
+
+    batch_options = {
+        f"#{row['id']} | {short_contract_number(row.get('contract_number'), fallback='Chưa có số HĐ')} | {row.get('customer_info') or 'Chưa có khách hàng'}": row["id"]
+        for row in rows
+    }
+    st.markdown("**Batch action trên trang hiện tại**")
+    selected_batch_labels = st.multiselect(
+        "Chọn nhiều hồ sơ",
+        list(batch_options.keys()),
+        key="case_batch_selected_rows",
+    )
+    selected_batch_ids = [batch_options[label] for label in selected_batch_labels]
+    batch_col1, batch_col2 = st.columns(2)
+    with batch_col1:
+        if st.button("Xóa nhiều hồ sơ", key="batch_delete_cases", width="stretch", icon=":material/delete:", disabled=not selected_batch_ids):
+            for case_id in selected_batch_ids:
+                asyncio.run(sync_case_delete_to_record(records_db_path, db_path, int(case_id)))
+                delete_case(db_path, int(case_id))
+            st.success(f"Đã xóa {len(selected_batch_ids)} hồ sơ.")
+            st.rerun()
+    with batch_col2:
+        if st.button("Đồng bộ từ Danh bạ", key="batch_sync_orgs", width="stretch", icon=":material/sync:", disabled=not selected_batch_ids):
+            from src.sqlite_store import get_all_organizations
+            from src.document_exporter import clean_customer_name
+            orgs = get_all_organizations(db_path)
+            org_map = {clean_customer_name(o["name"]).lower(): o for o in orgs if o.get("name")}
+            synced_count = 0
+            for case_id in selected_batch_ids:
+                c = get_case(db_path, int(case_id))
+                if not c: continue
+                c_name = clean_customer_name(c.get("customer_info") or "").lower()
+                if c_name in org_map:
+                    org = org_map[c_name]
+                    update_data = {
+                        "customer_address": org.get("address") or c.get("customer_address") or "",
+                        "tax_code": org.get("tax_code") or c.get("tax_code") or "",
+                        "representative_name": org.get("representative") or c.get("representative_name") or "",
+                        "representative_position": org.get("position") or c.get("representative_position") or "",
+                    }
+                    update_case(db_path, int(case_id), update_data)
+                    synced_count += 1
+            st.success(f"Đã đồng bộ {synced_count}/{len(selected_batch_ids)} hồ sơ từ danh bạ.")
+            import time
+            time.sleep(1)
+            st.rerun()
+
+    st.write("---")
+    st.markdown("**Xuất dữ liệu Excel**")
+    visible_columns = st.multiselect(
+        "Chọn cột xuất Excel",
+        all_columns,
+        default=valid_default_columns,
+        key="case_visible_columns",
+    )
+    if not visible_columns:
+        st.warning("Cần chọn ít nhất một cột để xuất Excel.")
+        visible_columns = all_columns
+
+    export_filtered_rows = export_rows_for_filters(
+        db_path,
+        query,
+        filters,
+        note_query=note_query,
+        visible_columns=visible_columns,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
+        export_count=total_matches,
+    )
+    export_filename = f"ho_so_loc_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    export_path = CASE_EXPORT_DIR / export_filename
+    export_case_rows_to_excel(export_filtered_rows, visible_columns, export_path)
+    export_label = export_scope_label(query, filters)
+    st.download_button(
+        "Xuất Excel theo bộ lọc hiện tại",
+        data=export_path.read_bytes(),
+        file_name=export_filename,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        width="stretch",
+        key=f"download_case_export_{hash((query, note_query, filters['execution_month'], filters['payment_status'], tuple(visible_columns), sort_field, sort_direction, total_matches))}",
+    )
+    st.caption(f"File xuất: {export_path}")
+    st.caption(f"Phạm vi xuất: {export_label} | Tổng dòng: {len(export_filtered_rows)}")
+
+    if st.session_state.get("confirm_delete_case_id"):
+        _render_delete_confirmation_dialog(db_path, records_db_path, int(st.session_state.pop("confirm_delete_case_id")))
+
+
+def render(
+    db_path: Path,
+    records_db_path: Path,
+    individual_templates_dir: Path,
+    organization_templates_dir: Path,
+) -> dict[str, object] | None:
     filter_options = load_filter_options(db_path)
     query = str(st.session_state.get("case_search_query", ""))
     note_query = str(st.session_state.get("case_note_query", ""))
@@ -563,127 +772,32 @@ def render(db_path: Path, records_db_path: Path) -> dict[str, object] | None:
         st.write("")
         st.caption(f"Tổng hồ sơ phù hợp: **{total_matches}**")
 
-    rows = search_page(
-        db_path,
-        query,
-        filters,
+    # Render fragment to isolate row/grid redraws!
+    _render_filtered_grid_fragment(
+        db_path=db_path,
+        records_db_path=records_db_path,
+        query=query,
         note_query=note_query,
+        filters=filters,
         sort_field=sort_field,
         sort_direction=sort_direction,
         page_size=page_size,
         page_number=int(page_number),
+        total_pages=total_pages,
+        total_matches=total_matches,
+        individual_templates_dir=individual_templates_dir,
+        organization_templates_dir=organization_templates_dir,
     )
-    if not rows:
-        st.info("Không tìm thấy hồ sơ phù hợp.")
+
+    selected_id = st.session_state.get("active_case_id")
+    if not selected_id:
         return None
 
-    selected_ids = [int(row["id"]) for row in rows]
-    active_case_id = st.session_state.get("active_case_id")
-    active_case_id = int(active_case_id) if active_case_id in selected_ids else selected_ids[0]
-    st.session_state["active_case_id"] = active_case_id
-
-    all_columns = display_columns(rows)
-    default_columns = st.session_state.get("case_visible_columns", all_columns)
-    valid_default_columns = [column for column in default_columns if column in all_columns] or all_columns
-    visible_columns = st.session_state.get("case_visible_columns", valid_default_columns)
-
-    st.caption(f"Đang hiển thị trang {int(page_number)}/{total_pages}")
-    widths = _render_column_width_controls()
-    _render_case_grid(db_path, records_db_path, rows, active_case_id, widths)
-
-    batch_options = {
-        f"#{row['id']} | {short_contract_number(row.get('contract_number'), fallback='Chưa có số HĐ')} | {row.get('customer_info') or 'Chưa có khách hàng'}": row["id"]
-        for row in rows
-    }
-    st.markdown("**Batch action trên trang hiện tại**")
-    selected_batch_labels = st.multiselect(
-        "Chọn nhiều hồ sơ",
-        list(batch_options.keys()),
-        key="case_batch_selected_rows",
-    )
-    selected_batch_ids = [batch_options[label] for label in selected_batch_labels]
-    batch_col1, batch_col2 = st.columns(2)
-    with batch_col1:
-        if st.button("Xóa nhiều hồ sơ", key="batch_delete_cases", width="stretch", icon=":material/delete:", disabled=not selected_batch_ids):
-            for case_id in selected_batch_ids:
-                asyncio.run(sync_case_delete_to_record(records_db_path, db_path, int(case_id)))
-                delete_case(db_path, int(case_id))
-            st.success(f"Đã xóa {len(selected_batch_ids)} hồ sơ.")
-            st.rerun()
-    with batch_col2:
-        if st.button("Đồng bộ từ Danh bạ", key="batch_sync_orgs", width="stretch", icon=":material/sync:", disabled=not selected_batch_ids):
-            from src.sqlite_store import get_all_organizations
-            from src.document_exporter import clean_customer_name
-            orgs = get_all_organizations(db_path)
-            org_map = {clean_customer_name(o["name"]).lower(): o for o in orgs if o.get("name")}
-            synced_count = 0
-            for case_id in selected_batch_ids:
-                c = get_case(db_path, int(case_id))
-                if not c: continue
-                c_name = clean_customer_name(c.get("customer_info") or "").lower()
-                if c_name in org_map:
-                    org = org_map[c_name]
-                    update_data = {
-                        "customer_address": org.get("address") or c.get("customer_address") or "",
-                        "tax_code": org.get("tax_code") or c.get("tax_code") or "",
-                        "representative_name": org.get("representative") or c.get("representative_name") or "",
-                        "representative_position": org.get("position") or c.get("representative_position") or "",
-                    }
-                    update_case(db_path, int(case_id), update_data)
-                    synced_count += 1
-            st.success(f"Đã đồng bộ {synced_count}/{len(selected_batch_ids)} hồ sơ từ danh bạ.")
-            import time
-            time.sleep(1)
-            st.rerun()
-
-    st.write("---")
-    st.markdown("**Xuất dữ liệu Excel**")
-    visible_columns = st.multiselect(
-        "Chọn cột xuất Excel",
-        all_columns,
-        default=valid_default_columns,
-        key="case_visible_columns",
-    )
-    if not visible_columns:
-        st.warning("Cần chọn ít nhất một cột để xuất Excel.")
-        visible_columns = all_columns
-
-    export_count = count_filtered_cases(db_path, query, filters, note_query=note_query)
-    export_filtered_rows = export_rows_for_filters(
-        db_path,
-        query,
-        filters,
-        note_query=note_query,
-        visible_columns=visible_columns,
-        sort_field=sort_field,
-        sort_direction=sort_direction,
-        export_count=export_count,
-    )
-    export_filename = f"ho_so_loc_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    export_path = CASE_EXPORT_DIR / export_filename
-    export_case_rows_to_excel(export_filtered_rows, visible_columns, export_path)
-    export_label = export_scope_label(query, filters)
-    st.download_button(
-        "Xuất Excel theo bộ lọc hiện tại",
-        data=export_path.read_bytes(),
-        file_name=export_filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        width="stretch",
-        key=f"download_case_export_{hash((query, note_query, filters['execution_month'], filters['payment_status'], tuple(visible_columns), sort_field, sort_direction, total_matches))}",
-    )
-    st.caption(f"File xuất: {export_path}")
-    st.caption(f"Phạm vi xuất: {export_label} | Tổng dòng: {len(export_filtered_rows)}")
-
-    if st.session_state.get("confirm_delete_case_id"):
-        _render_delete_confirmation_dialog(db_path, records_db_path, int(st.session_state.pop("confirm_delete_case_id")))
-
-    selected_id = int(st.session_state["active_case_id"])
-    case = get_case(db_path, selected_id)
+    case = get_case(db_path, int(selected_id))
     if not case:
-        st.warning("Hồ sơ đã chọn không còn tồn tại.")
         return None
 
-    refreshed_case = get_case(db_path, selected_id)
+    refreshed_case = get_case(db_path, int(selected_id))
     effective_case_folder = None
     if refreshed_case:
         effective_case_folder = Path(

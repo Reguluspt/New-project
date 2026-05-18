@@ -12,36 +12,7 @@ from src.sqlite_store import get_case
 from views import case_documents, case_revenue, case_table
 
 
-@st.dialog("Xem và xuất hồ sơ", width="large", on_dismiss="rerun")
-def _render_case_documents_dialog(
-    *,
-    db_path: Path,
-    selected_case: dict[str, object],
-    individual_templates_dir: Path,
-    organization_templates_dir: Path,
-) -> None:
-    case = dict(selected_case["case"])
-    selected_id = int(selected_case["selected_id"])
-    st.info(
-        "Hồ sơ đang chọn: "
-        f"#{selected_id} - {short_contract_number(case.get('contract_number'), fallback='Chưa có số HĐ')} - {case.get('customer_info') or 'Chưa có khách hàng'}"
-    )
-    case_documents.render(
-        selected_id=selected_id,
-        case=case,
-        refreshed_case=(dict(selected_case["refreshed_case"]) if selected_case.get("refreshed_case") else None),
-        effective_case_folder=(
-            Path(str(selected_case["effective_case_folder"]))
-            if selected_case.get("effective_case_folder")
-            else None
-        ),
-        individual_templates_dir=individual_templates_dir,
-        organization_templates_dir=organization_templates_dir,
-        db_path=db_path,
-    )
-    if st.button("Đóng", width="stretch"):
-        st.session_state["case_documents_dialog_open"] = False
-        st.rerun()
+
 
 
 def render(
@@ -79,7 +50,12 @@ def render(
                 db_path=db_path,
             )
 
-        selected_case = case_table.render(db_path, records_db_path)
+        selected_case = case_table.render(
+            db_path,
+            records_db_path,
+            individual_templates_dir=individual_templates_dir,
+            organization_templates_dir=organization_templates_dir,
+        )
 
         # Move the Telegram / Mail expander here to the bottom of the page
         with st.expander("Hồ sơ từ Telegram / Mail Listener", expanded=False):
@@ -114,17 +90,6 @@ def render(
                 )
             else:
                 st.caption("Chưa có hồ sơ nào trong bảng records.")
-
-        if not selected_case:
-            return
-
-        if st.session_state.pop("case_documents_dialog_open", False):
-            _render_case_documents_dialog(
-                db_path=db_path,
-                selected_case=selected_case,
-                individual_templates_dir=individual_templates_dir,
-                organization_templates_dir=organization_templates_dir,
-            )
 
     with tab_revenue:
         case_revenue.render(db_path)
