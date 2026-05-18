@@ -78,7 +78,21 @@ def _save_output_dir_and_case_folder(
 def _open_folder(path: str | Path) -> None:
     folder = Path(path)
     folder.mkdir(parents=True, exist_ok=True)
-    os.startfile(str(folder))  # type: ignore[attr-defined]
+    if hasattr(os, "startfile"):
+        try:
+            os.startfile(str(folder))
+        except Exception:
+            pass
+    else:
+        import subprocess
+        import sys
+        try:
+            if sys.platform == "darwin":
+                subprocess.run(["open", str(folder)], check=True)
+            elif sys.platform.startswith("linux"):
+                subprocess.run(["xdg-open", str(folder)], check=True)
+        except Exception:
+            pass
 
 
 def _case_for_export(case: dict[str, object] | None, selected_folder: Path) -> dict[str, object] | None:
@@ -196,15 +210,37 @@ def _render_file_actions(paths: list[Path]) -> None:
     st.write("---")
     st.markdown("**Các file đã xuất:**")
     for path in paths:
-        col_text, col_btn = st.columns([4, 1])
+        col_text, col_dl, col_open = st.columns([3, 1, 1])
         with col_text:
             st.caption(f"{path.name}")
-        with col_btn:
-            if st.button("Mở file", key=f"open_file_{path.name}_{path.stat().st_mtime}", width="stretch"):
+        with col_dl:
+            try:
+                with open(path, "rb") as f:
+                    file_bytes = f.read()
+                st.download_button(
+                    label="Tải về 📥",
+                    data=file_bytes,
+                    file_name=path.name,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document" if path.suffix == ".docx" else "application/pdf",
+                    key=f"download_{path.name}_{path.stat().st_mtime}",
+                    width="stretch"
+                )
+            except Exception as exc:
+                st.error(f"Lỗi: {exc}")
+        with col_open:
+            if st.button("Mở file 🖥️", key=f"open_file_{path.name}_{path.stat().st_mtime}", width="stretch"):
                 try:
-                    os.startfile(str(path))
+                    if hasattr(os, "startfile"):
+                        os.startfile(str(path))
+                    else:
+                        import subprocess
+                        import sys
+                        if sys.platform == "darwin":
+                            subprocess.run(["open", str(path)], check=True)
+                        elif sys.platform.startswith("linux"):
+                            subprocess.run(["xdg-open", str(path)], check=True)
                 except Exception as exc:
-                    st.error(f"Không thể mở file: {exc}")
+                    st.warning(f"Không thể mở trực tiếp: {exc}")
 
 
 def handle_quick_action(
