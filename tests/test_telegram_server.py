@@ -79,17 +79,20 @@ def _sample_extraction() -> LandCertificateExtraction:
 
 class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
     def test_load_settings_from_environment(self) -> None:
-        with patch.dict(
-            "os.environ",
-            {
-                "TELEGRAM_BOT_TOKEN": "token",
-                "WEBHOOK_URL": "https://example.com/base/",
-                "GEMINI_API_KEY": "gemini-secret",
-                "GEMINI_MODEL": "gemini-test",
-                "TELEGRAM_UPLOAD_DIR": "tmp/uploads",
-                "TELEGRAM_RECORDS_DB": "tmp/records.db",
-            },
-            clear=True,
+        with (
+            patch("src.telegram_server.load_dotenv"),
+            patch.dict(
+                "os.environ",
+                {
+                    "TELEGRAM_BOT_TOKEN": "token",
+                    "WEBHOOK_URL": "https://example.com/base/",
+                    "GEMINI_API_KEY": "gemini-secret",
+                    "GEMINI_MODEL": "gemini-test",
+                    "TELEGRAM_UPLOAD_DIR": "tmp/uploads",
+                    "TELEGRAM_RECORDS_DB": "tmp/records.db",
+                },
+                clear=True,
+            ),
         ):
             settings = load_telegram_settings()
 
@@ -129,19 +132,22 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(settings.webhook_endpoint, f"https://example.com{TELEGRAM_WEBHOOK_PATH}")
 
     def test_load_settings_accepts_mail_style_gmail_variables(self) -> None:
-        with patch.dict(
-            "os.environ",
-            {
-                "TELEGRAM_BOT_TOKEN": "token",
-                "WEBHOOK_URL": "https://example.com/webhook/telegram",
-                "GEMINI_API_KEY": "gemini-secret",
-                "MAIL_USERNAME": "sender@gmail.com",
-                "MAIL_PASSWORD": "app-password",
-                "MAIL_FROM": "Appraiser Name",
-                "MAIL_SERVER": "smtp.gmail.com",
-                "MAIL_PORT": "587",
-            },
-            clear=True,
+        with (
+            patch("src.telegram_server.load_dotenv"),
+            patch.dict(
+                "os.environ",
+                {
+                    "TELEGRAM_BOT_TOKEN": "token",
+                    "WEBHOOK_URL": "https://example.com/webhook/telegram",
+                    "GEMINI_API_KEY": "gemini-secret",
+                    "MAIL_USERNAME": "sender@gmail.com",
+                    "MAIL_PASSWORD": "app-password",
+                    "MAIL_FROM": "Appraiser Name",
+                    "MAIL_SERVER": "smtp.gmail.com",
+                    "MAIL_PORT": "587",
+                },
+                clear=True,
+            ),
         ):
             settings = load_telegram_settings()
 

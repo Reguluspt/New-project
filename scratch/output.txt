@@ -1,0 +1,22 @@
+
+======================================
+INSPECTING: c:/Users/Truon/Documents/New project/data/cases.db
+Case 1231 not found.
+Case 1232 not found.
+No cases found matching Telegram record IDs 813 or 845 in cases table.
+
+======================================
+INSPECTING: c:/Users/Truon/Documents/New project/data/telegram_records.db
+Telegram Record 813 not found.
+Telegram Record 845 not found.
+Recent 10 Telegram records:
+  ID: 79 | Customer: Ông Lê Viết Đức, Bà Cao Thị Thùy Vân | Created At: 2026-05-17 07:22:02
+  ID: 78 | Customer: Phùng Văn Ánh | Created At: 2026-05-17 01:35:57
+  ID: 77 | Customer: Phùng Văn Ánh | Created At: 2026-05-16 15:12:46
+  ID: 76 | Customer: Phùng Văn Ánh | Created At: 2026-05-16 14:54:03
+  ID: 75 | Customer: Phùng Văn Ánh | Created At: 2026-05-16 14:47:11
+  ID: 74 | Customer: Phùng Văn Ánh | Created At: 2026-05-16 14:33:05
+  ID: 73 | Customer: Phùng Văn Ánh | Created At: 2026-05-16 14:32:45
+  ID: 72 | Customer: Phùng Văn Ánh | Created At: 2026-05-16 14:29:00
+  ID: 71 | Customer: Phùng Văn Ánh | Created At: 2026-05-16 14:15:04
+  ID: 70 | Customer: NGÂN HÀNG THƯƠNG MẠI CỔ PHẦN NGOẠI THƯƠNG VIỆT NAM – CHI NHÁNH BẮC GIA LAI | Created At: 2026-05-16 13:48:53

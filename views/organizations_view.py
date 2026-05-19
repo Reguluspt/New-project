@@ -15,7 +15,7 @@ def render(sqlite_db_path: str, api_key: str, model: str):
         # Format df for display
         display_df = df[["id", "tax_code", "name", "abbreviation", "address", "representative", "position"]].copy()
         display_df.columns = ["ID", "Mã số thuế", "Tên Công ty", "Tên viết tắt", "Địa chỉ", "Người đại diện", "Chức vụ"]
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, width="stretch", hide_index=True)
     else:
         st.info("Chưa có dữ liệu danh bạ tổ chức.")
 
@@ -145,7 +145,7 @@ def render(sqlite_db_path: str, api_key: str, model: str):
             st.success(f"Trích xuất thành công {len(res_list)} tổ chức! Vui lòng kiểm tra bảng bên dưới và chỉnh sửa trực tiếp nếu cần, sau đó bấm Lưu.")
             
             df = pd.DataFrame(res_list)
-            edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+            edited_df = st.data_editor(df, num_rows="dynamic", width="stretch")
             
             if st.button("Lưu tất cả vào Danh bạ", type="primary"):
                 saved_count = 0

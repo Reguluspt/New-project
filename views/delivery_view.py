@@ -41,7 +41,7 @@ def render(records_db_path):
     # Display editor
     edited_df = st.data_editor(
         df_display[["ID", "Tên gợi nhớ (Cột trái)", "Thông tin chi tiết (Cột phải)"]],
-        use_container_width=True,
+        width="stretch",
         num_rows="dynamic",
         key="delivery_contacts_editor",
         disabled=["ID"]

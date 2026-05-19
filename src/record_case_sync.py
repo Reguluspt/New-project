@@ -14,6 +14,7 @@ from .sqlite_store import (
     create_case,
     init_db,
     update_case,
+    connect,
 )
 
 
@@ -154,6 +155,47 @@ def case_to_record_values(case: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def create_case_in_conn(conn: sqlite3.Connection, values: dict[str, Any], record_id: str, record_status: str) -> int:
+    from .sqlite_store import _normalize_case, CASE_FIELDS
+    now = datetime.now().isoformat(timespec="seconds")
+    data = _normalize_case(values)
+    columns = ["created_at", "updated_at", "telegram_record_id", "telegram_record_status", *CASE_FIELDS]
+    params = {
+        "created_at": now,
+        "updated_at": now,
+        "telegram_record_id": record_id,
+        "telegram_record_status": record_status,
+        **data
+    }
+    placeholders = ", ".join(f":{column}" for column in columns)
+    cursor = conn.execute(
+        f"INSERT INTO cases ({', '.join(columns)}) VALUES ({placeholders})",
+        params,
+    )
+    return int(cursor.lastrowid)
+
+
+def update_case_in_conn(conn: sqlite3.Connection, case_id: int, values: dict[str, Any], record_id: str, record_status: str) -> None:
+    from .sqlite_store import _normalize_case, CASE_FIELDS
+    row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if row is None:
+        raise ValueError(f"Khong tim thay ho so id={case_id}")
+    existing = dict(row)
+    
+    merged = {field: existing.get(field, "") for field in CASE_FIELDS}
+    merged.update(values)
+    data = _normalize_case(merged)
+    data["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    data["id"] = case_id
+    data["telegram_record_id"] = record_id
+    data["telegram_record_status"] = record_status
+    
+    assignments = ", ".join(f"{field} = :{field}" for field in [*CASE_FIELDS, "updated_at", "telegram_record_id", "telegram_record_status"])
+    cursor = conn.execute(f"UPDATE cases SET {assignments} WHERE id = :id", data)
+    if cursor.rowcount == 0:
+        raise ValueError(f"Khong tim thay ho so id={case_id}")
+
+
 def sync_record_rows_to_cases(records: list[dict[str, str]], cases_db_path: str | Path) -> int:
     _ensure_sync_columns(cases_db_path)
     synced = 0
@@ -165,34 +207,33 @@ def sync_record_rows_to_cases(records: list[dict[str, str]], cases_db_path: str 
             continue
         
         case_values = record_to_case_values(record)
-        with sqlite3.connect(cases_db_path) as conn:
-            case_id = _case_id_for_record(conn, record)
+        record_status = str(record.get("status") or "").strip()
+        
+        try:
+            with connect(cases_db_path) as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                case_id = _case_id_for_record(conn, record)
 
-        if case_id is None:
-            if str(record.get("status") or "").strip() == "CANCELLED":
-                continue
-            case_id = create_case(cases_db_path, case_values)
-        else:
-            update_case(cases_db_path, case_id, case_values)
-
-        with sqlite3.connect(cases_db_path) as conn:
-            conn.execute(
-                """
-                UPDATE cases
-                SET telegram_record_id = ?,
-                    telegram_record_status = ?,
-                    updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    record_id,
-                    str(record.get("status") or "").strip(),
-                    datetime.now().isoformat(timespec="seconds"),
-                    case_id,
-                ),
-            )
-            conn.commit()
-        synced += 1
+                if case_id is None:
+                    if record_status == "CANCELLED":
+                        continue
+                    create_case_in_conn(conn, case_values, record_id, record_status)
+                else:
+                    update_case_in_conn(conn, case_id, case_values, record_id, record_status)
+            synced += 1
+        except sqlite3.IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e):
+                try:
+                    with connect(cases_db_path) as conn:
+                        conn.execute("BEGIN IMMEDIATE")
+                        case_id = _case_id_for_record(conn, record)
+                        if case_id is not None:
+                            update_case_in_conn(conn, case_id, case_values, record_id, record_status)
+                            synced += 1
+                except Exception:
+                    pass
+            else:
+                raise
     return synced
 
 

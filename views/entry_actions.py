@@ -9,6 +9,7 @@ import streamlit as st
 from src.app_config import apply_extraction_to_form
 from src.extractor import extract_land_certificate
 from src.gemini_extractor import extract_land_certificate_with_gemini
+from src.models import LandCertificateMultiExtraction
 
 
 def _document_page_key(preview_path: Path, page_number: int) -> str:
@@ -79,11 +80,14 @@ def run_ocr_extraction(
             api_key=api_key,
             model=model,
         )
-    if hasattr(extraction, "assets") and extraction.assets:
+    if isinstance(extraction, LandCertificateMultiExtraction):
+        from src.models import blank_extraction
+
+        single_extraction = extraction.assets[0] if extraction.assets else blank_extraction()
+    elif hasattr(extraction, "assets") and extraction.assets:
         single_extraction = extraction.assets[0]
     else:
-        from src.models import blank_extraction
-        single_extraction = blank_extraction()
+        single_extraction = extraction
 
     apply_extraction_to_form(single_extraction)
     remember_ai_config()

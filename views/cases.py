@@ -63,7 +63,7 @@ def render(
             with exp_col1:
                 st.caption(f"Nguồn dữ liệu trực tiếp: {records_db_path}")
             with exp_col2:
-                if st.button("Làm mới 🔄", key="force_sync_records", use_container_width=True):
+                if st.button("Làm mới 🔄", key="force_sync_records", width="stretch"):
                     synced_count = asyncio.run(sync_records_to_cases(records_db_path, db_path, limit=1000))
                     records = asyncio.run(load_record_candidates(records_db_path, limit=30))
                     st.toast(f"Đã đồng bộ {synced_count} hồ sơ mới!")

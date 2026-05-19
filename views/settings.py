@@ -251,7 +251,7 @@ def render_oauth2_integration() -> None:
         if g_config.get("client_id") and g_config.get("client_secret"):
             try:
                 g_auth_url = get_auth_url("google", current_redirect_uri, state="google")
-                st.link_button("🚀 Kết nối Google Workspace", g_auth_url, type="primary", use_container_width=True)
+                st.link_button("🚀 Kết nối Google Workspace", g_auth_url, type="primary", width="stretch")
             except Exception as e:
                 st.error(f"Lỗi tạo link liên kết: {e}")
         else:
@@ -302,7 +302,7 @@ def render_oauth2_integration() -> None:
         if o_config.get("client_id") and o_config.get("client_secret"):
             try:
                 o_auth_url = get_auth_url("outlook", current_redirect_uri, state="outlook")
-                st.link_button("🚀 Kết nối Microsoft Outlook", o_auth_url, type="primary", use_container_width=True)
+                st.link_button("🚀 Kết nối Microsoft Outlook", o_auth_url, type="primary", width="stretch")
             except Exception as e:
                 st.error(f"Lỗi tạo link liên kết: {e}")
         else:

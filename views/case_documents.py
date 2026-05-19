@@ -223,7 +223,7 @@ def _render_file_actions(paths: list[Path], selected_folder: Path) -> None:
             file_name=archive_path.name,
             mime="application/zip",
             key=f"download_zip_auto_{selected_folder.name}_{archive_path.stat().st_mtime}",
-            use_container_width=True
+            width="stretch"
         )
     except Exception as exc:
         st.warning(f"Tự động đóng gói ZIP thất bại: {exc}")
@@ -740,7 +740,7 @@ def render(
                     file_name=archive_path.name,
                     mime="application/zip",
                     key=f"download_zip_{selected_id}_{archive_path.stat().st_mtime}",
-                    use_container_width=True
+                    width="stretch"
                 )
                 _open_folder(selected_folder)
             except Exception as exc:

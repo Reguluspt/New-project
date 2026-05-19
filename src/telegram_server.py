@@ -1696,9 +1696,18 @@ async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFA
 
 async def handle_confirmation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
-    record = _get_conversation_record(context)
-    if query is None or record is None:
+    if query is None:
         return ConversationHandler.END
+        
+    if query.data != EDIT_CALLBACK:
+        record = context.user_data.pop("pending_record", None)
+    else:
+        record = _get_conversation_record(context)
+        
+    if record is None:
+        await query.answer("Thao tác đang được xử lý hoặc đã hoàn tất...")
+        return ConversationHandler.END
+        
     await query.answer()
     record_id = int(record["record_id"])
     db_path = str(record["db_path"])
@@ -1735,7 +1744,6 @@ async def handle_confirmation_callback(update: Update, context: ContextTypes.DEF
         settings = _settings_from_context(context)
         await sync_record_to_case(settings.records_db_path, settings.cases_db_path, record_id)
         await query.edit_message_text(f"\u0110\u00e3 h\u1ee7y b\u1ea3n ghi #{record_id}. Tr\u1ea1ng th\u00e1i: {CANCELLED_STATUS}")
-    context.user_data.pop("pending_record", None)
     return ConversationHandler.END
 
 
