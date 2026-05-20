@@ -112,9 +112,11 @@ def multi_extraction_to_form_state(extraction: object) -> dict[str, str]:
     }
 
 
-def _merge_multiline(existing: str, incoming: str) -> str:
+def _merge_multiline(existing: str, incoming: str, *, dedupe: bool = True) -> str:
     existing_lines = [_clean(line) for line in str(existing or "").splitlines() if _clean(line)]
     incoming_lines = [_clean(line) for line in str(incoming or "").splitlines() if _clean(line)]
+    if not dedupe:
+        return "\n".join([*existing_lines, *incoming_lines])
     merged = list(existing_lines)
     normalized = {line.lower() for line in merged}
     for line in incoming_lines:
@@ -147,7 +149,7 @@ def apply_multi_extraction_to_form(extraction: object, *, append: bool = True) -
         if not value:
             continue
         if append and key in multiline_keys:
-            st.session_state[key] = _merge_multiline(st.session_state.get(key, ""), value)
+            st.session_state[key] = _merge_multiline(st.session_state.get(key, ""), value, dedupe=False)
         elif key.startswith("entry_customer") or key in {"entry_citizen_id_ind", "entry_citizen_id"}:
             st.session_state.setdefault(key, "")
             if not _clean(st.session_state.get(key)):
