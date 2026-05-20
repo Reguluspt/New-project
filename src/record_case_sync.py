@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .database_manager import load_record_by_id, load_record_candidates, update_record_fields, update_record_status
+from .contracts import short_contract_number
 from .sqlite_store import (
     CANCELED_CASE_STATUS,
     DEFAULT_CASE_STATUS,
@@ -66,6 +67,31 @@ def _case_id_for_record(conn: sqlite3.Connection, record: dict[str, str]) -> int
         ).fetchone()
         if row:
             return int(row[0])
+        row = conn.execute(
+            """
+            SELECT id
+            FROM cases
+            WHERE TRIM(COALESCE(contract_number, '')) = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (contract_number,),
+        ).fetchone()
+        if row:
+            return int(row[0])
+        record_short_contract = short_contract_number(contract_number, fallback=contract_number)
+        if record_short_contract and record_short_contract != contract_number:
+            for candidate in conn.execute(
+                """
+                SELECT id, contract_number
+                FROM cases
+                WHERE TRIM(COALESCE(contract_number, '')) <> ''
+                ORDER BY id DESC
+                """
+            ).fetchall():
+                candidate_contract = str(candidate["contract_number"] or "").strip()
+                if short_contract_number(candidate_contract, fallback=candidate_contract) == record_short_contract:
+                    return int(candidate["id"])
     return None
 
 
