@@ -53,6 +53,8 @@ def _raw_admin_reply() -> bytes:
     message = EmailMessage()
     message["From"] = "Admin <admin@example.com>"
     message["Reply-To"] = "admin@example.com"
+    message["To"] = "Sender <sender@gmail.com>"
+    message["Cc"] = "manager@example.com"
     message["Subject"] = "Re: [XIN SỐ] - VCB Gia Lai - Thửa đất số Lô 25B2"
     message["Message-ID"] = "<reply-1@example.com>"
     message["In-Reply-To"] = "<outbound-1@example.com>"
@@ -222,8 +224,8 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
             settings=settings,
         )
 
-        self.assertEqual(message["To"], "pro@example.com")
-        self.assertEqual(message["Cc"], "admin@example.com, manager@example.com, control@example.com")
+        self.assertEqual(message["To"], "admin@example.com")
+        self.assertEqual(message["Cc"], "manager@example.com, pro@example.com, control@example.com")
         self.assertEqual(message["In-Reply-To"], "<reply-1@example.com>")
         self.assertIn("<reply-1@example.com>", message["References"])
         html = message.get_payload()[1].get_payload(decode=True).decode("utf-8")

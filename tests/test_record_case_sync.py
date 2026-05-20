@@ -68,6 +68,30 @@ class RecordCaseSyncTests(unittest.TestCase):
         self.assertEqual(rows[0]["telegram_record_id"], "78")
         self.assertEqual(rows[0]["customer_info"], "Khach 2")
 
+    def test_cancelled_record_does_not_overwrite_new_case_with_same_contract(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+            db_path = Path(tmpdir) / "cases.db"
+            init_db(db_path)
+            case_id = create_case(
+                db_path,
+                {
+                    "contract_number": "N05-0849",
+                    "customer_info": "Khach moi tren web",
+                    "asset_description": "Tai san moi",
+                },
+            )
+            cancelled_record = _record("77", "N05-0849", customer_info="Khach cu tu Telegram")
+            cancelled_record["status"] = "CANCELLED"
+
+            synced = sync_record_rows_to_cases([cancelled_record], db_path)
+            rows = _case_rows(db_path)
+
+        self.assertEqual(synced, 0)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], case_id)
+        self.assertIn(rows[0]["telegram_record_id"], (None, ""))
+        self.assertEqual(rows[0]["customer_info"], "Khach moi tren web")
+
 
 if __name__ == "__main__":
     unittest.main()

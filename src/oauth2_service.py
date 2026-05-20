@@ -356,7 +356,8 @@ async def send_email_via_oauth2(
     html_body: str,
     cc_emails: list[str] | None = None,
     reply_to_msg_id: str | None = None,
-    references: str | None = None
+    references: str | None = None,
+    thread_id: str | None = None,
 ) -> str:
     """Gửi email thông qua API REST của Google Workspace hoặc Outlook sử dụng OAuth2."""
     access_token = await get_valid_access_token_async(provider)
@@ -372,7 +373,10 @@ async def send_email_via_oauth2(
                 "Content-Type": "application/json",
             }
             send_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
-            response = await client.post(send_url, headers=headers, json={"raw": raw_b64})
+            payload: dict[str, Any] = {"raw": raw_b64}
+            if thread_id:
+                payload["threadId"] = thread_id
+            response = await client.post(send_url, headers=headers, json=payload)
             if response.status_code not in [200, 201]:
                 raise RuntimeError(f"Gửi mail qua Gmail API thất bại: {response.text}")
             res_data = response.json()
@@ -460,6 +464,7 @@ async def fetch_emails_via_oauth2(
                     raw_bytes = base64.urlsafe_b64decode(raw_b64)
                     emails_list.append({
                         "uid": msg_id,
+                        "thread_id": str(msg_summary.get("threadId") or ""),
                         "raw_bytes": raw_bytes
                     })
 
@@ -491,6 +496,7 @@ async def fetch_emails_via_oauth2(
                 if mime_response.status_code == 200:
                     emails_list.append({
                         "uid": msg_id,
+                        "thread_id": msg_id,
                         "raw_bytes": mime_response.content
                     })
 

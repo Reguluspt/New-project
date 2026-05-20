@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .database_manager import load_record_by_id, load_record_candidates, update_record_fields, update_record_status
+from .database_manager import delete_record, load_record_by_id, load_record_candidates, update_record_fields, update_record_status
 from .contracts import short_contract_number
 from .sqlite_store import (
     CANCELED_CASE_STATUS,
@@ -21,6 +21,7 @@ from .sqlite_store import (
 
 UNPAID_PAYMENT_STATUS = "Chưa thanh toán"
 WEB_DELETED_STATUS = "CANCELLED"
+DELETED_RECORD_STATUSES = {"CANCELLED", "DELETED"}
 
 
 _SYNC_COLUMNS_INITIALIZED = {}
@@ -108,6 +109,10 @@ def _has_syncable_content(record: dict[str, str]) -> bool:
             "source",
         )
     )
+
+
+def _is_deleted_record(record: dict[str, str]) -> bool:
+    return str(record.get("status") or "").strip().upper() in DELETED_RECORD_STATUSES
 
 
 def record_to_case_values(record: dict[str, str]) -> dict[str, Any]:
@@ -226,6 +231,8 @@ def sync_record_rows_to_cases(records: list[dict[str, str]], cases_db_path: str 
     _ensure_sync_columns(cases_db_path)
     synced = 0
     for record in records:
+        if _is_deleted_record(record):
+            continue
         if not _has_syncable_content(record):
             continue
         record_id = str(record.get("id") or "").strip()
@@ -241,8 +248,6 @@ def sync_record_rows_to_cases(records: list[dict[str, str]], cases_db_path: str 
                 case_id = _case_id_for_record(conn, record)
 
                 if case_id is None:
-                    if record_status == "CANCELLED":
-                        continue
                     create_case_in_conn(conn, case_values, record_id, record_status)
                 else:
                     update_case_in_conn(conn, case_id, case_values, record_id, record_status)
@@ -270,7 +275,7 @@ async def sync_records_to_cases(records_db_path: str | Path, cases_db_path: str 
 
 async def sync_record_to_case(records_db_path: str | Path, cases_db_path: str | Path, record_id: int | str) -> int:
     record = await load_record_by_id(records_db_path, record_id)
-    if record is None:
+    if record is None or _is_deleted_record(record):
         return 0
     return await asyncio.to_thread(sync_record_rows_to_cases, [record], cases_db_path)
 
@@ -325,5 +330,5 @@ async def sync_case_delete_to_record(records_db_path: str | Path, cases_db_path:
     record_id = await asyncio.to_thread(_telegram_record_id_for_case, cases_db_path, case_id)
     if not record_id:
         return False
-    await update_record_status(records_db_path, record_id, WEB_DELETED_STATUS)
+    await delete_record(records_db_path, record_id)
     return True

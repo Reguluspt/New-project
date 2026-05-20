@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from src.mail_service import _remove_phone_numbers, load_gmail_smtp_settings, render_mail_html, send_appraisal_email
+from src.mail_service import _remove_phone_numbers, _subject_asset_text, load_gmail_smtp_settings, render_mail_html, send_appraisal_email
 
 
 class MailServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -40,7 +40,7 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await send_appraisal_email(
                 {
-                    "contract_number": "HD-001",
+                    "contract_number": "N05-0854",
                     "customer_info": "Khách A",
                     "source": "MB AMC ARR - Mr. Long - 0905226968",
                     "asset_description": "Thửa đất số 78d, tờ bản đồ số 13, địa chỉ Xã Hòa An, huyện Krông Păc, tỉnh Đak Lak.",
@@ -48,10 +48,7 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(result.to_email, "admin@example.com")
-        self.assertEqual(
-            result.subject,
-            "[XIN SỐ] - MB AMC ARR - Mr. Long - Thửa đất số 78d, tờ bản đồ số 13, địa chỉ Xã Hòa An, huyện Krông Păc, tỉnh Đak Lak.",
-        )
+        self.assertTrue(result.subject.startswith("[010/2026/N05-0854/DN] - MB AMC ARR - Mr. Long - "))
         send_sync_mock.assert_called_once()
         args, _ = send_sync_mock.call_args
         message, recipients, settings = args
@@ -119,6 +116,16 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
     def test_remove_phone_numbers_from_subject_source(self) -> None:
         self.assertEqual(_remove_phone_numbers("MB AMC ARR - Mr. Long - 0905226968"), "MB AMC ARR - Mr. Long")
         self.assertEqual(_remove_phone_numbers("VP Bank - Gia Lai - Chị Ngọc - 0972638579"), "VP Bank - Gia Lai - Chị Ngọc")
+
+
+    def test_subject_asset_text_uses_first_asset_address_only(self) -> None:
+        self.assertEqual(
+            _subject_asset_text(
+                "Thửa đất số 1, tờ bản đồ số 2; tại địa chỉ Phường Hội Phú, tỉnh Gia Lai.\n"
+                "Thửa đất số 3, tờ bản đồ số 4; tại địa chỉ Phường Thắng Lợi."
+            ),
+            "Phường Hội Phú, tỉnh Gia Lai",
+        )
 
 
 if __name__ == "__main__":

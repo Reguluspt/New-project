@@ -13,6 +13,7 @@ from .contracts import short_contract_number
 
 SENT_TO_PROFESSIONAL_STATUS = "SENT_TO_PROFESSIONAL"
 READY_FOR_WEB_STATUS = "S\u1eb5n s\u00e0ng nh\u1eadp web"
+DELETED_RECORD_STATUSES = {"CANCELLED", "DELETED"}
 
 
 async def find_organization_by_query(db_path: str | Path, query: str) -> list[dict[str, Any]]:
@@ -317,12 +318,28 @@ async def update_record_status(db_path: str | Path, record_id: int | str, status
         await db.commit()
 
 
+async def delete_record(db_path: str | Path, record_id: int | str) -> None:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_tracking_record_schema(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute("DELETE FROM records WHERE id = ?", (int(record_id),))
+        await db.commit()
+
+
 async def get_record(db_path: str | Path, record_id: int | str) -> dict[str, str]:
     db_path = resolve_records_db_path(db_path)
     await ensure_tracking_record_schema(db_path)
     async with aiosqlite.connect(db_path, timeout=30) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM records WHERE id = ?", (int(record_id),))
+        cursor = await db.execute(
+            """
+            SELECT *
+            FROM records
+            WHERE id = ?
+              AND COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
+            """,
+            (int(record_id),),
+        )
         row = await cursor.fetchone()
     if row is None:
         raise ValueError(f"Khong tim thay ban ghi #{record_id}.")
@@ -339,8 +356,15 @@ async def get_record_by_contract_number(db_path: str | Path, contract_query: str
         db.row_factory = aiosqlite.Row
         # Tìm kiếm theo số hợp đồng đầy đủ hoặc rút gọn
         cursor = await db.execute(
-            "SELECT * FROM records WHERE contract_number LIKE ? OR contract_number LIKE ? ORDER BY id DESC LIMIT 1",
-            (f"%{query}%", f"%{query}%")
+            """
+            SELECT *
+            FROM records
+            WHERE COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
+              AND (contract_number LIKE ? OR contract_number LIKE ?)
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (f"%{query}%", f"%{short_contract_number(query)}%")
         )
         row = await cursor.fetchone()
     if row:
@@ -402,6 +426,7 @@ async def load_record_candidates(db_path: str | Path, *, limit: int = 500) -> li
             """
             SELECT *
             FROM records
+            WHERE COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
             ORDER BY id DESC
             LIMIT ?
             """,
@@ -503,6 +528,7 @@ async def find_record_by_thread_reference(
                 SELECT *
                 FROM records
                 WHERE TRIM(outbound_message_id) <> ''
+                  AND COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
                   AND INSTR(?, outbound_message_id) > 0
                 ORDER BY id DESC
                 LIMIT 1
@@ -521,6 +547,7 @@ async def find_record_by_thread_reference(
                 SELECT *
                 FROM records
                 WHERE TRIM(outbound_subject) <> ''
+                  AND COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
                   AND (
                     LOWER(outbound_subject) LIKE ? ESCAPE '\\'
                     OR (
@@ -541,6 +568,7 @@ async def find_record_by_thread_reference(
                 SELECT *
                 FROM records
                 WHERE TRIM(outbound_subject) <> ''
+                  AND COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
                 ORDER BY id DESC
                 LIMIT 500
                 """
@@ -599,7 +627,8 @@ async def find_recent_record_by_subject(
                 f"""
                 SELECT *
                 FROM records
-                WHERE {outbound_clause}(LOWER(COALESCE(outbound_subject, '')) LIKE ? ESCAPE '\\'
+                WHERE COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
+                  AND {outbound_clause}(LOWER(COALESCE(outbound_subject, '')) LIKE ? ESCAPE '\\'
                    OR LOWER(COALESCE(asset_description, '')) LIKE ? ESCAPE '\\'
                    OR LOWER(COALESCE(dia_chi, '')) LIKE ? ESCAPE '\\'
                    OR LOWER(COALESCE(source, '')) LIKE ? ESCAPE '\\'
@@ -625,6 +654,7 @@ async def find_recent_record_by_subject(
                 """
                 SELECT *
                 FROM records
+                WHERE COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
                 ORDER BY id DESC
                 LIMIT ?
                 """,
@@ -632,11 +662,12 @@ async def find_recent_record_by_subject(
             )
         rows = await cursor.fetchall()
         if not rows and normalized_subject:
-            outbound_clause = "WHERE TRIM(outbound_subject) <> ''" if require_outbound_subject else ""
+            outbound_clause = "AND TRIM(outbound_subject) <> ''" if require_outbound_subject else ""
             cursor = await db.execute(
                 f"""
                 SELECT *
                 FROM records
+                WHERE COALESCE(status, '') NOT IN ('CANCELLED', 'DELETED')
                 {outbound_clause}
                 ORDER BY id DESC
                 LIMIT ?

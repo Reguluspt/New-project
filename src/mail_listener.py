@@ -65,9 +65,12 @@ class CertificateExtraction(BaseModel):
 @dataclass(frozen=True)
 class IncomingEmail:
     uid: str
+    thread_id: str
     subject: str
     from_email: str
     reply_to: str
+    to_header: str
+    cc_header: str
     message_id: str
     in_reply_to: str
     references: str
@@ -411,7 +414,7 @@ def _decode_header_value(value: object) -> str:
     return re.sub(r"[\r\n\t]+", " ", decoded).strip()
 
 
-def parse_incoming_email(raw: bytes, *, uid: str = "") -> IncomingEmail:
+def parse_incoming_email(raw: bytes, *, uid: str = "", thread_id: str = "") -> IncomingEmail:
     message = email.message_from_bytes(raw)
     text_parts: list[str] = []
     html_parts: list[str] = []
@@ -441,9 +444,12 @@ def parse_incoming_email(raw: bytes, *, uid: str = "") -> IncomingEmail:
     reply_to = parseaddr(reply_to_header)[1] or from_email
     return IncomingEmail(
         uid=uid,
+        thread_id=thread_id,
         subject=_decode_header_value(message.get("Subject")),
         from_email=from_email,
         reply_to=reply_to,
+        to_header=_decode_header_value(message.get("To")),
+        cc_header=_decode_header_value(message.get("Cc")),
         message_id=_decode_header_value(message.get("Message-ID")),
         in_reply_to=_decode_header_value(message.get("In-Reply-To")),
         references=_decode_header_value(message.get("References")),
@@ -600,6 +606,46 @@ def _reply_recipients(incoming: IncomingEmail, extra_cc: list[str]) -> tuple[str
     return to_email, cc
 
 
+def _mailbox_addresses(smtp_settings: GmailSmtpSettings) -> set[str]:
+    values = [smtp_settings.username, smtp_settings.mail_from]
+    return {
+        parsed.lower()
+        for value in values
+        for parsed in [parseaddr(str(value or ""))[1]]
+        if parsed
+    }
+
+
+def _reply_all_with_professional_recipients(
+    incoming: IncomingEmail,
+    *,
+    smtp_settings: GmailSmtpSettings,
+    professional_email: str,
+    monitor_cc: list[str],
+) -> tuple[str, list[str]]:
+    self_addresses = _mailbox_addresses(smtp_settings)
+    seen: set[str] = set()
+
+    def add_unique(target: list[str], value: str) -> None:
+        email_address = parseaddr(value)[1] or value
+        email_address = email_address.strip()
+        key = email_address.lower()
+        if email_address and key not in self_addresses and key not in seen:
+            seen.add(key)
+            target.append(email_address)
+
+    to_values: list[str] = []
+    cc_values: list[str] = []
+    add_unique(to_values, incoming.reply_to or incoming.from_email)
+    for _name, email_address in getaddresses([incoming.to_header, incoming.cc_header]):
+        add_unique(cc_values, email_address)
+    for value in [professional_email, *monitor_cc]:
+        add_unique(cc_values, value)
+    if not to_values:
+        add_unique(to_values, incoming.from_email)
+    return ", ".join(to_values), cc_values
+
+
 def build_reply_message(
     *,
     incoming: IncomingEmail,
@@ -705,12 +751,16 @@ def build_professional_forward_message(
         }
     )
     html = render_appraisal_email(mail_data)
-    admin_emails = [e.strip() for e in settings.admin_email.split(",") if e.strip()]
-    cc_list = _dedupe_emails([*admin_emails, *(settings.monitor_cc_list or [])])
+    to_email, cc_list = _reply_all_with_professional_recipients(
+        incoming,
+        smtp_settings=smtp_settings,
+        professional_email=settings.professional_dept_email,
+        monitor_cc=settings.monitor_cc_list or [],
+    )
 
     message = EmailMessage()
     message["From"] = smtp_settings.mail_from
-    message["To"] = settings.professional_dept_email
+    message["To"] = to_email
     if cc_list:
         message["Cc"] = ", ".join(cc_list)
     message["Subject"] = _reply_subject(incoming.subject)
@@ -751,8 +801,12 @@ async def send_professional_forward(
             }
         )
         html = render_appraisal_email(mail_data)
-        admin_emails = [e.strip() for e in settings.admin_email.split(",") if e.strip()]
-        cc_list = _dedupe_emails([*admin_emails, *(settings.monitor_cc_list or [])])
+        to_email, cc_list = _reply_all_with_professional_recipients(
+            incoming,
+            smtp_settings=smtp_settings,
+            professional_email=settings.professional_dept_email,
+            monitor_cc=settings.monitor_cc_list or [],
+        )
         subject = _reply_subject(incoming.subject)
         
         try:
@@ -760,12 +814,13 @@ async def send_professional_forward(
             await send_email_via_oauth2(
                 provider=provider,
                 from_email=smtp_settings.mail_from or smtp_settings.username,
-                to_email=settings.professional_dept_email,
+                to_email=to_email,
                 subject=subject,
                 html_body=html,
                 cc_emails=cc_list,
                 reply_to_msg_id=incoming.message_id,
-                references=incoming.references
+                references=incoming.references,
+                thread_id=incoming.thread_id or incoming.uid,
             )
             return
         except Exception as exc:
@@ -949,8 +1004,14 @@ async def process_certificate_reply(incoming: IncomingEmail, *, settings: MailLi
     return RecordMatch(record=dict(record), score=float(extraction.confidence or 0), reason="certificate_reply")
 
 
-async def process_incoming_email(raw: bytes, *, uid: str, settings: MailListenerSettings) -> RecordMatch | None:
-    incoming = parse_incoming_email(raw, uid=uid)
+async def process_incoming_email(
+    raw: bytes,
+    *,
+    uid: str,
+    settings: MailListenerSettings,
+    thread_id: str = "",
+) -> RecordMatch | None:
+    incoming = parse_incoming_email(raw, uid=uid, thread_id=thread_id)
     try:
         if settings.admin_email and settings.professional_dept_email:
             return await process_certificate_reply(incoming, settings=settings)
@@ -1056,14 +1117,15 @@ async def poll_unseen_once(settings: MailListenerSettings) -> int:
             for item in oauth_emails:
                 raw = item["raw_bytes"]
                 uid = item["uid"]
-                incoming = parse_incoming_email(raw, uid=uid)
+                thread_id = str(item.get("thread_id") or "")
+                incoming = parse_incoming_email(raw, uid=uid, thread_id=thread_id)
                 if await was_email_processed(settings.records_db_path, incoming, mailbox=provider):
                     continue
                 if settings.subject_filter:
                     haystack = f"{incoming.subject}\n{incoming.text}".casefold()
                     if settings.subject_filter.casefold() not in haystack:
                         continue
-                match = await process_incoming_email(raw, uid=uid, settings=settings)
+                match = await process_incoming_email(raw, uid=uid, thread_id=thread_id, settings=settings)
                 result = "replied" if match is not None and match.score > MATCH_THRESHOLD else "skipped"
                 await mark_email_processed(
                     settings.records_db_path,
