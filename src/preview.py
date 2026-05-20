@@ -86,9 +86,8 @@ def detect_orientation(page) -> dict[str, int | bool]:
     text = page.get_text().strip()
     is_scanned = len(text) < 10
 
-    # Ưu tiên sử dụng hướng gốc của file PDF thay vì tự động xoay bằng hình ảnh.
-    # Tính năng tự động xoay ảnh hay bị sai với Giấy Chứng Nhận do bố cục chữ dọc/ngang lẫn lộn.
-    rotation = page.rotation
+    # PDF có text thật dùng metadata gốc; PDF scan dùng heuristic ảnh để hỗ trợ các file bị xoay lẫn lộn.
+    rotation = _scanned_page_rotation(page) if is_scanned else page.rotation
 
     return {
         "rotation": _normalize_rotation(rotation),

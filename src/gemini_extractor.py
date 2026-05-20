@@ -37,7 +37,7 @@ def _remove_unsupported_schema_keys(schema: Any) -> Any:
 
 def gemini_response_json_schema() -> dict[str, Any]:
     """Return a Gemini-compatible JSON schema without SDK-added extras."""
-    schema = deepcopy(LandCertificateExtraction.model_json_schema())
+    schema = deepcopy(LandCertificateMultiExtraction.model_json_schema())
     return _remove_unsupported_schema_keys(schema)
 
 
@@ -57,8 +57,8 @@ def extract_land_certificate_with_gemini(
         contents=[
             _part_for_file(path),
             (
-                "Chi trich xuat mot tai san/GCN dau tien hoac ro nhat trong tai lieu. "
-                "Khong dem so luong tai san va khong tra ve danh sach nhieu tai san. "
+                "Hay dem va trich xuat tat ca tai san/GCN co trong tai lieu, khong chi lay tai san dau tien. "
+                "Neu mot file co nhieu thua dat hoac nhieu GCN, moi tai san la mot phan tu trong assets. "
                 "Tap trung vao so thua, so to ban do, dia chi thua dat, chu so huu cuoi cung, dia chi va CCCD/CMND cua nguoi do."
             ),
         ],
@@ -70,11 +70,15 @@ def extract_land_certificate_with_gemini(
         ),
     )
 
+    if isinstance(response.parsed, LandCertificateMultiExtraction):
+        return response.parsed
     if isinstance(response.parsed, LandCertificateExtraction):
         return LandCertificateMultiExtraction(assets=[response.parsed])
     if isinstance(response.parsed, dict):
+        if "assets" in response.parsed:
+            return LandCertificateMultiExtraction.model_validate(response.parsed)
         return LandCertificateMultiExtraction(assets=[LandCertificateExtraction.model_validate(response.parsed)])
-    return LandCertificateMultiExtraction(assets=[LandCertificateExtraction.model_validate_json(response.text)])
+    return LandCertificateMultiExtraction.model_validate_json(response.text)
 
 
 def organization_gemini_response_json_schema() -> dict[str, Any]:

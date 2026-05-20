@@ -10,6 +10,7 @@ import streamlit as st
 
 from src.excel_writer import compose_asset_description
 from src.models import LandCertificateExtraction
+from src.ocr_accumulator import apply_multi_extraction_to_form, multi_extraction_to_form_state
 from src.preview import detect_text_rotation_for_path
 from src.sqlite_store import DEFAULT_CASE_STATUS
 
@@ -57,6 +58,10 @@ ENTRY_FORM_DEFAULTS = {
     "entry_execution_month": datetime.now().strftime("%m/%Y"),
     "entry_payment_status": UNPAID_STATUS,
     "entry_contract_number": "",
+    "entry_contract_number_ind": "",
+    "entry_contract_date_ind": "",
+    "entry_contract_number_org": "",
+    "entry_contract_date_org": "",
     "entry_asset_type": "BĐS đặc thù khác",
     "entry_asset_description": "",
     "entry_preliminary_status": "Chưa sơ bộ",
@@ -84,6 +89,18 @@ ENTRY_FORM_DEFAULTS = {
     "entry_handover_contact_name": "",
     "entry_handover_contact_position": "",
     "entry_handover_contact_phone": "",
+    "entry_so_thua": "",
+    "entry_so_to": "",
+    "entry_land_address": "",
+    "entry_owner_name": "",
+    "entry_owner_address": "",
+    "entry_owner_citizen_id": "",
+    "so_thua": "",
+    "so_to": "",
+    "land_address": "",
+    "owner_name": "",
+    "owner_address": "",
+    "citizen_id": "",
 }
 
 
@@ -151,6 +168,38 @@ def ensure_entry_form_defaults() -> None:
         st.session_state.setdefault(key, value)
 
 
+def reset_entry_workspace() -> None:
+    reset_prefixes = (
+        "entry_",
+        "preview_page_",
+        "preview_mode_",
+        "preview_zoom_",
+        "thumb_page_",
+        "toolbar_rotate_",
+    )
+    reset_keys = {
+        "extraction",
+        "uploaded_signature",
+        "uploaded_path",
+        "uploaded_original_name",
+        "page_rotations",
+        "manual_rotation_cache",
+        "auto_rotation_cache",
+        "rotation_lock_cache",
+        "zoom_level",
+        "so_thua",
+        "so_to",
+        "land_address",
+        "owner_name",
+        "owner_address",
+        "citizen_id",
+    }
+    for key in list(st.session_state.keys()):
+        if key in reset_keys or any(key.startswith(prefix) for prefix in reset_prefixes):
+            st.session_state.pop(key, None)
+    ensure_entry_form_defaults()
+
+
 # ── File upload helpers ──────────────────────────────────────────────────────
 
 
@@ -205,13 +254,20 @@ def extraction_to_form_state(extraction: LandCertificateExtraction) -> dict[str,
         "entry_customer_info_ind": defaults["customer_info"],
         "entry_customer_address_ind": defaults["customer_address"],
         "entry_citizen_id_ind": defaults["citizen_id"],
+        "entry_customer_info": defaults["customer_info"],
+        "entry_customer_address": defaults["customer_address"],
+        "entry_citizen_id": defaults["citizen_id"],
         "entry_personal_note": defaults["personal_note"],
     }
 
 
 def apply_extraction_to_form(extraction: LandCertificateExtraction) -> None:
-    for key, value in extraction_to_form_state(extraction).items():
+    for key, value in multi_extraction_to_form_state(extraction).items():
         st.session_state[key] = value
+
+
+def apply_extraction_collection_to_form(extraction: object, *, append: bool = True) -> int:
+    return apply_multi_extraction_to_form(extraction, append=append)
 
 
 # ── Rotation cache helpers ───────────────────────────────────────────────────
@@ -309,9 +365,9 @@ def sync_gcn_to_form() -> None:
         st.session_state.get("so_to", "").strip(),
         st.session_state.get("land_address", "").strip(),
     )
-    st.session_state["entry_customer_info"] = st.session_state.get("owner_name", "").strip()
-    st.session_state["entry_customer_address"] = st.session_state.get("owner_address", "").strip()
-    st.session_state["entry_citizen_id"] = st.session_state.get("citizen_id", "").strip()
+    st.session_state["entry_customer_info_ind"] = st.session_state.get("owner_name", "").strip()
+    st.session_state["entry_customer_address_ind"] = st.session_state.get("owner_address", "").strip()
+    st.session_state["entry_citizen_id_ind"] = st.session_state.get("citizen_id", "").strip()
 
 
 def sync_gcn_to_form_from_fields() -> None:
@@ -336,9 +392,9 @@ def parse_asset_description_fields(text: str) -> dict[str, str]:
 
 
 def sync_form_to_gcn() -> list[str]:
-    st.session_state["owner_name"] = st.session_state.get("entry_customer_info", "").strip()
-    st.session_state["owner_address"] = st.session_state.get("entry_customer_address", "").strip()
-    st.session_state["citizen_id"] = st.session_state.get("entry_citizen_id", "").strip()
+    st.session_state["owner_name"] = st.session_state.get("entry_customer_info_ind", "").strip()
+    st.session_state["owner_address"] = st.session_state.get("entry_customer_address_ind", "").strip()
+    st.session_state["citizen_id"] = st.session_state.get("entry_citizen_id_ind", "").strip()
 
     parsed = parse_asset_description_fields(st.session_state.get("entry_asset_description", ""))
     updated_fields: list[str] = []

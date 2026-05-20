@@ -1,5 +1,7 @@
 build/
+scratch/
 data/oauth_config.json
+data/cases.db
 *.env
 *.pid
 *.log

@@ -10,6 +10,7 @@ from src.app_config import (
     CASE_FILES_DIR,
     OUTPUT_DIR,
     UNPAID_STATUS,
+    reset_entry_workspace,
     selectbox_from_excel,
     sync_form_to_gcn_from_fields,
 )
@@ -18,6 +19,7 @@ from src.database_store import format_money, parse_money
 from src.database_manager import create_outbound_tracking_record, resolve_records_db_path
 from src.excel_writer import fill_template
 from src.mail_service import send_appraisal_email
+from src.models import blank_extraction
 from src.sqlite_store import DEFAULT_CASE_STATUS, create_case, display_cases, recent_cases, update_case
 from src.web_automation import run_company_web_entry
 
@@ -56,7 +58,9 @@ def render(
     excel_dropdown_options: dict,
 ) -> None:
     st.subheader("Bước 1 - Kiểm tra và xuất form nhập liệu")
-    extraction = st.session_state.extraction
+    if st.session_state.get("save_success_message"):
+        st.success(st.session_state.pop("save_success_message"))
+    extraction = st.session_state.get("extraction") or blank_extraction()
 
     so_thua = _hidden_gcn_value("so_thua", extraction.so_thua_dat)
     so_to = _hidden_gcn_value("so_to", extraction.so_to_ban_do)
@@ -224,21 +228,37 @@ def render(
                     contract_number=contract_number,
                     customer_name=customer_info,
                 )
-                saved_original = save_original_file(
-                    st.session_state.uploaded_path,
-                    st.session_state.uploaded_original_name,
-                    folder,
-                )
+                saved_original_paths: list[str] = []
+                approved_documents = st.session_state.get("entry_approved_documents") or []
+                if approved_documents:
+                    for document in approved_documents:
+                        saved_original = save_original_file(
+                            document.get("path"),
+                            document.get("original_name") or Path(str(document.get("path") or "")).name,
+                            folder,
+                        )
+                        if saved_original:
+                            saved_original_paths.append(str(saved_original))
+                else:
+                    saved_original = save_original_file(
+                        st.session_state.get("uploaded_path"),
+                        st.session_state.get("uploaded_original_name", ""),
+                        folder,
+                    )
+                    if saved_original:
+                        saved_original_paths.append(str(saved_original))
                 update_case(
                     sqlite_db_path,
                     case_id,
                     {
                         **output_values,
                         "case_folder": str(folder),
-                        "original_file_path": str(saved_original) if saved_original else "",
+                        "original_file_path": "\n".join(saved_original_paths),
                     },
                 )
-                st.success(f"Đã lưu hồ sơ #{case_id} vào SQLite.")
+                st.session_state["save_success_message"] = f"Đã lưu hồ sơ #{case_id} vào SQLite."
+                reset_entry_workspace()
+                st.rerun()
             except Exception as exc:
                 st.error(f"Lưu SQLite thất bại: {exc}")
 

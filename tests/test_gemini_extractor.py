@@ -39,7 +39,7 @@ class GeminiExtractorTests(unittest.TestCase):
         schema = gemini_response_json_schema()
 
         self.assertFalse(_contains_key(schema, "additionalProperties"))
-        self.assertEqual(schema["properties"]["page_metadata"]["type"], "array")
+        self.assertEqual(schema["properties"]["assets"]["type"], "array")
 
     def test_extract_uses_response_json_schema_instead_of_pydantic_response_schema(self) -> None:
         extraction = _extraction()
