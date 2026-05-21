@@ -88,19 +88,13 @@ CASE_GRID_COLUMNS = [
     ("id", "ID / Tháng", 0.7),
     ("contract", "Số HĐ / Nguồn", 1.05),
     ("customer", "Khách hàng", 1.45),
-    ("citizen", "CCCD", 0.85),
+    ("note", "Ghi chú", 1.25),
     ("asset", "Tài sản", 1.05),
     ("fee", "Phí", 0.85),
     ("payment", "Thanh toán", 0.9),
     ("status", "Trạng thái", 0.85),
-    ("note", "Ghi chú", 1.25),
-    ("view", "Xem", 0.2),
-    ("export", "Xuất", 0.2),
-    ("mail", "Mail", 0.2),
-    ("mail_phathanh", "Mail PH", 0.2),
-    ("web", "Web", 0.2),
-    ("edit", "Sửa", 0.2),
-    ("del", "Xóa", 0.2),
+    ("citizen", "CCCD", 0.85),
+    ("actions", "Thao tác nhanh", 0.58),
 ]
 
 
@@ -166,6 +160,7 @@ def _render_case_grid_styles(widths: list[float]) -> None:
                 font-size: 12px;
                 font-weight: 700;
                 text-transform: uppercase;
+                text-align: center;
             }
             .case-grid-cell-main {
                 font-weight: 700;
@@ -186,8 +181,27 @@ def _render_case_grid_styles(widths: list[float]) -> None:
                 padding-left: 0.35rem;
                 padding-right: 0.35rem;
             }
+            div[data-testid="stHorizontalBlock"] button[kind="tertiary"] {
+                min-height: 26px;
+                padding: 0;
+            }
             .case-grid-action-header {
                 text-align: center;
+            }
+            .case-grid-actions-cell div[data-testid="stHorizontalBlock"] {
+                gap: 0.3rem;
+                margin-bottom: 2px;
+            }
+            .case-grid-center-cell {
+                text-align: center;
+            }
+            .case-grid-center-cell div[data-testid="stButton"] {
+                display: flex;
+                justify-content: center;
+            }
+            .case-grid-center-cell div[data-testid="stButton"] button[kind="tertiary"] {
+                width: 100%;
+                justify-content: center;
             }
             .case-status-badge {
                 display: inline-flex;
@@ -336,107 +350,125 @@ def _render_case_row(
         cols[1].caption(_row_text(row.get("source"), "Chưa có nguồn"))
         cols[2].markdown(f"**{_row_text(row.get('customer_info'), 'Chưa có khách hàng')}**")
         cols[2].caption(CUSTOMER_TYPE_LABELS.get(str(row.get("customer_type") or "individual"), "Cá nhân"))
-        cols[3].write(_row_text(row.get("citizen_id"), "-"))
+        cols[3].write(_row_text(row.get("personal_note"), "-"))
         cols[4].markdown(_format_multiline(row.get("asset_description") or row.get("asset_type"), "Chưa có tài sản"))
-        cols[5].markdown(f"**{format_money(row.get('valuation_fee_number'))}**")
-        if cols[6].button(
-            _row_text(row.get("payment_status"), DEFAULT_PAYMENT_STATUS),
-            key=f"payment_status_case_{row_id}",
-            width="content",
-            disabled=is_canceled,
-            help=f"Đổi sang {payment_label}",
-        ):
-            update_case(db_path, row_id, {"payment_status": next_payment})
-            st.session_state["active_case_id"] = row_id
-            st.rerun()
-        if cols[7].button(
-            _row_text(row_status, DEFAULT_CASE_STATUS),
-            key=f"case_status_case_{row_id}",
-            width="content",
-            help=f"Đổi sang {next_case_status_label}",
-        ):
-            update_case(db_path, row_id, {"case_status": next_case_status, "cancel_reason": ""})
-            asyncio.run(sync_case_to_record(get_db_path(), db_path, row_id))
-            st.session_state["active_case_id"] = row_id
-            st.rerun()
-        if is_active:
-            cols[7].caption("Đang chọn")
-        cols[8].write(_row_text(row.get("personal_note"), "-"))
-
-        if cols[9].button(
-            " ",
-            key=f"select_case_{row_id}",
-            width="content",
-            icon=":material/visibility:",
-            help="Chọn hồ sơ này để xem và xuất Word/PDF/ZIP",
-        ):
-            st.session_state["active_case_id"] = row_id
-            open_case_documents_dialog(
-                db_path,
-                row_id,
-                individual_templates_dir=individual_templates_dir,
-                organization_templates_dir=organization_templates_dir,
+        with cols[5]:
+            st.markdown(
+                f'<div class="case-grid-center-cell"><strong>{format_money(row.get("valuation_fee_number"))}</strong></div>',
+                unsafe_allow_html=True,
             )
+        with cols[6]:
+            _pay_left, pay_center, _pay_right = st.columns([1, 3, 1], gap=None)
+            with pay_center:
+                if st.button(
+                    _row_text(row.get("payment_status"), DEFAULT_PAYMENT_STATUS),
+                    key=f"payment_status_case_{row_id}",
+                    width="stretch",
+                    type="tertiary",
+                    disabled=is_canceled,
+                    help=f"Đổi sang {payment_label}",
+                ):
+                    update_case(db_path, row_id, {"payment_status": next_payment})
+                    st.session_state["active_case_id"] = row_id
+                    st.rerun()
+        with cols[7]:
+            _status_left, status_center, _status_right = st.columns([1, 3, 1], gap=None)
+            with status_center:
+                if st.button(
+                    _row_text(row_status, DEFAULT_CASE_STATUS),
+                    key=f"case_status_case_{row_id}",
+                    width="stretch",
+                    type="tertiary",
+                    help=f"Đổi sang {next_case_status_label}",
+                ):
+                    update_case(db_path, row_id, {"case_status": next_case_status, "cancel_reason": ""})
+                    asyncio.run(sync_case_to_record(get_db_path(), db_path, row_id))
+                    st.session_state["active_case_id"] = row_id
+                    st.rerun()
+                if is_active:
+                    st.caption("Đang chọn")
+        cols[8].write(_row_text(row.get("citizen_id"), "-"))
 
-        if cols[10].button(
-            " ",
-            key=f"quick_export_{row_id}",
-            width="content",
-            icon=":material/download:",
-            help="Xuất nhanh bộ hồ sơ Word",
-        ):
-            st.session_state["quick_action"] = {"type": "export", "case_id": row_id}
-            st.rerun()
-
-        if cols[11].button(
-            " ",
-            key=f"quick_mail_{row_id}",
-            width="content",
-            icon=":material/mail:",
-            help="Gửi mail yêu cầu định giá",
-        ):
-            st.session_state["quick_action"] = {"type": "mail", "case_id": row_id}
-            st.rerun()
-
-        if cols[12].button(
-            " ",
-            key=f"quick_mail_phathanh_{row_id}",
-            width="content",
-            icon=":material/forward_to_inbox:",
-            help="Gửi mail phát hành chứng thư",
-        ):
-            st.session_state["quick_action"] = {"type": "mail_phathanh", "case_id": row_id}
-            st.rerun()
-
-        if cols[13].button(
-            " ",
-            key=f"quick_web_{row_id}",
-            width="content",
-            icon=":material/language:",
-            help="Gửi yêu cầu định giá lên Web",
-        ):
-            st.session_state["quick_action"] = {"type": "web", "case_id": row_id}
-            st.rerun()
-
-        if cols[14].button(
-            " ",
-            key=f"edit_case_{row_id}",
-            width="content",
-            icon=":material/edit:",
-            help="Mở popup sửa hồ sơ",
-        ):
-            st.session_state["active_case_id"] = row_id
-            open_case_edit_dialog(db_path, row_id)
-            
-        if cols[15].button(
-            " ",
-            key=f"delete_case_{row_id}",
-            width="content",
-            icon=":material/delete:",
-            help="Xóa hồ sơ này khỏi dữ liệu",
-        ):
-            st.session_state["confirm_delete_case_id"] = row_id
-            st.rerun()
+        with cols[9]:
+            st.markdown('<div class="case-grid-actions-cell">', unsafe_allow_html=True)
+            action_top = st.columns(4, gap="small")
+            action_bottom = st.columns(4, gap="small")
+            if action_top[0].button(
+                " ",
+                key=f"select_case_{row_id}",
+                width="stretch",
+                type="tertiary",
+                icon=":material/visibility:",
+                help="Chọn hồ sơ này để xem và xuất Word/PDF/ZIP",
+            ):
+                st.session_state["active_case_id"] = row_id
+                open_case_documents_dialog(
+                    db_path,
+                    row_id,
+                    individual_templates_dir=individual_templates_dir,
+                    organization_templates_dir=organization_templates_dir,
+                )
+            if action_top[1].button(
+                " ",
+                key=f"quick_export_{row_id}",
+                width="stretch",
+                type="tertiary",
+                icon=":material/download:",
+                help="Xuất nhanh bộ hồ sơ Word",
+            ):
+                st.session_state["quick_action"] = {"type": "export", "case_id": row_id}
+                st.rerun()
+            if action_top[2].button(
+                " ",
+                key=f"quick_mail_{row_id}",
+                width="stretch",
+                type="tertiary",
+                icon=":material/mail:",
+                help="Gửi mail yêu cầu định giá",
+            ):
+                st.session_state["quick_action"] = {"type": "mail", "case_id": row_id}
+                st.rerun()
+            if action_top[3].button(
+                " ",
+                key=f"quick_mail_phathanh_{row_id}",
+                width="stretch",
+                type="tertiary",
+                icon=":material/forward_to_inbox:",
+                help="Gửi mail phát hành chứng thư",
+            ):
+                st.session_state["quick_action"] = {"type": "mail_phathanh", "case_id": row_id}
+                st.rerun()
+            if action_bottom[0].button(
+                " ",
+                key=f"quick_web_{row_id}",
+                width="stretch",
+                type="tertiary",
+                icon=":material/language:",
+                help="Gửi yêu cầu định giá lên Web",
+            ):
+                st.session_state["quick_action"] = {"type": "web", "case_id": row_id}
+                st.rerun()
+            if action_bottom[1].button(
+                " ",
+                key=f"edit_case_{row_id}",
+                width="stretch",
+                type="tertiary",
+                icon=":material/edit:",
+                help="Mở popup sửa hồ sơ",
+            ):
+                st.session_state["active_case_id"] = row_id
+                open_case_edit_dialog(db_path, row_id)
+            if action_bottom[2].button(
+                " ",
+                key=f"delete_case_{row_id}",
+                width="stretch",
+                type="tertiary",
+                icon=":material/delete:",
+                help="Xóa hồ sơ này khỏi dữ liệu",
+            ):
+                st.session_state["confirm_delete_case_id"] = row_id
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_case_grid(
@@ -453,7 +485,7 @@ def _render_case_grid(
     st.caption("Bấm trực tiếp vào trạng thái thanh toán hoặc trạng thái hồ sơ để đổi nhanh. Bấm icon mắt để chọn hồ sơ cho khung xem/xuất tài liệu bên dưới.")
     header_cells = "\n".join(
         f'                <div class="case-grid-action-header">{html.escape(label)}</div>'
-        if key in {"view", "export", "mail", "mail_phathanh", "web", "edit", "del"}
+        if key == "actions"
         else f"                <div>{html.escape(label)}</div>"
         for key, label, _default in CASE_GRID_COLUMNS
     )
