@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 import os
 import random
 import re
@@ -13,6 +14,7 @@ import aiosqlite
 from dotenv import load_dotenv
 
 from .database_manager import get_db_path, resolve_records_db_path
+from .sqlite_store import update_case
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -960,6 +962,109 @@ async def fill_credit_and_submit(page, data: Mapping[str, str]) -> str:
     return result
 
 
+async def find_created_web_case_id(page, data: Mapping[str, str]) -> str:
+    contract_number = str(data.get("contract_number") or "").strip()
+    customer_info = str(data.get("customer_info") or data.get("customer_name") or "").strip()
+    asset_description = str(data.get("asset_description") or "").strip()
+
+    async def _click_status_tab() -> None:
+        candidates = [
+            page.get_by_role("link", name=re.compile(r"Trạng thái", re.IGNORECASE)),
+            page.get_by_role("button", name=re.compile(r"Trạng thái", re.IGNORECASE)),
+            page.get_by_text("Trạng thái", exact=True),
+        ]
+        for locator in candidates:
+            try:
+                if await locator.count() > 0:
+                    await locator.first.click(timeout=5000)
+                    await page.wait_for_load_state("networkidle")
+                    await page.wait_for_timeout(800)
+                    return
+            except Exception:
+                continue
+        raise RuntimeError("Không tìm thấy tab Trạng thái sau khi gửi yêu cầu định giá.")
+
+    async def _fill_filter(label_or_placeholder: str, value: str) -> bool:
+        if not value:
+            return False
+        selectors = [
+            f"input[placeholder*='{label_or_placeholder}']",
+            f"input[aria-label*='{label_or_placeholder}']",
+        ]
+        for selector in selectors:
+            try:
+                locator = page.locator(selector).first
+                if await locator.count() > 0:
+                    await locator.fill(value, timeout=5000)
+                    await locator.press("Enter", timeout=2000)
+                    await page.wait_for_load_state("networkidle")
+                    await page.wait_for_timeout(800)
+                    return True
+            except Exception:
+                continue
+        return False
+
+    await _click_status_tab()
+    await _fill_filter("hợp đồng", contract_number) or await _fill_filter("Tên khách hàng", customer_info)
+
+    expected_fragments = [value for value in [contract_number, customer_info, asset_description.splitlines()[0] if asset_description else ""] if value]
+    web_id = await page.evaluate(
+        """({expectedFragments}) => {
+            const normalize = (value) => (value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();
+            const expected = expectedFragments.map(normalize).filter(Boolean);
+            const rows = Array.from(document.querySelectorAll('table tbody tr, .table tbody tr'));
+            const candidateRows = rows.filter((row) => {
+                const text = normalize(row.innerText || row.textContent || '');
+                return !expected.length || expected.some(fragment => text.includes(fragment));
+            });
+            for (const row of candidateRows) {
+                const cells = Array.from(row.querySelectorAll('td,th')).map(cell => (cell.innerText || cell.textContent || '').trim());
+                const firstNumeric = cells.find(cell => /^\\d{3,}$/.test(cell));
+                if (firstNumeric) return firstNumeric;
+                const match = (row.innerText || row.textContent || '').match(/\\b\\d{3,}\\b/);
+                if (match) return match[0];
+            }
+            return '';
+        }""",
+        {"expectedFragments": expected_fragments},
+    )
+    web_id = str(web_id or "").strip()
+    if not web_id:
+        raise RuntimeError("Đã gửi yêu cầu nhưng không tìm được ID hồ sơ trên tab Trạng thái.")
+    return web_id
+
+
+def _cases_db_path() -> Path:
+    configured = os.getenv("SQLITE_DATABASE", "").strip()
+    return Path(configured) if configured else PROJECT_ROOT / "data" / "cases.db"
+
+
+def _web_case_asset_label(index: int, record: Mapping[str, str], web_case_id: str) -> str:
+    asset_text = str(record.get("dia_chi") or record.get("asset_description") or "").strip().replace("\n", ", ")
+    if len(asset_text) > 80:
+        asset_text = asset_text[:77].rstrip() + "..."
+    suffix = f" - {asset_text}" if asset_text else ""
+    return f"TS{index + 1}: {web_case_id}{suffix}"
+
+
+async def save_web_case_id_to_case(record: Mapping[str, str], web_case_ids: list[str]) -> None:
+    unique_ids = []
+    seen = set()
+    for value in web_case_ids:
+        web_id = str(value or "").strip()
+        if web_id and web_id not in seen:
+            seen.add(web_id)
+            unique_ids.append(web_id)
+    if not unique_ids:
+        return
+    if "case_status" not in record and "payment_status" not in record and "case_folder" not in record:
+        return
+    raw_case_id = str(record.get("id") or "").strip()
+    if not raw_case_id.isdigit():
+        return
+    await asyncio.to_thread(update_case, _cases_db_path(), int(raw_case_id), {"web_case_id": "\n".join(unique_ids)})
+
+
 # ---------------------------------------------------------------------------
 # Playwright helpers (kept from original implementation)
 # ---------------------------------------------------------------------------
@@ -1046,6 +1151,7 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
             context = await browser.new_context()
             
             results_msg = []
+            web_case_ids: list[str] = []
 
             for i in range(N):
                 logger.info("Đang xử lý tài sản %d/%d của hồ sơ #%s", i + 1, N, record_id)
@@ -1072,7 +1178,10 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
                     
                     # --- 3. Tài liệu, Tín dụng & Gửi ---
                     res = await fill_credit_and_submit(page, sub_record)
-                    results_msg.append(f"- Tài sản {i + 1}: {res}")
+                    web_case_id = await find_created_web_case_id(page, sub_record)
+                    web_case_label = _web_case_asset_label(i, sub_record, web_case_id)
+                    web_case_ids.append(web_case_label)
+                    results_msg.append(f"- Tài sản {i + 1}: {res} | ID Web: {web_case_label}")
                 except Exception as exc:
                     import traceback
                     tb_str = traceback.format_exc()
@@ -1106,6 +1215,7 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
                 await update_record_status(settings.records_db_path, valid_id, "COMPLETED_ON_WEB")
             except (ValueError, TypeError):
                 logger.info("Bỏ qua cập nhật trạng thái records.db vì record_id không hợp lệ: %s", record_id)
+            await save_web_case_id_to_case(record, web_case_ids)
             
             success_text = f"✅ Đã nhập Web C.Ty thành công hồ sơ #{record_id} ({N} tài sản).\n" + "\n".join(results_msg)
             await notify_telegram(success_text)

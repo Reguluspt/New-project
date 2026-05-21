@@ -136,6 +136,19 @@ class SQLiteStoreCrudTests(unittest.TestCase):
         self.assertEqual(restored["case_status"], DEFAULT_CASE_STATUS)
         self.assertEqual(restored["cancel_reason"], "")
 
+    def test_update_case_persists_web_case_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "cases.db"
+            init_db(db_path)
+            case_id = create_case(db_path, {"customer_info": "Khach A"})
+
+            update_case(db_path, case_id, {"web_case_id": "TS1: 217265 - Dia chi A\nTS2: 217266 - Dia chi B"})
+            row = get_case(db_path, case_id)
+
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row["web_case_id"], "TS1: 217265 - Dia chi A\nTS2: 217266 - Dia chi B")
+
     def test_delete_case_removes_record_and_rejects_missing_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "cases.db"

@@ -56,6 +56,7 @@ CASE_FIELDS = [
     "handover_contact_name",
     "handover_contact_position",
     "handover_contact_phone",
+    "web_case_id",
 ]
 
 OPTIONAL_COLUMNS = {
@@ -76,6 +77,7 @@ OPTIONAL_COLUMNS = {
     "handover_contact_name": "TEXT",
     "handover_contact_position": "TEXT",
     "handover_contact_phone": "TEXT",
+    "web_case_id": "TEXT",
 }
 
 DEFAULT_PAYMENT_STATUS = "Đã thanh toán"
@@ -215,7 +217,8 @@ def init_db(db_path: str | Path) -> None:
                 authorization_note TEXT,
                 handover_contact_name TEXT,
                 handover_contact_position TEXT,
-                handover_contact_phone TEXT
+                handover_contact_phone TEXT,
+                web_case_id TEXT
             )
             """
         )
