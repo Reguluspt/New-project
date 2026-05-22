@@ -810,8 +810,27 @@ async def send_professional_forward(
         subject = _reply_subject(incoming.subject)
         
         try:
-            print(f"Sending professional forward using OAuth2 API for provider: {provider}")
-            await send_email_via_oauth2(
+            gmail_thread_id = incoming.thread_id or None
+            append_listener_log(
+                "professional_reply_all_sending",
+                uid=incoming.uid,
+                provider=provider,
+                record_id=record.get("id"),
+                subject=subject,
+                to_email=to_email,
+                cc_list=cc_list,
+                thread_id=gmail_thread_id,
+                message_id=incoming.message_id,
+                in_reply_to=incoming.in_reply_to,
+                references=incoming.references,
+                has_thread_id=bool(gmail_thread_id),
+            )
+            print(
+                "Sending professional reply-all using OAuth2 API "
+                f"for provider: {provider}; thread_id={gmail_thread_id or '<missing>'}; "
+                f"message_id={incoming.message_id or '<missing>'}"
+            )
+            sent_message_id = await send_email_via_oauth2(
                 provider=provider,
                 from_email=smtp_settings.mail_from or smtp_settings.username,
                 to_email=to_email,
@@ -820,11 +839,31 @@ async def send_professional_forward(
                 cc_emails=cc_list,
                 reply_to_msg_id=incoming.message_id,
                 references=incoming.references,
-                thread_id=incoming.thread_id or incoming.uid,
+                thread_id=gmail_thread_id,
+            )
+            append_listener_log(
+                "professional_reply_all_sent",
+                uid=incoming.uid,
+                provider=provider,
+                record_id=record.get("id"),
+                sent_message_id=sent_message_id,
+                thread_id=gmail_thread_id,
+                message_id=incoming.message_id,
+                has_thread_id=bool(gmail_thread_id),
             )
             return
         except Exception as exc:
-            print(f"OAuth2 professional forward failed: {exc}, falling back to SMTP.")
+            append_listener_log(
+                "professional_reply_all_oauth_failed",
+                uid=incoming.uid,
+                provider=provider,
+                record_id=record.get("id"),
+                error_type=type(exc).__name__,
+                error=str(exc),
+                thread_id=incoming.thread_id or None,
+                message_id=incoming.message_id,
+            )
+            print(f"OAuth2 professional reply-all failed: {exc}, falling back to SMTP.")
 
     message = build_professional_forward_message(
         incoming=incoming,
