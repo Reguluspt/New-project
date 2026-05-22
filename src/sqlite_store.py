@@ -598,6 +598,10 @@ def revenue_summary(
     params["canceled_status"] = CANCELED_CASE_STATUS
 
     with connect(db_path) as conn:
+        case_count_current_month = conn.execute(
+            f"SELECT COUNT(*) FROM cases {current_month_where}",
+            params,
+        ).fetchone()[0]
         projected_current_month = conn.execute(
             f"SELECT COALESCE(SUM(COALESCE(valuation_fee_number, 0)), 0) FROM cases {current_month_where}",
             params,
@@ -651,6 +655,7 @@ def revenue_summary(
     paid_current = float(paid_current_month or 0)
     return {
         "target_month": target_month,
+        "case_count_current_month": int(case_count_current_month or 0),
         "projected_current_month": projected_current,
         "paid_current_month": paid_current,
         "unpaid_current_month": max(projected_current - paid_current, 0),

@@ -18,6 +18,8 @@ from src.sqlite_store import (
     import_excel_database,
     init_db,
     list_importable_excel_sheets,
+    monthly_revenue_breakdown,
+    revenue_summary,
     search_cases,
     update_case,
 )
@@ -148,6 +150,41 @@ class SQLiteStoreCrudTests(unittest.TestCase):
         self.assertIsNotNone(row)
         assert row is not None
         self.assertEqual(row["web_case_id"], "TS1: 217265 - Dia chi A\nTS2: 217266 - Dia chi B")
+
+    def test_revenue_reports_exclude_cancelled_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "cases.db"
+            init_db(db_path)
+            create_case(
+                db_path,
+                {
+                    "customer_info": "Khach A",
+                    "execution_month": "05/2026",
+                    "payment_status": DEFAULT_PAYMENT_STATUS,
+                    "case_status": DEFAULT_CASE_STATUS,
+                    "valuation_fee_number": "1000000",
+                },
+            )
+            create_case(
+                db_path,
+                {
+                    "customer_info": "Khach B",
+                    "execution_month": "05/2026",
+                    "payment_status": DEFAULT_PAYMENT_STATUS,
+                    "case_status": CANCELED_CASE_STATUS,
+                    "valuation_fee_number": "2000000",
+                },
+            )
+
+            summary = revenue_summary(db_path, target_month="05/2026")
+            monthly_rows = monthly_revenue_breakdown(db_path, year="2026")
+
+        self.assertEqual(summary["case_count_current_month"], 1)
+        self.assertEqual(summary["projected_current_month"], 1000000)
+        self.assertEqual(summary["paid_current_month"], 1000000)
+        self.assertEqual(len(monthly_rows), 1)
+        self.assertEqual(monthly_rows[0]["case_count"], 1)
+        self.assertEqual(monthly_rows[0]["projected_revenue"], 1000000)
 
     def test_delete_case_removes_record_and_rejects_missing_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

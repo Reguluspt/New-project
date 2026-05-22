@@ -102,7 +102,7 @@ def build_chart_rows(summary: dict[str, Any], total_matches: int) -> list[dict[s
     chart_rows.append(
         {
             "Tháng": summary["target_month"],
-            "Số hồ sơ": total_matches,
+            "Số hồ sơ": int(summary.get("case_count_current_month", total_matches)),
             "Doanh thu dự kiến": summary["projected_current_month"],
             "Đã thanh toán": summary["paid_current_month"],
             "Chưa thanh toán": summary["unpaid_current_month"],

@@ -85,6 +85,28 @@ def _next_case_status(status: object) -> tuple[str, str]:
     return DEFAULT_CASE_STATUS, DEFAULT_CASE_STATUS
 
 
+CASE_STATUS_OPTIONS = [
+    DEFAULT_CASE_STATUS,
+    "Hoàn thành",
+    "Đã hủy",
+]
+CASE_STATUS_VALUE_BY_LABEL = {
+    DEFAULT_CASE_STATUS: DEFAULT_CASE_STATUS,
+    "Hoàn thành": "Hoàn thành",
+    "Đã hủy": CANCELED_CASE_STATUS,
+}
+CASE_STATUS_LABEL_BY_VALUE = {
+    DEFAULT_CASE_STATUS: DEFAULT_CASE_STATUS,
+    "Hoàn thành": "Hoàn thành",
+    CANCELED_CASE_STATUS: "Đã hủy",
+}
+
+
+def _case_status_label(status: object) -> str:
+    current = _row_text(status, DEFAULT_CASE_STATUS)
+    return CASE_STATUS_LABEL_BY_VALUE.get(current, current)
+
+
 def _payment_badge_kind(status: object) -> str:
     text = _row_text(status, DEFAULT_PAYMENT_STATUS)
     if text == DEFAULT_PAYMENT_STATUS:
@@ -359,7 +381,6 @@ def _render_case_row(
     row_id = int(row["id"])
     row_status = row.get("case_status") or DEFAULT_CASE_STATUS
     payment_label, next_payment = _next_payment_status(row)
-    next_case_status_label, next_case_status = _next_case_status(row_status)
     is_active = row_id == active_case_id
     is_canceled = row_status == CANCELED_CASE_STATUS
 
@@ -384,6 +405,9 @@ def _render_case_row(
         cols[1].markdown(f"**{short_contract_number(row.get('contract_number'), fallback='Chưa có số HĐ')}**")
         cols[1].caption(_row_text(row.get("source"), "Chưa có nguồn"))
         cols[2].markdown(f"**{_row_text(row.get('customer_info'), 'Chưa có khách hàng')}**")
+        customer_address = str(row.get("customer_address") or "").strip()
+        if customer_address:
+            cols[2].caption(customer_address)
         cols[2].caption(CUSTOMER_TYPE_LABELS.get(str(row.get("customer_type") or "individual"), "Cá nhân"))
         cols[3].write(_row_text(row.get("personal_note"), "-"))
         cols[4].markdown(_format_multiline(row.get("asset_description") or row.get("asset_type"), "Chưa có tài sản"))
@@ -409,14 +433,21 @@ def _render_case_row(
         with cols[7]:
             _status_left, status_center, _status_right = st.columns([1, 3, 1], gap=None)
             with status_center:
-                if st.button(
-                    _row_text(row_status, DEFAULT_CASE_STATUS),
-                    key=f"case_status_case_{row_id}",
-                    width="stretch",
-                    type="tertiary",
-                    help=f"Đổi sang {next_case_status_label}",
-                ):
-                    update_case(db_path, row_id, {"case_status": next_case_status, "cancel_reason": ""})
+                current_status_label = _case_status_label(row_status)
+                try:
+                    current_status_index = CASE_STATUS_OPTIONS.index(current_status_label)
+                except ValueError:
+                    current_status_index = 0
+                selected_status_label = st.selectbox(
+                    "Trạng thái",
+                    CASE_STATUS_OPTIONS,
+                    index=current_status_index,
+                    key=f"case_status_case_{row_id}_{row_status}",
+                    label_visibility="collapsed",
+                )
+                selected_status = CASE_STATUS_VALUE_BY_LABEL.get(selected_status_label, DEFAULT_CASE_STATUS)
+                if selected_status != row_status:
+                    update_case(db_path, row_id, {"case_status": selected_status, "cancel_reason": ""})
                     asyncio.run(sync_case_to_record(get_db_path(), db_path, row_id))
                     st.session_state["active_case_id"] = row_id
                     st.rerun()

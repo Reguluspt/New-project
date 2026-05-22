@@ -130,6 +130,20 @@ class CaseFiltersTests(unittest.TestCase):
         self.assertEqual(len(chart_data), 9)
         self.assertEqual(chart_data[0], {"Tháng": "01/2026", "Chỉ tiêu": "Doanh thu dự kiến", "Giá trị": 100})
 
+    def test_chart_rows_use_revenue_case_count_when_available(self) -> None:
+        summary = {
+            "target_month": "03/2026",
+            "case_count_current_month": 2,
+            "projected_current_month": 300,
+            "paid_current_month": 200,
+            "unpaid_current_month": 100,
+            "previous_months": [],
+        }
+
+        rows = build_chart_rows(summary, total_matches=3)
+
+        self.assertEqual(rows[0]["Số hồ sơ"], 2)
+
     def test_export_scope_label_uses_readable_customer_type(self) -> None:
         label = export_scope_label(
             "ABC",
