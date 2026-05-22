@@ -59,6 +59,18 @@ def _format_web_case_id(value: object) -> str:
     return "".join(rows)
 
 
+def _format_created_date(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "Chưa có ngày tạo"
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text[:19], fmt).strftime("%d/%m/%Y")
+        except ValueError:
+            continue
+    return text
+
+
 def _next_payment_status(row: dict[str, object]) -> tuple[str, str]:
     current = row.get("payment_status") or DEFAULT_PAYMENT_STATUS
     if current == DEFAULT_PAYMENT_STATUS:
@@ -102,7 +114,7 @@ def _state_choice(key: str, options: list[str], fallback: str | None = None) -> 
 
 
 CASE_GRID_COLUMNS = [
-    ("id", "ID / Tháng", 0.7),
+    ("id", "ID / Ngày tạo", 0.7),
     ("contract", "Số HĐ / Nguồn", 1.05),
     ("customer", "Khách hàng", 1.45),
     ("note", "Ghi chú", 1.25),
@@ -362,12 +374,13 @@ def _render_case_row(
     with st.container(border=True):
         cols = st.columns(widths)
         web_case_id_html = _format_web_case_id(row.get("web_case_id"))
+        created_date = _format_created_date(row.get("created_at"))
         if web_case_id_html:
             cols[0].markdown(web_case_id_html, unsafe_allow_html=True)
-            cols[0].caption(f"#{row_id} | {_row_text(row.get('execution_month'), 'Chưa có tháng')}")
+            cols[0].caption(f"#{row_id} | {created_date}")
         else:
             cols[0].markdown(f"**#{row_id}**")
-            cols[0].caption(_row_text(row.get("execution_month"), "Chưa có tháng"))
+            cols[0].caption(created_date)
         cols[1].markdown(f"**{short_contract_number(row.get('contract_number'), fallback='Chưa có số HĐ')}**")
         cols[1].caption(_row_text(row.get("source"), "Chưa có nguồn"))
         cols[2].markdown(f"**{_row_text(row.get('customer_info'), 'Chưa có khách hàng')}**")
