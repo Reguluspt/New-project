@@ -42,6 +42,23 @@ def _row_text(value: object, fallback: str = "-") -> str:
     return text if text else fallback
 
 
+def _format_web_case_id(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    rows = []
+    for line in text.splitlines():
+        clean_line = line.strip()
+        if not clean_line:
+            continue
+        display = clean_line.split(" - ", 1)[0].strip()
+        rows.append(
+            '<div style="color:#dc2626;font-weight:800;line-height:1.35;" '
+            f'title="{html.escape(clean_line)}">{html.escape(display)}</div>'
+        )
+    return "".join(rows)
+
+
 def _next_payment_status(row: dict[str, object]) -> tuple[str, str]:
     current = row.get("payment_status") or DEFAULT_PAYMENT_STATUS
     if current == DEFAULT_PAYMENT_STATUS:
@@ -344,8 +361,13 @@ def _render_case_row(
 
     with st.container(border=True):
         cols = st.columns(widths)
-        cols[0].markdown(f"**#{row_id}**")
-        cols[0].caption(_row_text(row.get("execution_month"), "Chưa có tháng"))
+        web_case_id_html = _format_web_case_id(row.get("web_case_id"))
+        if web_case_id_html:
+            cols[0].markdown(web_case_id_html, unsafe_allow_html=True)
+            cols[0].caption(f"#{row_id} | {_row_text(row.get('execution_month'), 'Chưa có tháng')}")
+        else:
+            cols[0].markdown(f"**#{row_id}**")
+            cols[0].caption(_row_text(row.get("execution_month"), "Chưa có tháng"))
         cols[1].markdown(f"**{short_contract_number(row.get('contract_number'), fallback='Chưa có số HĐ')}**")
         cols[1].caption(_row_text(row.get("source"), "Chưa có nguồn"))
         cols[2].markdown(f"**{_row_text(row.get('customer_info'), 'Chưa có khách hàng')}**")

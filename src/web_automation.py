@@ -1083,7 +1083,9 @@ async def save_web_case_id_to_case(record: Mapping[str, str], web_case_ids: list
     raw_case_id = str(record.get("id") or "").strip()
     if not raw_case_id.isdigit():
         return
-    await asyncio.to_thread(update_case, _cases_db_path(), int(raw_case_id), {"web_case_id": "\n".join(unique_ids)})
+    db_path = _cases_db_path()
+    logger.info("Lưu ID Web cho hồ sơ #%s vào %s: %s", raw_case_id, db_path, unique_ids)
+    await asyncio.to_thread(update_case, db_path, int(raw_case_id), {"web_case_id": "\n".join(unique_ids)})
 
 
 # ---------------------------------------------------------------------------
