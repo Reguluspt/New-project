@@ -25,6 +25,36 @@ DEFAULT_NAVIGATION_TIMEOUT = 30_000
 DEFAULT_ACTION_TIMEOUT = 10_000
 
 
+WEB_ENTRY_REQUIRED_FIELDS = [
+    ("contract_number", "Số hợp đồng", ("contract_number",)),
+    ("customer_info", "Tên khách hàng", ("customer_info", "customer_name")),
+    ("customer_address", "Địa chỉ khách hàng", ("customer_address",)),
+    ("asset_description", "Tài sản thẩm định", ("asset_description", "dia_chi", "dia_chi_thua_dat", "city")),
+    ("valuation_purpose", "Mục đích thẩm định", ("valuation_purpose",)),
+    ("asset_type", "Loại tài sản", ("asset_type",)),
+    ("source", "Nguồn/ngân hàng", ("source",)),
+]
+
+
+def _has_value(data: Mapping[str, object], keys: tuple[str, ...]) -> bool:
+    return any(str(data.get(key) or "").strip() for key in keys)
+
+
+def missing_web_entry_fields(data: Mapping[str, object]) -> list[dict[str, str]]:
+    """Return required app fields that should be completed before Web automation."""
+    missing: list[dict[str, str]] = []
+    for field_key, label, source_keys in WEB_ENTRY_REQUIRED_FIELDS:
+        if not _has_value(data, source_keys):
+            missing.append(
+                {
+                    "field": field_key,
+                    "label": label,
+                    "source": " / ".join(source_keys),
+                }
+            )
+    return missing
+
+
 def _normalize_text(value: str) -> str:
     normalized = unicodedata.normalize("NFD", value or "")
     without_marks = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
@@ -963,10 +993,6 @@ async def fill_credit_and_submit(page, data: Mapping[str, str]) -> str:
 
 
 async def find_created_web_case_id(page, data: Mapping[str, str]) -> str:
-    contract_number = str(data.get("contract_number") or "").strip()
-    customer_info = str(data.get("customer_info") or data.get("customer_name") or "").strip()
-    asset_description = str(data.get("asset_description") or "").strip()
-
     async def _click_status_tab() -> None:
         candidates = [
             page.get_by_role("link", name=re.compile(r"Trạng thái", re.IGNORECASE)),
@@ -984,54 +1010,49 @@ async def find_created_web_case_id(page, data: Mapping[str, str]) -> str:
                 continue
         raise RuntimeError("Không tìm thấy tab Trạng thái sau khi gửi yêu cầu định giá.")
 
-    async def _fill_filter(label_or_placeholder: str, value: str) -> bool:
-        if not value:
-            return False
-        selectors = [
-            f"input[placeholder*='{label_or_placeholder}']",
-            f"input[aria-label*='{label_or_placeholder}']",
-        ]
-        for selector in selectors:
-            try:
-                locator = page.locator(selector).first
-                if await locator.count() > 0:
-                    await locator.fill(value, timeout=5000)
-                    await locator.press("Enter", timeout=2000)
-                    await page.wait_for_load_state("networkidle")
-                    await page.wait_for_timeout(800)
-                    return True
-            except Exception:
-                continue
-        return False
-
     await _click_status_tab()
-    await _fill_filter("hợp đồng", contract_number) or await _fill_filter("Tên khách hàng", customer_info)
 
-    expected_fragments = [value for value in [contract_number, customer_info, asset_description.splitlines()[0] if asset_description else ""] if value]
-    web_id = await page.evaluate(
-        """({expectedFragments}) => {
-            const normalize = (value) => (value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();
-            const expected = expectedFragments.map(normalize).filter(Boolean);
-            const rows = Array.from(document.querySelectorAll('table tbody tr, .table tbody tr'));
-            const candidateRows = rows.filter((row) => {
-                const text = normalize(row.innerText || row.textContent || '');
-                return !expected.length || expected.some(fragment => text.includes(fragment));
-            });
-            for (const row of candidateRows) {
-                const cells = Array.from(row.querySelectorAll('td,th')).map(cell => (cell.innerText || cell.textContent || '').trim());
-                const firstNumeric = cells.find(cell => /^\\d{3,}$/.test(cell));
-                if (firstNumeric) return firstNumeric;
-                const match = (row.innerText || row.textContent || '').match(/\\b\\d{3,}\\b/);
-                if (match) return match[0];
-            }
-            return '';
-        }""",
-        {"expectedFragments": expected_fragments},
-    )
-    web_id = str(web_id or "").strip()
-    if not web_id:
-        raise RuntimeError("Đã gửi yêu cầu nhưng không tìm được ID hồ sơ trên tab Trạng thái.")
-    return web_id
+    for _attempt in range(20):
+        web_id = await page.evaluate(
+            """() => {
+                const isVisible = (el) => {
+                    if (!el) return false;
+                    const style = window.getComputedStyle(el);
+                    const box = el.getBoundingClientRect();
+                    return box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+                };
+                const rowSelectors = [
+                    'table tbody tr',
+                    '.table tbody tr',
+                    '.p-datatable-tbody tr',
+                    '.ant-table-tbody tr',
+                    '[role="row"]'
+                ];
+                const rows = [];
+                for (const selector of rowSelectors) {
+                    for (const row of Array.from(document.querySelectorAll(selector))) {
+                        if (!rows.includes(row) && isVisible(row)) rows.push(row);
+                    }
+                }
+                for (const row of rows) {
+                    const cells = Array.from(row.querySelectorAll('td, th, [role="cell"], [role="gridcell"]'))
+                        .filter(isVisible)
+                        .map(cell => (cell.innerText || cell.textContent || '').trim())
+                        .filter(Boolean);
+                    if (!cells.length) continue;
+                    const firstCellMatch = cells[0].match(/\\b\\d{3,}\\b/);
+                    if (firstCellMatch) return firstCellMatch[0];
+                    const rowMatch = (row.innerText || row.textContent || '').trim().match(/^\\s*(\\d{3,})\\b/);
+                    if (rowMatch) return rowMatch[1];
+                }
+                return '';
+            }"""
+        )
+        web_id = str(web_id or "").strip()
+        if web_id:
+            return web_id
+        await page.wait_for_timeout(500)
+    raise RuntimeError("Đã gửi yêu cầu nhưng không đọc được ID hồ sơ ở dòng đầu tiên trên tab Trạng thái.")
 
 
 def _cases_db_path() -> Path:
@@ -1105,6 +1126,11 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
     
     if not target_url:
         raise RuntimeError("Thiếu URL trang web nội bộ.")
+
+    missing_fields = missing_web_entry_fields(record)
+    if missing_fields:
+        missing_labels = ", ".join(item["label"] for item in missing_fields)
+        raise RuntimeError(f"Thiếu thông tin bắt buộc để nhập Web: {missing_labels}")
 
     record_id = record.get("id", "?")
     logger.info("Bắt đầu nhập liệu tự động cho hồ sơ #%s", record_id)

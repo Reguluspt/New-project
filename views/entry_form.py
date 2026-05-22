@@ -20,8 +20,9 @@ from src.database_manager import create_outbound_tracking_record, resolve_record
 from src.excel_writer import fill_template
 from src.mail_service import send_appraisal_email
 from src.models import blank_extraction
-from src.sqlite_store import DEFAULT_CASE_STATUS, create_case, display_cases, recent_cases, update_case
-from src.web_automation import run_company_web_entry
+from src.sqlite_store import DEFAULT_CASE_STATUS, create_case, display_cases, get_case, recent_cases, update_case
+from src.web_automation import missing_web_entry_fields, run_company_web_entry
+from views.case_dialogs import open_case_edit_dialog
 
 
 def _hidden_gcn_value(session_key: str, extracted_value) -> str:
@@ -51,6 +52,38 @@ def _send_entry_mail(output_values: dict[str, object]) -> None:
         st.caption(f"CC: {', '.join(result.cc_emails)}")
 
 
+def _entry_has_meaningful_data(values: dict[str, object]) -> bool:
+    keys = (
+        "contract_number",
+        "customer_info",
+        "customer_address",
+        "asset_description",
+        "valuation_purpose",
+        "source",
+    )
+    return any(str(values.get(key) or "").strip() for key in keys)
+
+
+def _entry_action_payload(sqlite_db_path: Path, output_values: dict[str, object]) -> tuple[dict[str, object], int | None, bool]:
+    if _entry_has_meaningful_data(output_values):
+        return output_values, None, False
+    last_case_id = st.session_state.get("last_saved_case_id")
+    if last_case_id:
+        saved_case = get_case(sqlite_db_path, int(last_case_id))
+        if saved_case:
+            return dict(saved_case), int(last_case_id), True
+    return output_values, None, False
+
+
+def _render_missing_web_fields(missing_fields: list[dict[str, str]]) -> None:
+    st.error("Hồ sơ còn thiếu thông tin bắt buộc để gửi yêu cầu định giá lên Web.")
+    st.dataframe(
+        [{"Trường cần bổ sung": item["label"], "Dữ liệu kiểm tra": item["source"]} for item in missing_fields],
+        width="stretch",
+        hide_index=True,
+    )
+
+
 def render(
     *,
     sqlite_db_path: Path,
@@ -70,6 +103,11 @@ def render(
     citizen_id = _hidden_gcn_value("citizen_id", extraction.so_cccd_chu_so_huu_cuoi_cung)
 
     execution_month = datetime.now().strftime("%m/%Y")
+    today_text = datetime.now().strftime("%d/%m/%Y")
+    if not str(st.session_state.get("entry_contract_date_ind") or "").strip():
+        st.session_state["entry_contract_date_ind"] = today_text
+    if not str(st.session_state.get("entry_contract_date_org") or "").strip():
+        st.session_state["entry_contract_date_org"] = today_text
     case_status = DEFAULT_CASE_STATUS
     payment_status = UNPAID_STATUS
 
@@ -256,8 +294,10 @@ def render(
                         "original_file_path": "\n".join(saved_original_paths),
                     },
                 )
-                st.session_state["save_success_message"] = f"Đã lưu hồ sơ #{case_id} vào SQLite."
                 reset_entry_workspace()
+                st.session_state["last_saved_case_id"] = case_id
+                st.session_state["active_case_id"] = case_id
+                st.session_state["save_success_message"] = f"Đã lưu hồ sơ #{case_id} vào SQLite. Các nút gửi mail/Web sẽ ưu tiên dùng hồ sơ vừa lưu nếu form đang trống."
                 st.rerun()
             except Exception as exc:
                 st.error(f"Lưu SQLite thất bại: {exc}")
@@ -272,16 +312,29 @@ def render(
         web_clicked = st.button("Gửi yêu cầu lên Web", width="stretch", icon=":material/language:")
 
     if web_clicked:
+        web_payload, saved_case_id, used_saved_case = _entry_action_payload(sqlite_db_path, output_values)
+        missing_fields = missing_web_entry_fields(web_payload)
+        if missing_fields:
+            _render_missing_web_fields(missing_fields)
+            if used_saved_case and saved_case_id is not None:
+                st.info("Em đã mở popup sửa hồ sơ vừa lưu để anh bổ sung thông tin còn thiếu. Sau khi cập nhật, anh bấm gửi Web lại.")
+                open_case_edit_dialog(sqlite_db_path, saved_case_id)
+            else:
+                st.info("Anh bổ sung các trường còn thiếu ngay trên form nhập hồ sơ rồi bấm gửi Web lại.")
+            return
         try:
             with st.spinner("Đang mở trình duyệt để nhập Web..."):
-                result = asyncio.run(run_company_web_entry(output_values, web_url=""))
+                result = asyncio.run(run_company_web_entry(web_payload, web_url=""))
             st.success(result)
         except Exception as exc:
             st.error(f"Nhập Web thất bại: {exc}")
 
     if mail_clicked:
+        mail_payload, _saved_case_id, used_saved_case = _entry_action_payload(sqlite_db_path, output_values)
+        if used_saved_case:
+            st.info("Form đang trống nên app dùng hồ sơ vừa lưu để gửi mail, không gửi dữ liệu trắng.")
         try:
-            _send_entry_mail(output_values)
+            _send_entry_mail(mail_payload)
         except Exception as exc:
             st.error(f"Gửi mail thất bại: {exc}")
 

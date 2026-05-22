@@ -24,7 +24,8 @@ from src.database_manager import create_outbound_tracking_record, resolve_record
 from src.mail_service import send_appraisal_email
 from src.pdf_exporter import find_soffice_path
 from src.sqlite_store import update_case
-from src.web_automation import run_company_web_entry
+from src.web_automation import missing_web_entry_fields, run_company_web_entry
+from views.case_dialogs import open_case_edit_dialog
 
 
 def _ensure_output_dir_state() -> Path:
@@ -93,6 +94,31 @@ def _open_folder(path: str | Path) -> None:
                 subprocess.run(["xdg-open", str(folder)], check=True)
         except Exception:
             pass
+
+
+def _render_missing_web_fields(missing_fields: list[dict[str, str]]) -> None:
+    st.error("Hồ sơ còn thiếu thông tin bắt buộc để gửi yêu cầu định giá lên Web.")
+    st.dataframe(
+        [{"Trường cần bổ sung": item["label"], "Dữ liệu kiểm tra": item["source"]} for item in missing_fields],
+        width="stretch",
+        hide_index=True,
+    )
+
+
+def _ensure_web_ready_or_open_edit(
+    *,
+    export_case: dict[str, object],
+    db_path: Path | None,
+    selected_id: int,
+) -> bool:
+    missing_fields = missing_web_entry_fields(export_case)
+    if not missing_fields:
+        return True
+    _render_missing_web_fields(missing_fields)
+    if db_path is not None:
+        st.info("Em đã mở popup sửa hồ sơ để anh bổ sung các trường còn thiếu. Sau khi cập nhật, anh bấm gửi Web lại.")
+        open_case_edit_dialog(db_path, selected_id)
+    return False
 
 
 def _case_for_export(case: dict[str, object] | None, selected_folder: Path) -> dict[str, object] | None:
@@ -313,6 +339,12 @@ def handle_quick_action(
                 st.error(f"Gửi mail phát hành thất bại: {exc}")
 
     elif action_type == "web":
+        if not _ensure_web_ready_or_open_edit(
+            export_case=export_case,
+            db_path=db_path,
+            selected_id=selected_id,
+        ):
+            return
         if _persist_before_action(
             db_path=db_path,
             selected_id=selected_id,
@@ -452,6 +484,12 @@ def render(
     if web_clicked:
         if not export_case:
             st.error("Không tìm thấy hồ sơ để gửi lên Web.")
+        elif not _ensure_web_ready_or_open_edit(
+            export_case=export_case,
+            db_path=db_path,
+            selected_id=selected_id,
+        ):
+            return
         elif _persist_before_action(
             db_path=db_path,
             selected_id=selected_id,
