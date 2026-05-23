@@ -32,6 +32,23 @@ def _smtp_auth_error_message() -> str:
     )
 
 
+def _attach_sobo_logo(msg: EmailMessage) -> None:
+    logo_path = os.path.join(PROJECT_ROOT, "src", "templates", "logo.jpg")
+    if not os.path.exists(logo_path):
+        return
+    try:
+        with open(logo_path, "rb") as logo_file:
+            msg.get_payload()[1].add_related(
+                logo_file.read(),
+                maintype="image",
+                subtype="jpeg",
+                cid="<cenvalue_logo>",
+                filename="logo.jpg",
+            )
+    except Exception as exc:
+        logger.error(f"Loi khi dinh kem logo email so bo: {exc}")
+
+
 async def send_sobo_email_with_result(
     to_email: str,
     subject: str,
@@ -72,13 +89,7 @@ async def send_sobo_email_with_result(
             
             if html_body:
                 msg.add_alternative(html_body, subtype="html")
-                logo_path = os.path.join(PROJECT_ROOT, "src", "templates", "cen_value_logo.png")
-                if os.path.exists(logo_path):
-                    try:
-                        with open(logo_path, "rb") as f:
-                            msg.get_payload()[1].add_related(f.read(), maintype="image", subtype="png", cid="<cen_value_logo>", filename="cen_value_logo.png")
-                    except Exception as e:
-                        logger.error(f"Lỗi logo OAuth2: {e}")
+                _attach_sobo_logo(msg)
                         
             if attachment_path and os.path.exists(attachment_path):
                 filename = os.path.basename(attachment_path)
@@ -121,6 +132,19 @@ async def send_sobo_email_with_result(
                     cc_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in cc_emails if addr.strip()]
                     
                 attachments_payload = []
+                if html_body:
+                    logo_path = os.path.join(PROJECT_ROOT, "src", "templates", "logo.jpg")
+                    if os.path.exists(logo_path):
+                        with open(logo_path, "rb") as logo_file:
+                            logo_bytes = base64.b64encode(logo_file.read()).decode("utf-8")
+                        attachments_payload.append({
+                            "@odata.type": "#microsoft.graph.fileAttachment",
+                            "name": "logo.jpg",
+                            "contentType": "image/jpeg",
+                            "contentBytes": logo_bytes,
+                            "isInline": True,
+                            "contentId": "cenvalue_logo",
+                        })
                 if attachment_path and os.path.exists(attachment_path):
                     filename = os.path.basename(attachment_path)
                     content_bytes = base64.b64encode(open(attachment_path, "rb").read()).decode("utf-8")
@@ -183,14 +207,7 @@ async def send_sobo_email_with_result(
 
     if html_body:
         msg.add_alternative(html_body, subtype="html")
-        
-        logo_path = os.path.join(PROJECT_ROOT, "src", "templates", "cen_value_logo.png")
-        if os.path.exists(logo_path):
-            try:
-                with open(logo_path, "rb") as f:
-                    msg.get_payload()[1].add_related(f.read(), maintype="image", subtype="png", cid="<cen_value_logo>", filename="cen_value_logo.png")
-            except Exception as e:
-                logger.error(f"Loi khi dinh kem logo: {e}")
+        _attach_sobo_logo(msg)
 
     if attachment_path and os.path.exists(attachment_path):
         filename = os.path.basename(attachment_path)

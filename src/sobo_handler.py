@@ -1,6 +1,8 @@
 import os
 import logging
+import html
 import unidecode
+from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from uuid import uuid4
@@ -24,26 +26,103 @@ SOBO_MAPPING = {
     "Sobo.binhduong@gmail.com": ["bình dương", "binh duong", "bình phước", "binh phuoc", "bà rịa", "vũng tàu", "ba ria", "vung tau"],
     "Sobo.cantho@gmail.com": ["cần thơ", "can tho", "tiền giang", "tien giang", "bến tre", "ben tre", "vĩnh long", "vinh long", "trà vinh", "tra vinh", "hậu giang", "hau giang", "sóc trăng", "soc trang", "đồng tháp", "dong thap", "an giang", "kiên giang", "kien giang", "bạc liêu", "bac lieu", "cà mau", "ca mau"]
 }
+SOBO_EMAIL_OPTIONS = tuple(SOBO_MAPPING.keys())
+SOBO_ASSET_TYPE = "Quyền sử dụng đất và CTXD (nếu có hoàn công trên sổ)"
 
-SIGNATURE_HTML = """
-<br><br>
-<div style="font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5;">
-    <span style="color: #1f497d;"><i>Trân trọng!</i></span><br>
-    <span style="color: #e36c0a; font-size: 12pt;"><b>Phạm Ngọc Thanh Trường</b></span><br>
-    <span style="color: #0070c0;"><b>Trưởng phòng kinh doanh khu vực Tây Nguyên</b></span><br>
-    <span style="color: #0070c0;">Mobile: 0905.22.69.68 - 0913.503.051</span><br>
-    <span style="color: #0070c0;">Email: <a href="mailto:truongpnt@cenvalue.vn" style="color: #0563c1;">truongpnt@cenvalue.vn</a></span><br>
-    <span style="color: #1f497d;">***************************************************</span><br><br>
-    <span style="color: #0070c0; font-size: 12pt;"><b>CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ - CEN <span style="color: #e36c0a;">VALUE</span></b></span><br>
-    <span style="color: #0070c0;"><u>Trụ sở chính</u></span><br>
-    <span style="color: #0070c0;">Địa chỉ: Tầng 4, Tòa nhà Golden Palm, số 21 Lê Văn Lương, Nhân Chính, Thanh Xuân, Hà Nội</span><br>
-    <span style="color: #0070c0;">Tel: (+8424) 32222 786 (Ext: 235) - Fax: (+8424) 32222 787</span><br>
-    <span style="color: #0070c0;"><u>Chi nhánh tại Đà Nẵng</u></span><br>
-    <span style="color: #0070c0;">Địa chỉ: Tầng 2, Số 06 Đường Trần Phú, Q. Hải Châu, Tp Đà Nẵng</span><br>
-    <span style="color: #0070c0;">Tel: (0236) 3 65 66 61</span><br>
-    <span style="color: #0070c0;">Website: <a href="http://www.thamdinhgiatheky.vn" style="color: #0563c1;">http://www.thamdinhgiatheky.vn</a></span>
-</div>
+
+def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
+    source = str(sobo.get("source", ""))
+    so_thua = str(sobo.get("so_thua", ""))
+    so_to = str(sobo.get("so_to", ""))
+    dia_chi = str(sobo.get("dia_chi", ""))
+    link = str(sobo.get("link", ""))
+    parsed_link = urlparse(link)
+    href = link if parsed_link.scheme in {"http", "https"} else "#"
+
+    body = (
+        "Kính gửi Anh/Chị,\n\n"
+        "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
+        "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
+        f"- Nguồn khách hàng: {source}\n"
+        f"- Loại tài sản: {SOBO_ASSET_TYPE}\n"
+        f"- Số thửa đất: {so_thua}\n"
+        f"- Số tờ bản đồ: {so_to}\n"
+        f"- Địa chỉ tài sản: {dia_chi}\n"
+        f"- Định vị tài sản: {link}\n\n"
+        "Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để "
+        "Phòng Kinh Doanh tiếp tục làm việc với khách hàng.\n\n"
+        "Trân trọng cảm ơn Anh/Chị.\n\n"
+        "PHẠM NGỌC THANH TRƯỜNG\n"
+        "Trưởng phòng Kinh Doanh Khu vực Tây Nguyên\n"
+        "Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE\n"
+        "Điện thoại: 0905 22 69 68 - 0913 503 051\n"
+        "Email: truongpnt@cenvalue.vn"
+    )
+
+    safe_source = html.escape(source)
+    safe_so_thua = html.escape(so_thua)
+    safe_so_to = html.escape(so_to)
+    safe_dia_chi = html.escape(dia_chi)
+    safe_href = html.escape(href, quote=True)
+    safe_asset_type = html.escape(SOBO_ASSET_TYPE)
+
+    body_html = f"""
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fb;margin:0;padding:20px 0;font-family:Arial,'Segoe UI',sans-serif;color:#11284d;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        <tr>
+          <td style="padding:15px 28px;background:#ffffff;">
+            <img src="cid:cenvalue_logo" width="170" alt="CENVALUE" style="display:block;width:170px;max-width:100%;height:auto;border:0;">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:19px 28px;background:#008e96;color:#ffffff;font-size:14px;font-weight:bold;line-height:1.4;">
+            YÊU CẦU THAM KHẢO GIÁ TRỊ SƠ BỘ TÀI SẢN
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;font-size:15px;line-height:1.55;color:#283952;">
+            <p style="margin:0 0 18px;">Kính gửi Anh/Chị,</p>
+            <p style="margin:0 0 22px;">Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;">
+              <tr>
+                <td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#006a70;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td>
+              </tr>
+              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_thua}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_to}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_dia_chi}</td></tr>
+            </table>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e2e8f0;background:#f7fafc;border-radius:7px;">
+              <tr>
+                <td style="padding:14px 16px;">
+                  <strong style="display:block;font-size:14px;color:#11284d;">Định vị tài sản</strong>
+                  <span style="font-size:13px;color:#64748b;">Đường dẫn Google Maps từ quy trình /sobo</span>
+                </td>
+                <td align="right" style="padding:14px 16px;">
+                  <a href="{safe_href}" style="display:inline-block;padding:10px 14px;border-radius:6px;background:#008e96;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;">Xem vị trí tài sản</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 18px;">Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để Phòng Kinh Doanh tiếp tục làm việc với khách hàng.</p>
+            <p style="margin:0 0 24px;">Trân trọng cảm ơn Anh/Chị.</p>
+            <div style="padding-top:20px;border-top:1px solid #e2e8f0;font-size:13px;line-height:1.5;color:#45566f;">
+              <div style="font-size:16px;font-weight:bold;color:#006a70;">PHẠM NGỌC THANH TRƯỜNG</div>
+              <div style="font-weight:bold;color:#d39a58;margin-bottom:6px;">Trưởng phòng Kinh Doanh Khu vực Tây Nguyên</div>
+              <div>Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE</div>
+              <div>Điện thoại: 0905 22 69 68 - 0913 503 051</div>
+              <div>Email: <a href="mailto:truongpnt@cenvalue.vn" style="color:#006a70;text-decoration:none;">truongpnt@cenvalue.vn</a></div>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 """
+    return body, body_html
 
 def find_department_email(address: str) -> str:
     if not address: return None
@@ -55,6 +134,18 @@ def find_department_email(address: str) -> str:
             if prov.lower() in addr_lower or unidecode.unidecode(prov.lower()) in addr_norm:
                 return email
     return None
+
+
+def build_department_email_keyboard(suggested_email: str | None) -> InlineKeyboardMarkup:
+    keyboard = []
+    for index, email in enumerate(SOBO_EMAIL_OPTIONS):
+        prefix = "✅ " if email == suggested_email else "📧 "
+        label = f"{prefix}{email}"
+        if email == suggested_email:
+            label += " (gợi ý)"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"sobo_email_{index}")])
+    keyboard.append([InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")])
+    return InlineKeyboardMarkup(keyboard)
 
 async def cmd_sobo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -180,13 +271,13 @@ async def _process_sobo_extracted_file(update: Update, context: ContextTypes.DEF
         context.user_data['sobo']['dia_chi'] = dia_chi
         context.user_data['sobo']['file_path'] = file_path
         
-        email = find_department_email(dia_chi)
-        if email:
-            context.user_data['sobo']['email'] = email
-            email_info = f"✅ Đã nhận diện Tỉnh/Thành phố. Phòng ban phụ trách: **{email}**"
+        suggested_email = find_department_email(dia_chi)
+        if suggested_email:
+            email_info = f"✅ Đã nhận diện Tỉnh/Thành phố. Email gợi ý: **{suggested_email}**"
         else:
-            context.user_data['sobo']['email'] = "Chưa xác định"
-            email_info = "⚠️ Không thể tự động nhận diện Tỉnh/Thành phố. Vui lòng kiểm tra lại sau."
+            email_info = "⚠️ Không thể tự động nhận diện Tỉnh/Thành phố."
+        context.user_data['sobo']['suggested_email'] = suggested_email
+        context.user_data['sobo'].pop('email', None)
 
         await update.message.reply_text(
             f"Đã trích xuất thành công:\n"
@@ -194,14 +285,40 @@ async def _process_sobo_extracted_file(update: Update, context: ContextTypes.DEF
             f"- Tờ: {so_to}\n"
             f"- Địa chỉ: {dia_chi}\n\n"
             f"{email_info}\n\n"
-            f"📍 Tiếp theo, vui lòng gửi **Link định vị tài sản** (Google Maps):",
-            parse_mode="Markdown"
+            "📧 Vui lòng chọn **email nhận sơ bộ** từ danh sách dưới đây:",
+            reply_markup=build_department_email_keyboard(suggested_email),
+            parse_mode="Markdown",
         )
-        return SOBO_LOC
+        return SOBO_DOC
     except Exception as e:
         logger.error(f"Lỗi extract sơ bộ: {e}")
         await update.message.reply_text("❌ Có lỗi xảy ra trong quá trình nhận diện AI. Vui lòng gửi lại GCN rõ nét hơn.")
         return SOBO_DOC
+
+
+async def sobo_select_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    try:
+        index = int(query.data.removeprefix("sobo_email_"))
+        email = SOBO_EMAIL_OPTIONS[index]
+    except (ValueError, IndexError):
+        await query.edit_message_text("❌ Lựa chọn email không hợp lệ. Vui lòng bắt đầu lại bằng /sobo.")
+        context.user_data.pop('sobo', None)
+        return ConversationHandler.END
+
+    context.user_data.setdefault('sobo', {})['email'] = email
+    await query.edit_message_text(
+        f"✅ Đã chọn email nhận sơ bộ: {email}\n\n"
+        "📍 Tiếp theo, vui lòng gửi Link định vị tài sản (Google Maps):"
+    )
+    return SOBO_LOC
+
+
+async def sobo_require_email_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📧 Vui lòng chọn email nhận sơ bộ bằng nút phía trên trước khi gửi link định vị.")
+    return SOBO_DOC
+
 
 async def sobo_receive_loc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loc_link = update.message.text
@@ -223,15 +340,7 @@ async def sobo_receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Generate Preview
     subject = f"[SƠ BỘ] - {source} - Thửa đất số {sobo.get('so_thua')}, tờ bản đồ số {sobo.get('so_to')}; tại địa chỉ {sobo.get('dia_chi')}"
-    body = f"Kính gửi anh chị,\n\nEm gửi tài sản tại Thửa đất số {sobo.get('so_thua')}, tờ bản đồ số {sobo.get('so_to')}; tại địa chỉ {sobo.get('dia_chi')}. Kính nhờ anh, chị hỗ trợ sơ bộ tài sản này giúp em nhé, Em cảm ơn!\n\nĐịnh vị ts: {sobo.get('link')}"
-    
-    body_html = f"""
-    <div style="font-family: Arial, sans-serif; font-size: 11pt;">
-        <p>Kính gửi anh chị,</p>
-        <p>Em gửi tài sản tại <b>Thửa đất số {sobo.get('so_thua')}, tờ bản đồ số {sobo.get('so_to')}; tại địa chỉ {sobo.get('dia_chi')}</b>. Kính nhờ anh, chị hỗ trợ sơ bộ tài sản này giúp em nhé, Em cảm ơn!</p>
-        <p>Định vị ts: <a href="{sobo.get('link')}">{sobo.get('link')}</a></p>
-    </div>
-    """ + SIGNATURE_HTML
+    body, body_html = build_sobo_email_content(sobo)
     
     sobo['subject'] = subject
     sobo['body'] = body
@@ -243,7 +352,6 @@ async def sobo_receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    import html
     preview_msg = (
         "📧 <b>BẢN XEM TRƯỚC EMAIL:</b>\n\n"
         f"<b>Người nhận:</b> {html.escape(str(email))}\n"
@@ -313,7 +421,9 @@ def get_sobo_conversation_handler() -> ConversationHandler:
         states={
             SOBO_DOC: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_doc),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_loc)
+                CallbackQueryHandler(sobo_select_email, pattern="^sobo_email_"),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_require_email_selection)
             ],
             SOBO_LOC: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_loc)],
             SOBO_SOURCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_source)],
