@@ -48,6 +48,7 @@ from src.telegram_server import (
     listener_status_command,
     missing_required_fields,
     process_land_certificate_file,
+    register_bot_commands,
     save_record,
     send_email,
     search_dropdown_options,
@@ -163,6 +164,18 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         handlers = telegram_app.handlers[0]
         self.assertGreaterEqual(len(handlers), 4)
         self.assertTrue(any(isinstance(handler, ConversationHandler) for handler in handlers))
+
+    async def test_register_bot_commands_enables_command_menu(self) -> None:
+        telegram_app = Mock()
+        telegram_app.bot = Mock()
+        telegram_app.bot.set_my_commands = AsyncMock()
+        telegram_app.bot.set_chat_menu_button = AsyncMock()
+
+        await register_bot_commands(telegram_app)
+
+        commands = telegram_app.bot.set_my_commands.await_args.args[0]
+        self.assertEqual([command.command for command in commands], ["sobo", "phathanh", "nhap", "tra_cuu", "gui_mail", "cancel", "start"])
+        telegram_app.bot.set_chat_menu_button.assert_awaited_once()
 
     async def test_webhook_processes_update_payload(self) -> None:
         app = FastAPI()

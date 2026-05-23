@@ -22,7 +22,7 @@ import aiosqlite
 logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from telegram import Document, InlineKeyboardButton, InlineKeyboardMarkup, PhotoSize, Update
+from telegram import BotCommand, Document, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonCommands, PhotoSize, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -178,6 +178,15 @@ TELEGRAM_DROPDOWN_FIELDS = {
     "valuation_staff": "valuation_staff",
 }
 MAX_DROPDOWN_MATCHES = 0
+TELEGRAM_BOT_COMMANDS = [
+    BotCommand("sobo", "G\u1eedi y\u00eau c\u1ea7u tham kh\u1ea3o gi\u00e1 tr\u1ecb s\u01a1 b\u1ed9"),
+    BotCommand("phathanh", "Ph\u00e1t h\u00e0nh ch\u1ee9ng th\u01b0 th\u1ea9m \u0111\u1ecbnh"),
+    BotCommand("nhap", "Nh\u1eadp h\u1ed3 s\u01a1 m\u1edbi"),
+    BotCommand("tra_cuu", "Tra c\u1ee9u h\u1ed3 s\u01a1 theo s\u1ed1 h\u1ee3p \u0111\u1ed3ng"),
+    BotCommand("gui_mail", "G\u1eedi mail h\u1ed3 s\u01a1 theo s\u1ed1 h\u1ee3p \u0111\u1ed3ng"),
+    BotCommand("cancel", "H\u1ee7y thao t\u00e1c \u0111ang th\u1ef1c hi\u1ec7n"),
+    BotCommand("start", "Xem h\u01b0\u1edbng d\u1eabn b\u1eaft \u0111\u1ea7u"),
+]
 
 
 @dataclass(frozen=True)
@@ -1882,6 +1891,11 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logging.getLogger(__name__).error("Telegram error: %s", context.error, exc_info=context.error)
 
 
+async def register_bot_commands(telegram_app: Application) -> None:
+    await telegram_app.bot.set_my_commands(TELEGRAM_BOT_COMMANDS)
+    await telegram_app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+
+
 def build_telegram_application(token: str) -> Application:
     telegram_app = Application.builder().token(token).updater(None).build()
     conversation = ConversationHandler(
@@ -1950,6 +1964,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.telegram_settings = settings
 
     await telegram_app.initialize()
+    await register_bot_commands(telegram_app)
     await telegram_app.bot.set_webhook(
         url=settings.webhook_endpoint,
         allowed_updates=Update.ALL_TYPES,
