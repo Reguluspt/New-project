@@ -1167,7 +1167,7 @@ async def poll_unseen_once(settings: MailListenerSettings) -> int:
                     if settings.subject_filter.casefold() not in haystack:
                         continue
                 match = await process_incoming_email(raw, uid=uid, thread_id=thread_id, settings=settings)
-                result = "replied" if match is not None and match.score > MATCH_THRESHOLD else "skipped"
+                result = "replied" if match is not None and (match.score > MATCH_THRESHOLD or match.reason == "certificate_reply") else "skipped"
                 await mark_email_processed(
                     settings.records_db_path,
                     incoming,
@@ -1215,7 +1215,7 @@ async def poll_unseen_once(settings: MailListenerSettings) -> int:
                     )
                     continue
             match = await process_incoming_email(raw, uid=uid, settings=settings)
-            result = "replied" if match is not None and match.score > MATCH_THRESHOLD else "skipped"
+            result = "replied" if match is not None and (match.score > MATCH_THRESHOLD or match.reason == "certificate_reply") else "skipped"
             await mark_email_processed(
                 settings.records_db_path,
                 incoming,
