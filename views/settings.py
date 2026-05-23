@@ -5,7 +5,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from src.app_config import DATA_DIR, SQLITE_DATABASE, AI_CONFIG_PATH, load_ai_config
+from src.app_config import DATA_DIR, SQLITE_DATABASE
 from src.backup_service import create_backup
 from src.excel_writer import EXCEL_DROPDOWN_LABELS, load_dropdown_options, save_dropdown_options
 from src.pdf_exporter import find_soffice_path
@@ -92,15 +92,10 @@ def render_system_health_check(template_config: dict[str, object]) -> None:
         st.caption("Cần cài đặt LibreOffice để có thể xuất file PDF.")
 
     # 4. AI Provider Check
-    ai_config = load_ai_config(AI_CONFIG_PATH)
-    provider = str(ai_config.get("provider", "Gemini"))
-    providers_info = ai_config.get("providers", {})
-    if isinstance(providers_info, dict):
-        p_info = providers_info.get(provider, {})
-        if isinstance(p_info, dict) and p_info.get("api_key"):
-            st.success(f"AI Provider ({provider}): Cấu hình OK")
-        else:
-            st.warning(f"AI Provider ({provider}): CHƯA CÓ API KEY")
+    if os.getenv("GEMINI_API_KEY", "").strip():
+        st.success("AI Provider (Gemini): Cấu hình OK từ API.env")
+    else:
+        st.warning("AI Provider (Gemini): CHƯA CÓ GEMINI_API_KEY trong API.env")
     
     st.write("---")
     if st.button("Sao lưu dữ liệu ngay", width="stretch"):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from collections.abc import Callable
 
 import streamlit as st
 
@@ -60,6 +61,13 @@ def render_app_theme() -> None:
                 color: var(--app-text);
             }
 
+            header[data-testid="stHeader"],
+            [data-testid="stToolbar"],
+            [data-testid="stStatusWidget"],
+            #MainMenu {
+                display: none !important;
+            }
+
             section[data-testid="stSidebar"] {
                 background: var(--app-surface);
                 border-right: 1px solid var(--app-outline-soft);
@@ -73,7 +81,7 @@ def render_app_theme() -> None:
             }
 
             .block-container {
-                padding-top: 5.4rem !important;
+                padding-top: 5.6rem !important;
                 padding-left: 1.9rem !important;
                 padding-right: 1.9rem !important;
                 padding-bottom: 2rem !important;
@@ -204,6 +212,15 @@ def render_app_theme() -> None:
                 box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.16) !important;
             }
 
+            [data-testid="InputInstructions"] {
+                display: none !important;
+            }
+
+            input[type="password"]::-ms-reveal,
+            input[type="password"]::-ms-clear {
+                display: none;
+            }
+
             label, div[data-testid="stWidgetLabel"] p {
                 color: var(--app-text) !important;
                 font-size: 13px !important;
@@ -212,7 +229,8 @@ def render_app_theme() -> None:
 
             .stButton > button,
             .stDownloadButton > button,
-            button[kind="primary"] {
+            button[kind="primary"],
+            button[data-testid="stBaseButton-primaryFormSubmit"] {
                 border-radius: 8px !important;
                 border: 1px solid var(--app-primary) !important;
                 background: var(--app-primary) !important;
@@ -223,7 +241,8 @@ def render_app_theme() -> None:
             }
 
             .stButton > button:hover,
-            .stDownloadButton > button:hover {
+            .stDownloadButton > button:hover,
+            button[data-testid="stBaseButton-primaryFormSubmit"]:hover {
                 background: var(--app-primary-strong) !important;
                 border-color: var(--app-primary-strong) !important;
                 color: #ffffff !important;
@@ -242,7 +261,7 @@ def render_app_theme() -> None:
                 border: 1px solid var(--app-outline-soft) !important;
             }
 
-            .app-topbar {
+            .st-key-app_header {
                 position: fixed;
                 top: 0;
                 left: 0;
@@ -258,6 +277,19 @@ def render_app_theme() -> None:
                 align-items: center;
                 justify-content: space-between;
                 gap: 20px;
+                flex-wrap: nowrap !important;
+                overflow-x: auto;
+                overflow-y: hidden;
+                height: 64px;
+                box-sizing: border-box;
+            }
+
+            .st-key-app_header [data-testid="stVerticalBlock"] {
+                gap: 0;
+            }
+
+            .st-key-app_header > * {
+                flex: 0 0 auto;
             }
 
             .app-brand {
@@ -328,6 +360,29 @@ def render_app_theme() -> None:
                 font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
             }
 
+            .st-key-app_header .stButton > button {
+                min-height: 42px !important;
+                border: 0 !important;
+                box-shadow: none !important;
+                padding: 0 10px !important;
+                white-space: nowrap;
+            }
+
+            .st-key-app_header .stButton > button[kind="secondary"] {
+                background: transparent !important;
+                color: #5d6b82 !important;
+            }
+
+            .st-key-app_header .stButton > button[kind="primary"] {
+                background: rgba(0, 82, 204, 0.1) !important;
+                color: var(--app-primary) !important;
+            }
+
+            .st-key-app_header .stButton > button:hover {
+                background: var(--app-primary-soft) !important;
+                color: var(--app-primary) !important;
+            }
+
             .app-top-actions {
                 display: flex;
                 align-items: center;
@@ -376,6 +431,36 @@ def render_app_theme() -> None:
                 color: var(--app-primary);
                 font-weight: 700;
                 white-space: nowrap;
+            }
+
+            .login-brand {
+                width: min(440px, calc(100vw - 32px));
+                margin: clamp(3rem, 12vh, 8rem) auto 18px;
+                text-align: center;
+            }
+
+            .login-title {
+                color: var(--app-primary);
+                font-size: 28px;
+                line-height: 36px;
+                font-weight: 750;
+            }
+
+            .login-subtitle {
+                color: var(--app-muted);
+                font-size: 14px;
+                line-height: 22px;
+                margin-top: 6px;
+            }
+
+            .st-key-login_panel {
+                width: min(420px, calc(100vw - 32px));
+                margin: 0 auto;
+                padding: 26px 26px 18px;
+                background: var(--app-surface);
+                border: 1px solid var(--app-outline-soft);
+                border-radius: 8px;
+                box-shadow: var(--app-shadow);
             }
 
             .dashboard-kpi-grid {
@@ -496,9 +581,9 @@ def render_app_theme() -> None:
             }
 
             @media (max-width: 900px) {
-                .app-topbar {
+                .st-key-app_header {
                     align-items: center;
-                    overflow-x: auto;
+                    padding: 0 12px;
                 }
                 .app-title, .app-search, .app-divider, .app-brand-sub, .app-account {
                     display: none;
@@ -527,39 +612,50 @@ def render_app_theme() -> None:
     )
 
 
-def render_app_header(current_user: str) -> None:
+def render_app_header(current_user: str, active_view: str, *, on_logout: Callable[[], None]) -> str:
     initials = "".join(part[:1] for part in current_user.split()[:2]).upper() or "AD"
-    st.markdown(
-        f"""
-        <div class="app-topbar">
+    nav_items = (
+        ("dashboard", "Dashboard", ":material/dashboard:"),
+        ("entry", "Nhập hồ sơ", ":material/document_scanner:"),
+        ("cases", "Quản lý hồ sơ", ":material/folder_shared:"),
+        ("organizations", "Tổ chức", ":material/corporate_fare:"),
+        ("delivery", "Chuyển phát", ":material/local_shipping:"),
+        ("templates", "Templates", ":material/description:"),
+        ("settings", "Cấu hình", ":material/settings:"),
+    )
+    with st.container(key="app_header", horizontal=True, vertical_alignment="center", gap="small"):
+        st.markdown(
+            f"""
             <div class="app-brand">
                 <div>
                     <div class="app-brand-main">Hệ Thống Thẩm Định</div>
-                    <div class="app-brand-sub">Phòng Quản Lý Tài Chính</div>
+                    <div class="app-brand-sub">Phòng Kinh Doanh</div>
                 </div>
-                <div class="app-divider"></div>
-                <nav class="app-nav" aria-label="Điều hướng chính">
-                    <span class="app-nav-item active"><span class="material-symbols-outlined">dashboard</span><span>Dashboard</span></span>
-                    <span class="app-nav-item"><span class="material-symbols-outlined">document_scanner</span><span>Nhập Hồ Sơ</span></span>
-                    <span class="app-nav-item"><span class="material-symbols-outlined">folder_shared</span><span>Quản Lý Hồ Sơ</span></span>
-                    <span class="app-nav-item"><span class="material-symbols-outlined">settings</span><span>Cấu Hình</span></span>
-                    <span class="app-nav-item"><span class="material-symbols-outlined">description</span><span>Templates</span></span>
-                </nav>
             </div>
-            <div class="app-top-actions">
-                <div class="app-search">
-                    <span class="material-symbols-outlined">search</span>
-                    <span>Tìm kiếm...</span>
-                </div>
-                <span class="app-icon"><span class="material-symbols-outlined">notifications</span></span>
-                <span class="app-icon"><span class="material-symbols-outlined">help</span></span>
-                <span class="app-avatar">{html.escape(initials[:2])}</span>
-                <span class="app-account">{html.escape(current_user)}</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
+        for view_key, label, icon in nav_items:
+            if st.button(
+                label,
+                icon=icon,
+                type="primary" if active_view == view_key else "secondary",
+                width="content",
+                key=f"header_nav_{view_key}",
+            ):
+                st.session_state["active_view"] = view_key
+                st.rerun()
+        st.markdown(f'<span class="app-avatar">{html.escape(initials[:2])}</span>', unsafe_allow_html=True)
+        if st.button(
+            "Đăng xuất",
+            icon=":material/logout:",
+            type="secondary",
+            width="content",
+            key="header_logout",
+        ):
+            on_logout()
+            st.rerun()
+    return active_view
 
 
 def _format_million(value: float) -> str:

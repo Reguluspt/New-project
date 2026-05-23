@@ -7,7 +7,7 @@ from typing import Any
 
 import streamlit as st
 
-from src.app_config import AI_CONFIG_PATH, apply_extraction_collection_to_form, apply_extraction_to_form, load_ai_config
+from src.app_config import apply_extraction_collection_to_form, apply_extraction_to_form
 from src.extractor import extract_land_certificate
 from src.gemini_extractor import extract_land_certificate_with_gemini
 from src.models import LandCertificateMultiExtraction
@@ -155,12 +155,10 @@ def extract_with_fallback(
                 if not _is_temporary_model_error(exc):
                     raise
 
-        saved_ai_config = load_ai_config(AI_CONFIG_PATH)
-        saved_openai = dict(saved_ai_config.get("providers", {}).get("OpenAI", {}))
-        openai_key = os.getenv("OPENAI_API_KEY", "").strip() or str(saved_openai.get("api_key") or "").strip()
+        openai_key = os.getenv("OPENAI_API_KEY", "").strip()
         openai_model = (
             os.getenv("OPENAI_FALLBACK_MODEL", "").strip()
-            or str(saved_openai.get("model") or "").strip()
+            or os.getenv("OPENAI_MODEL", "").strip()
             or "gpt-4.1-mini"
         )
         if openai_key:
