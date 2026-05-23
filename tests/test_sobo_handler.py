@@ -8,13 +8,24 @@ from telegram.ext import ConversationHandler
 
 from src.models import ExtractedValue, LandCertificateExtraction
 from src.sobo_handler import (
+    SOBO_ASSET_SELECT,
     SOBO_DOC,
     SOBO_EMAIL_OPTIONS,
     SOBO_LOC,
+    SOBO_MACHINERY_DOC,
+    SOBO_MACHINERY_EMAIL,
+    SOBO_MACHINERY_NAME,
+    SOBO_CONFIRM,
     _process_sobo_extracted_file,
+    build_machinery_email_content,
     build_sobo_email_content,
     build_department_email_keyboard,
+    cmd_sobo,
+    sobo_receive_machinery_doc,
+    sobo_receive_machinery_name,
     sobo_require_email_selection,
+    sobo_require_machinery_file,
+    sobo_select_asset_type,
     sobo_select_email,
 )
 
@@ -24,6 +35,20 @@ def _value(value: str) -> ExtractedValue:
 
 
 class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_command_starts_with_two_asset_type_choices(self) -> None:
+        update = Mock()
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {}
+
+        state = await cmd_sobo(update, context)
+
+        self.assertEqual(state, SOBO_ASSET_SELECT)
+        keyboard = update.message.reply_text.await_args.kwargs["reply_markup"]
+        labels = [row[0].text for row in keyboard.inline_keyboard]
+        self.assertIn("🏠 Bất động sản", labels)
+        self.assertIn("⚙️ Máy móc thiết bị", labels)
+
     def test_email_content_uses_approved_template_and_escapes_values(self) -> None:
         body, body_html = build_sobo_email_content(
             {
@@ -49,6 +74,15 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn('href="#"', body_html)
         self.assertNotIn('href="javascript:', body_html)
+
+    def test_machinery_email_content_only_uses_equipment_name_field(self) -> None:
+        body, body_html = build_machinery_email_content({"equipment_name": "Máy cắt <CNC>"})
+
+        self.assertIn("Máy móc thiết bị", body)
+        self.assertIn("Tên thiết bị: Máy cắt <CNC>", body)
+        self.assertIn("Máy cắt &lt;CNC&gt;", body_html)
+        self.assertNotIn("Số thửa đất", body_html)
+        self.assertNotIn("Định vị tài sản", body_html)
 
     def test_email_keyboard_marks_suggested_destination(self) -> None:
         suggested = SOBO_EMAIL_OPTIONS[0]
@@ -95,6 +129,90 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state, SOBO_LOC)
         self.assertEqual(context.user_data["sobo"]["email"], SOBO_EMAIL_OPTIONS[2])
         update.callback_query.edit_message_text.assert_awaited_once()
+
+    async def test_machinery_asset_branch_requests_file_attachment(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_asset_machinery"
+        context = Mock()
+        context.user_data = {"sobo": {}}
+
+        state = await sobo_select_asset_type(update, context)
+
+        self.assertEqual(state, SOBO_MACHINERY_DOC)
+        self.assertEqual(context.user_data["sobo"]["asset_type"], "machinery")
+        message = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("không được quét hoặc phân tích", message)
+
+    async def test_machinery_uploaded_file_is_kept_as_attachment_without_scanning(self) -> None:
+        update = Mock()
+        update.message.document.file_id = "file-1"
+        update.message.document.file_name = "may_cat.pdf"
+        update.message.photo = None
+        update.message.reply_text = AsyncMock()
+        telegram_file = Mock()
+        telegram_file.download_to_drive = AsyncMock()
+        context = Mock()
+        context.user_data = {"sobo": {"asset_type": "machinery"}}
+        context.bot.get_file = AsyncMock(return_value=telegram_file)
+
+        with patch("src.sobo_handler.extract_land_certificate_with_gemini") as extract:
+            state = await sobo_receive_machinery_doc(update, context)
+
+        self.assertEqual(state, SOBO_MACHINERY_NAME)
+        self.assertEqual(context.user_data["sobo"]["attachment_name"], "may_cat.pdf")
+        telegram_file.download_to_drive.assert_awaited_once()
+        extract.assert_not_called()
+
+    async def test_machinery_name_prompts_for_email_selection(self) -> None:
+        update = Mock()
+        update.message.text = "Máy cắt CNC"
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {"sobo": {"asset_type": "machinery"}}
+
+        state = await sobo_receive_machinery_name(update, context)
+
+        self.assertEqual(state, SOBO_MACHINERY_EMAIL)
+        self.assertEqual(context.user_data["sobo"]["equipment_name"], "Máy cắt CNC")
+        self.assertIsNotNone(update.message.reply_text.await_args.kwargs["reply_markup"])
+
+    async def test_machinery_branch_rejects_name_before_file_upload(self) -> None:
+        update = Mock()
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+
+        state = await sobo_require_machinery_file(update, context)
+
+        self.assertEqual(state, SOBO_MACHINERY_DOC)
+        prompt = update.message.reply_text.await_args.args[0]
+        self.assertIn("tải lên file", prompt)
+
+    async def test_machinery_email_selection_opens_send_preview_without_location_step(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_email_0"
+        context = Mock()
+        context.user_data = {
+            "sobo": {
+                "asset_type": "machinery",
+                "equipment_name": "Máy cắt CNC",
+                "attachment_name": "may_cat.pdf",
+            }
+        }
+
+        state = await sobo_select_email(update, context)
+
+        self.assertEqual(state, SOBO_CONFIRM)
+        self.assertEqual(
+            context.user_data["sobo"]["subject"],
+            "[SƠ BỘ] - Máy móc thiết bị - Máy cắt CNC",
+        )
+        preview = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("may_cat.pdf", preview)
+        self.assertNotIn("Link định vị", preview)
 
     async def test_location_text_before_email_selection_is_rejected(self) -> None:
         update = Mock()

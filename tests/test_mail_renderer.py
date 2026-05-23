@@ -41,6 +41,8 @@ class MailRendererTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("background-color:#ffc000", html)
         self.assertIn("background-color:#ffff00", html)
         self.assertIn("color:#ff0000", html)
+        self.assertIn("color:#000000; background-color:#ffffff", html)
+        self.assertNotIn("color:#0057d8", html)
         self.assertIn("010/2026/N04-1045/DN", html)
         self.assertNotIn("Số chứng thư", html)
         self.assertIn("BDS dac thu khac", html)

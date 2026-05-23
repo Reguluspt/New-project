@@ -39,6 +39,11 @@ from src.database_manager import (
 from src.mail_service import GmailSmtpSettings
 
 
+def _html_part(message: EmailMessage) -> str:
+    part = next(part for part in message.walk() if part.get_content_type() == "text/html")
+    return part.get_payload(decode=True).decode("utf-8")
+
+
 def _raw_email() -> bytes:
     message = EmailMessage()
     message["From"] = "Son <son@example.com>"
@@ -181,9 +186,11 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message["To"], "reply@example.com")
         self.assertIn(AUTO_REPLY_CC, message["Cc"])
         self.assertEqual(message["In-Reply-To"], "<msg-1@example.com>")
-        html = message.get_payload()[1].get_payload(decode=True).decode("utf-8")
+        html = _html_part(message)
         self.assertIn("Gửi Sơn,", html)
         self.assertIn("27.500.000", html)
+        self.assertIn("cid:logo_cenvalue", html)
+        self.assertIn("Content-ID: <logo_cenvalue>", message.as_string())
 
     def test_build_professional_forward_message_sets_thread_headers(self) -> None:
         incoming = parse_incoming_email(_raw_admin_reply(), uid="21")
@@ -228,11 +235,13 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message["Cc"], "manager@example.com, pro@example.com, control@example.com")
         self.assertEqual(message["In-Reply-To"], "<reply-1@example.com>")
         self.assertIn("<reply-1@example.com>", message["References"])
-        html = message.get_payload()[1].get_payload(decode=True).decode("utf-8")
+        html = _html_part(message)
         self.assertIn("CT-2026-0007", html)
         self.assertNotIn("N04-0007", html)
         self.assertIn("Em phân chuyên viên định giá tài sản", html)
         self.assertNotIn("Số chứng thư", html)
+        self.assertIn("cid:logo_cenvalue", html)
+        self.assertIn("Content-ID: <logo_cenvalue>", message.as_string())
 
     async def test_update_matched_record_sets_contract_and_ready_status(self) -> None:
         with TemporaryDirectory() as tmpdir:

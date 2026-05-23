@@ -184,6 +184,21 @@ def render_mail_html(data_dict: Mapping[str, Any]) -> str:
     return render_appraisal_email(_mail_data_from_payload(data_dict))
 
 
+def attach_inline_logo(message: EmailMessage) -> None:
+    logo_path = PROJECT_ROOT / "src" / "templates" / "logo.jpg"
+    if not logo_path.exists():
+        return
+    html_part = message.get_payload()[-1]
+    with logo_path.open("rb") as logo_file:
+        html_part.add_related(
+            logo_file.read(),
+            maintype="image",
+            subtype="jpeg",
+            cid="<logo_cenvalue>",
+            filename="logo.jpg",
+        )
+
+
 def _send_sync(message: EmailMessage, recipients: list[str], settings: GmailSmtpSettings) -> None:
     from email.utils import parseaddr
     envelope_from = parseaddr(settings.mail_from)[1] or settings.mail_from.strip()
@@ -259,6 +274,7 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
     html = render_appraisal_email(mail_data)
     message.set_content("Email này cần trình đọc HTML để xem bảng thông tin hồ sơ.")
     message.add_alternative(html, subtype="html")
+    attach_inline_logo(message)
     to_emails = [addr.strip() for addr in to_email.split(",") if addr.strip()]
     recipients = _dedupe_emails([*to_emails, *cc_emails])
 

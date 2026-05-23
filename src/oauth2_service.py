@@ -330,7 +330,7 @@ def _build_mime_message(
     msg.add_alternative(html_body, subtype="html")
     
     # Inline image embedding (CID) for the logo
-    logo_path = Path("src/templates/logo.jpg")
+    logo_path = Path(__file__).resolve().parent / "templates" / "logo.jpg"
     if logo_path.exists():
         import mimetypes
         ctype, _encoding = mimetypes.guess_type(str(logo_path))
@@ -341,7 +341,7 @@ def _build_mime_message(
             with open(logo_path, 'rb') as f:
                 img_data = f.read()
             html_part = msg.get_payload()[-1]
-            html_part.add_related(img_data, maintype=maintype, subtype=subtype, cid='logo_cenvalue')
+            html_part.add_related(img_data, maintype=maintype, subtype=subtype, cid='<logo_cenvalue>', filename='logo.jpg')
         except Exception as img_err:
             logger.error(f"Error embedding logo in OAuth MIME msg: {img_err}")
             
@@ -389,6 +389,18 @@ async def send_email_via_oauth2(
         if cc_emails:
             cc_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in cc_emails if addr.strip()]
 
+        attachments_payload = []
+        logo_path = Path(__file__).resolve().parent / "templates" / "logo.jpg"
+        if logo_path.exists():
+            attachments_payload.append({
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                "name": "logo.jpg",
+                "contentType": "image/jpeg",
+                "contentBytes": base64.b64encode(logo_path.read_bytes()).decode("utf-8"),
+                "isInline": True,
+                "contentId": "logo_cenvalue",
+            })
+
         email_payload = {
             "message": {
                 "subject": subject,
@@ -398,6 +410,7 @@ async def send_email_via_oauth2(
                 },
                 "toRecipients": to_recipients,
                 "ccRecipients": cc_recipients,
+                "attachments": attachments_payload,
             }
         }
 

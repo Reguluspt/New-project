@@ -37,7 +37,7 @@ from .database_manager import (
     update_matched_record_contract,
 )
 from .mail_renderer import mail_data_from_record, render_appraisal_email
-from .mail_service import GmailSmtpSettings, _dedupe_emails, _parse_email_list, load_gmail_smtp_settings
+from .mail_service import GmailSmtpSettings, _dedupe_emails, _parse_email_list, attach_inline_logo, load_gmail_smtp_settings
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -667,6 +667,7 @@ def build_reply_message(
         message["References"] = f"{incoming.references} {incoming.message_id}".strip()
     message.set_content("Email n\u00e0y c\u1ea7n tr\u00ecnh \u0111\u1ecdc HTML \u0111\u1ec3 xem b\u1ea3ng th\u00f4ng tin h\u1ed3 s\u01a1.")
     message.add_alternative(html, subtype="html")
+    attach_inline_logo(message)
     return message
 
 
@@ -769,6 +770,7 @@ def build_professional_forward_message(
         message["References"] = f"{incoming.references} {incoming.message_id}".strip()
     message.set_content("Email này cần trình đọc HTML để xem bảng thông tin hồ sơ.")
     message.add_alternative(html, subtype="html")
+    attach_inline_logo(message)
     return message
 
 

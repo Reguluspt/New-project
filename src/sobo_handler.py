@@ -14,7 +14,16 @@ from .models import LandCertificateExtraction
 logger = logging.getLogger(__name__)
 
 # Các trạng thái
-SOBO_DOC, SOBO_LOC, SOBO_SOURCE, SOBO_CONFIRM = range(20, 24)
+(
+    SOBO_ASSET_SELECT,
+    SOBO_DOC,
+    SOBO_LOC,
+    SOBO_SOURCE,
+    SOBO_CONFIRM,
+    SOBO_MACHINERY_DOC,
+    SOBO_MACHINERY_NAME,
+    SOBO_MACHINERY_EMAIL,
+) = range(20, 28)
 
 # Danh sách Mapping
 SOBO_MAPPING = {
@@ -124,6 +133,59 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
 """
     return body, body_html
 
+
+def build_machinery_email_content(sobo: dict) -> tuple[str, str]:
+    equipment_name = str(sobo.get("equipment_name", ""))
+    safe_name = html.escape(equipment_name)
+    body = (
+        "Kính gửi Anh/Chị,\n\n"
+        "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
+        "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
+        "- Loại tài sản: Máy móc thiết bị\n"
+        f"- Tên thiết bị: {equipment_name}\n\n"
+        "Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để "
+        "Phòng Kinh Doanh tiếp tục làm việc với khách hàng.\n\n"
+        "Trân trọng cảm ơn Anh/Chị.\n\n"
+        "PHẠM NGỌC THANH TRƯỜNG\n"
+        "Trưởng phòng Kinh Doanh Khu vực Tây Nguyên\n"
+        "Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE\n"
+        "Điện thoại: 0905 22 69 68 - 0913 503 051\n"
+        "Email: truongpnt@cenvalue.vn"
+    )
+    body_html = f"""
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fb;margin:0;padding:20px 0;font-family:Arial,'Segoe UI',sans-serif;color:#11284d;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        <tr><td style="padding:15px 28px;background:#ffffff;"><img src="cid:cenvalue_logo" width="170" alt="CENVALUE" style="display:block;width:170px;max-width:100%;height:auto;border:0;"></td></tr>
+        <tr><td style="padding:19px 28px;background:#008e96;color:#ffffff;font-size:14px;font-weight:bold;line-height:1.4;">YÊU CẦU THAM KHẢO GIÁ TRỊ SƠ BỘ TÀI SẢN</td></tr>
+        <tr>
+          <td style="padding:28px;font-size:15px;line-height:1.55;color:#283952;">
+            <p style="margin:0 0 18px;">Kính gửi Anh/Chị,</p>
+            <p style="margin:0 0 22px;">Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;">
+              <tr><td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#006a70;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td></tr>
+              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">Máy móc thiết bị</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Tên thiết bị</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_name}</strong></td></tr>
+            </table>
+            <p style="margin:22px 0 18px;">Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để Phòng Kinh Doanh tiếp tục làm việc với khách hàng.</p>
+            <p style="margin:0 0 24px;">Trân trọng cảm ơn Anh/Chị.</p>
+            <div style="padding-top:20px;border-top:1px solid #e2e8f0;font-size:13px;line-height:1.5;color:#45566f;">
+              <div style="font-size:16px;font-weight:bold;color:#006a70;">PHẠM NGỌC THANH TRƯỜNG</div>
+              <div style="font-weight:bold;color:#d39a58;margin-bottom:6px;">Trưởng phòng Kinh Doanh Khu vực Tây Nguyên</div>
+              <div>Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE</div>
+              <div>Điện thoại: 0905 22 69 68 - 0913 503 051</div>
+              <div>Email: <a href="mailto:truongpnt@cenvalue.vn" style="color:#006a70;text-decoration:none;">truongpnt@cenvalue.vn</a></div>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+"""
+    return body, body_html
+
 def find_department_email(address: str) -> str:
     if not address: return None
     addr_lower = address.lower()
@@ -147,14 +209,51 @@ def build_department_email_keyboard(suggested_email: str | None) -> InlineKeyboa
     keyboard.append([InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")])
     return InlineKeyboardMarkup(keyboard)
 
+
+def build_asset_type_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏠 Bất động sản", callback_data="sobo_asset_real_estate")],
+        [InlineKeyboardButton("⚙️ Máy móc thiết bị", callback_data="sobo_asset_machinery")],
+        [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+    ])
+
+
 async def cmd_sobo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📝 *Bắt đầu quy trình Gửi Sơ bộ*\n\n"
-        "Vui lòng gửi **Ảnh chụp** hoặc **File PDF** Giấy chứng nhận quyền sử dụng đất để tôi quét thông tin Tỉnh/Thành phố và Thửa đất.",
-        parse_mode="Markdown"
+        "Vui lòng chọn **loại tài sản** cần gửi sơ bộ:",
+        reply_markup=build_asset_type_keyboard(),
+        parse_mode="Markdown",
     )
     context.user_data['sobo'] = {}
-    return SOBO_DOC
+    return SOBO_ASSET_SELECT
+
+
+async def sobo_select_asset_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data['sobo'] = {}
+    if query.data == "sobo_asset_real_estate":
+        context.user_data['sobo']['asset_type'] = "real_estate"
+        await query.edit_message_text(
+            "🏠 Đã chọn Bất động sản.\n\n"
+            "Vui lòng gửi Ảnh chụp hoặc File PDF Giấy chứng nhận quyền sử dụng đất "
+            "để tôi quét thông tin Tỉnh/Thành phố và Thửa đất."
+        )
+        return SOBO_DOC
+
+    if query.data != "sobo_asset_machinery":
+        await query.edit_message_text("❌ Loại tài sản không hợp lệ. Vui lòng bắt đầu lại bằng /sobo.")
+        context.user_data.pop('sobo', None)
+        return ConversationHandler.END
+
+    context.user_data['sobo']['asset_type'] = "machinery"
+    await query.edit_message_text(
+        "⚙️ Đã chọn Máy móc thiết bị.\n\n"
+        "Vui lòng tải lên file hồ sơ hoặc hình ảnh thiết bị để đính kèm vào email. "
+        "File sẽ không được quét hoặc phân tích."
+    )
+    return SOBO_MACHINERY_DOC
 
 import asyncio
 import fitz
@@ -184,6 +283,62 @@ async def sobo_receive_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Vui lòng gửi một tài liệu (PDF) hoặc hình ảnh (JPG/PNG).")
         return SOBO_DOC
+
+
+async def sobo_receive_machinery_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    filename = ""
+    if message.document:
+        file_ref = message.document
+        filename = message.document.file_name or "ho_so_may_moc"
+        extension = os.path.splitext(filename)[1].lower()
+        if not extension or len(extension) > 10 or not extension[1:].isalnum():
+            extension = ".bin"
+    elif message.photo:
+        file_ref = message.photo[-1]
+        filename = "hinh_anh_may_moc.jpg"
+        extension = ".jpg"
+    else:
+        await message.reply_text("❌ Vui lòng tải lên một file hồ sơ hoặc hình ảnh thiết bị.")
+        return SOBO_MACHINERY_DOC
+
+    file = await context.bot.get_file(file_ref.file_id)
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, f"sobo_machinery_{uuid4().hex}{extension}")
+    await file.download_to_drive(file_path)
+
+    sobo = context.user_data.setdefault('sobo', {})
+    sobo['file_path'] = file_path
+    sobo['attachment_name'] = filename
+    await message.reply_text(
+        "✅ Đã nhận file đính kèm. File không được quét hoặc phân tích.\n\n"
+        "Vui lòng nhập *Tên thiết bị*:",
+        parse_mode="Markdown",
+    )
+    return SOBO_MACHINERY_NAME
+
+
+async def sobo_receive_machinery_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    equipment_name = update.message.text.strip()
+    if not equipment_name:
+        await update.message.reply_text("❌ Tên thiết bị không được để trống. Vui lòng nhập lại.")
+        return SOBO_MACHINERY_NAME
+
+    sobo = context.user_data.setdefault('sobo', {})
+    sobo['equipment_name'] = equipment_name
+    await update.message.reply_text(
+        "📧 Vui lòng chọn *email nhận sơ bộ* từ danh sách dưới đây:",
+        reply_markup=build_department_email_keyboard(None),
+        parse_mode="Markdown",
+    )
+    return SOBO_MACHINERY_EMAIL
+
+
+async def sobo_require_machinery_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📎 Vui lòng tải lên file hồ sơ hoặc hình ảnh thiết bị trước khi nhập tên thiết bị.")
+    return SOBO_MACHINERY_DOC
+
 
 async def _wait_and_process_sobo_media_group(media_group_id: str, context: ContextTypes.DEFAULT_TYPE):
     await asyncio.sleep(1.5)
@@ -308,6 +463,30 @@ async def sobo_select_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     context.user_data.setdefault('sobo', {})['email'] = email
+    if context.user_data['sobo'].get('asset_type') == "machinery":
+        sobo = context.user_data['sobo']
+        equipment_name = sobo.get('equipment_name', '')
+        subject = f"[SƠ BỘ] - Máy móc thiết bị - {equipment_name}"
+        body, body_html = build_machinery_email_content(sobo)
+        sobo['subject'] = subject
+        sobo['body'] = body
+        sobo['body_html'] = body_html
+        attachment_name = sobo.get('attachment_name', '1 file hồ sơ')
+        preview_msg = (
+            "📧 <b>BẢN XEM TRƯỚC EMAIL:</b>\n\n"
+            f"<b>Người nhận:</b> {html.escape(str(email))}\n"
+            f"<b>File đính kèm:</b> {html.escape(str(attachment_name))}\n"
+            f"<b>Tiêu đề:</b> <code>{html.escape(subject)}</code>\n\n"
+            f"<b>Nội dung:</b>\n{html.escape(body)}\n\n"
+            "Bạn có muốn gửi mail này không?"
+        )
+        reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Gửi Mail ngay", callback_data="sobo_send")],
+            [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+        ])
+        await query.edit_message_text(preview_msg, reply_markup=reply_markup, parse_mode="HTML")
+        return SOBO_CONFIRM
+
     await query.edit_message_text(
         f"✅ Đã chọn email nhận sơ bộ: {email}\n\n"
         "📍 Tiếp theo, vui lòng gửi Link định vị tài sản (Google Maps):"
@@ -419,6 +598,10 @@ def get_sobo_conversation_handler() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[CommandHandler('sobo', cmd_sobo)],
         states={
+            SOBO_ASSET_SELECT: [
+                CallbackQueryHandler(sobo_select_asset_type, pattern="^sobo_asset_"),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+            ],
             SOBO_DOC: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_doc),
                 CallbackQueryHandler(sobo_select_email, pattern="^sobo_email_"),
@@ -427,6 +610,16 @@ def get_sobo_conversation_handler() -> ConversationHandler:
             ],
             SOBO_LOC: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_loc)],
             SOBO_SOURCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_source)],
+            SOBO_MACHINERY_DOC: [
+                MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_machinery_doc),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_require_machinery_file),
+            ],
+            SOBO_MACHINERY_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_machinery_name)],
+            SOBO_MACHINERY_EMAIL: [
+                CallbackQueryHandler(sobo_select_email, pattern="^sobo_email_"),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+            ],
             SOBO_CONFIRM: [CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_")],
         },
         fallbacks=[CommandHandler('cancel', sobo_cancel_cmd)],

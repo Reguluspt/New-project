@@ -61,6 +61,10 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.cc_emails, [])
         self.assertTrue(message["Message-ID"])
         self.assertIn("@gmail.com>", message["Message-ID"])
+        mime_source = message.as_string()
+        self.assertIn("cid:logo_cenvalue", mime_source)
+        self.assertIn("Content-ID: <logo_cenvalue>", mime_source)
+        self.assertIn('filename="logo.jpg"', mime_source)
 
     async def test_send_appraisal_email_includes_monitor_cc_header_and_recipients(self) -> None:
         env = {

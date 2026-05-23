@@ -145,7 +145,7 @@ def _send_phathanh_reply_sync(original_mail, html_body, settings):
     parts = msg.get_payload()
     html_part = parts[-1]
     
-    logo_path = Path("src/templates/logo.jpg")
+    logo_path = Path(__file__).resolve().parent / "templates" / "logo.jpg"
     if logo_path.exists():
         import mimetypes
         ctype, encoding = mimetypes.guess_type(str(logo_path))
@@ -156,7 +156,7 @@ def _send_phathanh_reply_sync(original_mail, html_body, settings):
         try:
             with open(logo_path, 'rb') as f:
                 img_data = f.read()
-            html_part.add_related(img_data, maintype=maintype, subtype=subtype, cid='logo_cenvalue')
+            html_part.add_related(img_data, maintype=maintype, subtype=subtype, cid='<logo_cenvalue>', filename='logo.jpg')
         except Exception as img_err:
             print(f"Error embedding logo image: {img_err}")
     
@@ -395,4 +395,3 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
             raise RuntimeError("Gửi email SMTP thất bại.")
         
     return original_mail.get("to") or original_mail.get("from")
-
