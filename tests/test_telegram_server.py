@@ -174,7 +174,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         await register_bot_commands(telegram_app)
 
         commands = telegram_app.bot.set_my_commands.await_args.args[0]
-        self.assertEqual([command.command for command in commands], ["sobo", "phathanh", "nhap", "tra_cuu", "gui_mail", "cancel", "start"])
+        self.assertEqual([command.command for command in commands], ["sobo", "nhap", "nhapthucong", "tra_cuu", "phathanh", "gui_mail", "cancel"])
         telegram_app.bot.set_chat_menu_button.assert_awaited_once()
 
     async def test_webhook_processes_update_payload(self) -> None:

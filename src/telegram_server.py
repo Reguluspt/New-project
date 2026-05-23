@@ -180,12 +180,12 @@ TELEGRAM_DROPDOWN_FIELDS = {
 MAX_DROPDOWN_MATCHES = 0
 TELEGRAM_BOT_COMMANDS = [
     BotCommand("sobo", "G\u1eedi y\u00eau c\u1ea7u tham kh\u1ea3o gi\u00e1 tr\u1ecb s\u01a1 b\u1ed9"),
-    BotCommand("phathanh", "Ph\u00e1t h\u00e0nh ch\u1ee9ng th\u01b0 th\u1ea9m \u0111\u1ecbnh"),
     BotCommand("nhap", "Nh\u1eadp h\u1ed3 s\u01a1 m\u1edbi"),
+    BotCommand("nhapthucong", "Y\u00eau c\u1ea7u m\u1eabu nh\u1eadp li\u1ec7u th\u1ee7 c\u00f4ng"),
     BotCommand("tra_cuu", "Tra c\u1ee9u h\u1ed3 s\u01a1 theo s\u1ed1 h\u1ee3p \u0111\u1ed3ng"),
+    BotCommand("phathanh", "Th\u1ef1c hi\u1ec7n lu\u1ed3ng ph\u00e1t h\u00e0nh ch\u1ee9ng th\u01b0"),
     BotCommand("gui_mail", "G\u1eedi mail h\u1ed3 s\u01a1 theo s\u1ed1 h\u1ee3p \u0111\u1ed3ng"),
     BotCommand("cancel", "H\u1ee7y thao t\u00e1c \u0111ang th\u1ef1c hi\u1ec7n"),
-    BotCommand("start", "Xem h\u01b0\u1edbng d\u1eabn b\u1eaft \u0111\u1ea7u"),
 ]
 
 
