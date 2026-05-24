@@ -16,6 +16,7 @@ from src.sobo_handler import (
     SOBO_MACHINERY_EMAIL,
     SOBO_MACHINERY_NAME,
     SOBO_CONFIRM,
+    SOBO_NOTE,
     _process_sobo_extracted_file,
     build_machinery_email_content,
     build_sobo_email_content,
@@ -23,6 +24,8 @@ from src.sobo_handler import (
     cmd_sobo,
     sobo_receive_machinery_doc,
     sobo_receive_machinery_name,
+    sobo_receive_note,
+    sobo_receive_source,
     sobo_require_email_selection,
     sobo_require_machinery_file,
     sobo_select_asset_type,
@@ -63,6 +66,7 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
                 "so_to": "13",
                 "dia_chi": "Khu phố 2 & phường Xuân Hòa",
                 "link": "https://maps.google.com/?q=1&z=2",
+                "note": "Hồ sơ cần phản hồi <gấp>",
             }
         )
 
@@ -73,6 +77,8 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("cid:cenvalue_logo", body_html)
         self.assertIn("VCB &lt;Gia Lai&gt;", body_html)
         self.assertIn("Khu phố 2 &amp; phường Xuân Hòa", body_html)
+        self.assertIn("Ghi chú: Hồ sơ cần phản hồi <gấp>", body)
+        self.assertIn("Hồ sơ cần phản hồi &lt;gấp&gt;", body_html)
         self.assertNotIn("VCB <Gia Lai>", body_html)
 
     def test_email_content_does_not_create_unsafe_location_link(self) -> None:
@@ -82,11 +88,15 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('href="javascript:', body_html)
 
     def test_machinery_email_content_only_uses_equipment_name_field(self) -> None:
-        body, body_html = build_machinery_email_content({"equipment_name": "Máy cắt <CNC>"})
+        body, body_html = build_machinery_email_content(
+            {"equipment_name": "Máy cắt <CNC>", "note": "Kiểm tra serial & công suất"}
+        )
 
         self.assertIn("Máy móc thiết bị", body)
         self.assertIn("Tên thiết bị: Máy cắt <CNC>", body)
         self.assertIn("Máy cắt &lt;CNC&gt;", body_html)
+        self.assertIn("Ghi chú: Kiểm tra serial & công suất", body)
+        self.assertIn("Kiểm tra serial &amp; công suất", body_html)
         self.assertNotIn("Số thửa đất", body_html)
         self.assertNotIn("Định vị tài sản", body_html)
 
@@ -232,7 +242,7 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         prompt = update.message.reply_text.await_args.args[0]
         self.assertIn("tải lên file", prompt)
 
-    async def test_machinery_email_selection_opens_send_preview_without_location_step(self) -> None:
+    async def test_machinery_email_selection_prompts_for_note_without_location_step(self) -> None:
         update = Mock()
         update.callback_query.answer = AsyncMock()
         update.callback_query.edit_message_text = AsyncMock()
@@ -248,14 +258,72 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
 
         state = await sobo_select_email(update, context)
 
+        self.assertEqual(state, SOBO_NOTE)
+        prompt = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("ghi chú", prompt.lower())
+        self.assertNotIn("Link định vị", prompt)
+
+    async def test_machinery_note_opens_send_preview_with_note(self) -> None:
+        update = Mock()
+        update.message.text = "Ưu tiên phản hồi trong ngày"
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {
+            "sobo": {
+                "asset_type": "machinery",
+                "equipment_name": "Máy cắt CNC",
+                "attachment_name": "may_cat.pdf",
+                "email": SOBO_EMAIL_OPTIONS[0],
+            }
+        }
+
+        state = await sobo_receive_note(update, context)
+
         self.assertEqual(state, SOBO_CONFIRM)
         self.assertEqual(
             context.user_data["sobo"]["subject"],
             "[SƠ BỘ] - Máy móc thiết bị - Máy cắt CNC",
         )
-        preview = update.callback_query.edit_message_text.await_args.args[0]
+        preview = update.message.reply_text.await_args.args[0]
         self.assertIn("may_cat.pdf", preview)
-        self.assertNotIn("Link định vị", preview)
+        self.assertIn("Ghi chú: Ưu tiên phản hồi trong ngày", preview)
+
+    async def test_real_estate_source_prompts_for_note_before_preview(self) -> None:
+        update = Mock()
+        update.message.text = "VCB Gia Lai"
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {"sobo": {"email": SOBO_EMAIL_OPTIONS[0]}}
+
+        state = await sobo_receive_source(update, context)
+
+        self.assertEqual(state, SOBO_NOTE)
+        self.assertEqual(context.user_data["sobo"]["source"], "VCB Gia Lai")
+        prompt = update.message.reply_text.await_args.args[0]
+        self.assertIn("ghi chú", prompt.lower())
+
+    async def test_real_estate_note_opens_send_preview_with_note(self) -> None:
+        update = Mock()
+        update.message.text = "Tài sản có lối đi chung"
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {
+            "sobo": {
+                "asset_sub_type": "single",
+                "source": "VCB Gia Lai",
+                "so_thua": "72",
+                "so_to": "13",
+                "dia_chi": "Pleiku, Gia Lai",
+                "email": SOBO_EMAIL_OPTIONS[0],
+            }
+        }
+
+        state = await sobo_receive_note(update, context)
+
+        self.assertEqual(state, SOBO_CONFIRM)
+        self.assertEqual(context.user_data["sobo"]["note"], "Tài sản có lối đi chung")
+        preview = update.message.reply_text.await_args.args[0]
+        self.assertIn("Ghi chú: Tài sản có lối đi chung", preview)
 
     async def test_location_text_before_email_selection_is_rejected(self) -> None:
         update = Mock()
@@ -400,7 +468,8 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
                 {"so_thua": "234", "so_to": "54", "dia_chi": "Pleiku, Gia Lai"},
                 {"so_thua": "235", "so_to": "54", "dia_chi": "Pleiku, Gia Lai"}
             ],
-            "link": "https://maps.google.com/?q=1&z=2"
+            "link": "https://maps.google.com/?q=1&z=2",
+            "note": "Định giá gấp trong ngày"
         }
         body, body_html = build_sobo_email_content(sobo)
 
@@ -409,11 +478,13 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Số thửa đất: 234", body)
         self.assertIn("Tài sản 2:", body)
         self.assertIn("Số thửa đất: 235", body)
+        self.assertIn("Ghi chú: Định giá gấp trong ngày", body)
 
         self.assertIn("THÔNG TIN TÀI SẢN THẨM ĐỊNH", body_html)
         self.assertIn("Tài sản 1", body_html)
         self.assertIn("Tài sản 2", body_html)
         self.assertIn("Pleiku, Gia Lai", body_html)
+        self.assertIn("Định giá gấp trong ngày", body_html)
 
 
 if __name__ == "__main__":

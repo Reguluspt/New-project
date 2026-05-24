@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
     SOBO_RE_SUB_TYPE,
     SOBO_DOC_MULTI,
     SOBO_DOC_MULTI_CHOICE,
-) = range(20, 31)
+    SOBO_NOTE,
+) = range(20, 32)
 
 # Danh sách Mapping
 SOBO_MAPPING = {
@@ -48,6 +49,8 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
     so_to = str(sobo.get("so_to", ""))
     dia_chi = str(sobo.get("dia_chi", ""))
     link = str(sobo.get("link", ""))
+    note = str(sobo.get("note", "")).strip()
+    note_display = note or "Không có"
     parsed_link = urlparse(link)
     href = link if parsed_link.scheme in {"http", "https"} else "#"
 
@@ -57,6 +60,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
     safe_dia_chi = html.escape(dia_chi)
     safe_href = html.escape(href, quote=True)
     safe_asset_type = html.escape(SOBO_ASSET_TYPE)
+    safe_note = html.escape(note_display).replace("\n", "<br>")
 
     if sobo.get("asset_sub_type") == "multi":
         assets_list = sobo.get("assets_list", [])
@@ -78,6 +82,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             f"- Định vị tài sản: {link}\n\n"
             f"DANH SÁCH CHI TIẾT TÀI SẢN:\n"
             f"{assets_text}"
+            f"- Ghi chú: {note_display}\n\n"
             "Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để "
             "Phòng Kinh Doanh tiếp tục làm việc với khách hàng.\n\n"
             "Trân trọng cảm ơn Anh/Chị.\n\n"
@@ -108,6 +113,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
               <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
               {table_rows_html}
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Ghi chú</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_note}</td></tr>
             </table>
         """
     else:
@@ -121,6 +127,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             f"- Số tờ bản đồ: {so_to}\n"
             f"- Địa chỉ tài sản: {dia_chi}\n"
             f"- Định vị tài sản: {link}\n\n"
+            f"- Ghi chú: {note_display}\n\n"
             "Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để "
             "Phòng Kinh Doanh tiếp tục làm việc với khách hàng.\n\n"
             "Trân trọng cảm ơn Anh/Chị.\n\n"
@@ -141,6 +148,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_thua}</strong></td></tr>
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_to}</strong></td></tr>
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_dia_chi}</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Ghi chú</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_note}</td></tr>
             </table>
         """
 
@@ -200,13 +208,17 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
 
 def build_machinery_email_content(sobo: dict) -> tuple[str, str]:
     equipment_name = str(sobo.get("equipment_name", ""))
+    note = str(sobo.get("note", "")).strip()
+    note_display = note or "Không có"
     safe_name = html.escape(equipment_name)
+    safe_note = html.escape(note_display).replace("\n", "<br>")
     body = (
         "Kính gửi Anh/Chị,\n\n"
         "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
         "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
         "- Loại tài sản: Máy móc thiết bị\n"
         f"- Tên thiết bị: {equipment_name}\n\n"
+        f"- Ghi chú: {note_display}\n\n"
         "Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để "
         "Phòng Kinh Doanh tiếp tục làm việc với khách hàng.\n\n"
         "Trân trọng cảm ơn Anh/Chị.\n\n"
@@ -235,6 +247,7 @@ def build_machinery_email_content(sobo: dict) -> tuple[str, str]:
               <tr><td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#024743;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td></tr>
               <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">Máy móc thiết bị</td></tr>
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Tên thiết bị</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_name}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Ghi chú</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_note}</td></tr>
             </table>
             <p style="margin:22px 0 18px;">Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để Phòng Kinh Doanh tiếp tục làm việc với khách hàng.</p>
             <p style="margin:0 0 24px;">Trân trọng cảm ơn Anh/Chị.</p>
@@ -787,28 +800,12 @@ async def sobo_select_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data.setdefault('sobo', {})['email'] = email
     if context.user_data['sobo'].get('asset_type') == "machinery":
-        sobo = context.user_data['sobo']
-        equipment_name = sobo.get('equipment_name', '')
-        subject = f"[SƠ BỘ] - Máy móc thiết bị - {equipment_name}"
-        body, body_html = build_machinery_email_content(sobo)
-        sobo['subject'] = subject
-        sobo['body'] = body
-        sobo['body_html'] = body_html
-        attachment_name = sobo.get('attachment_name', '1 file hồ sơ')
-        preview_msg = (
-            "📧 <b>BẢN XEM TRƯỚC EMAIL:</b>\n\n"
-            f"<b>Người nhận:</b> {html.escape(str(email))}\n"
-            f"<b>File đính kèm:</b> {html.escape(str(attachment_name))}\n"
-            f"<b>Tiêu đề:</b> <code>{html.escape(subject)}</code>\n\n"
-            f"<b>Nội dung:</b>\n{html.escape(body)}\n\n"
-            "Bạn có muốn gửi mail này không?"
+        await query.edit_message_text(
+            f"✅ Đã chọn email nhận sơ bộ: {email}\n\n"
+            "📝 Vui lòng nhập ghi chú cho tài sản/thiết bị.\n"
+            "Nếu không có ghi chú, vui lòng nhập: Không có"
         )
-        reply_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Gửi Mail ngay", callback_data="sobo_send")],
-            [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
-        ])
-        await query.edit_message_text(preview_msg, reply_markup=reply_markup, parse_mode="HTML")
-        return SOBO_CONFIRM
+        return SOBO_NOTE
 
     await query.edit_message_text(
         f"✅ Đã chọn email nhận sơ bộ: {email}\n\n"
@@ -827,7 +824,7 @@ async def sobo_receive_loc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['sobo']['link'] = loc_link
     
     await update.message.reply_text(
-        "👤 Bước cuối cùng: Vui lòng nhập **Nguồn khách hàng** (Ví dụ: VCB Gia Lai, KH Cá nhân...)\n"
+        "👤 Vui lòng nhập **Nguồn khách hàng** (Ví dụ: VCB Gia Lai, KH Cá nhân...)\n"
         "Điều này sẽ được ghi vào Tiêu đề Email."
     )
     return SOBO_SOURCE
@@ -837,54 +834,73 @@ async def sobo_receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE
     source = update.message.text.strip()
     sobo = context.user_data['sobo']
     sobo['source'] = source
-    
+
+    await update.message.reply_text(
+        "📝 Vui lòng nhập ghi chú cho tài sản.\n"
+        "Nếu không có ghi chú, vui lòng nhập: Không có"
+    )
+    return SOBO_NOTE
+
+
+async def sobo_receive_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    note = update.message.text.strip()
+    if not note:
+        await update.message.reply_text("❌ Ghi chú không được để trống. Nếu không có, vui lòng nhập: Không có")
+        return SOBO_NOTE
+
+    sobo = context.user_data['sobo']
+    sobo['note'] = note
     email = sobo.get('email')
-    
-    if sobo.get("asset_sub_type") == "multi":
-        assets_list = sobo.get('assets_list', [])
-        thuas = [a.get('so_thua', '') for a in assets_list if a.get('so_thua')]
-        tos = [a.get('so_to', '') for a in assets_list if a.get('so_to')]
-        addresses = [a.get('dia_chi', '') for a in assets_list if a.get('dia_chi')]
-        
-        unique_thuas = []
-        for t in thuas:
-            if t not in unique_thuas:
-                unique_thuas.append(t)
-        unique_tos = []
-        for t in tos:
-            if t not in unique_tos:
-                unique_tos.append(t)
-                
-        sobo['so_thua'] = " + ".join(unique_thuas) if unique_thuas else ""
-        sobo['so_to'] = " + ".join(unique_tos) if unique_tos else ""
-        sobo['dia_chi'] = max(addresses, key=len) if addresses else ""
-        attachment_preview = f"{len(sobo.get('file_paths', []))} file GCN"
+
+    if sobo.get('asset_type') == "machinery":
+        equipment_name = sobo.get('equipment_name', '')
+        subject = f"[SƠ BỘ] - Máy móc thiết bị - {equipment_name}"
+        body, body_html = build_machinery_email_content(sobo)
+        attachment_preview = sobo.get('attachment_name', '1 file hồ sơ')
     else:
-        attachment_preview = "1 file GCN"
-        
-    # Generate Preview
-    subject = f"[SƠ BỘ] - {source} - Thửa đất số {sobo.get('so_thua')}, tờ bản đồ số {sobo.get('so_to')}; tại địa chỉ {sobo.get('dia_chi')}"
-    body, body_html = build_sobo_email_content(sobo)
-    
+        if sobo.get("asset_sub_type") == "multi":
+            assets_list = sobo.get('assets_list', [])
+            thuas = [a.get('so_thua', '') for a in assets_list if a.get('so_thua')]
+            tos = [a.get('so_to', '') for a in assets_list if a.get('so_to')]
+            addresses = [a.get('dia_chi', '') for a in assets_list if a.get('dia_chi')]
+
+            unique_thuas = []
+            for t in thuas:
+                if t not in unique_thuas:
+                    unique_thuas.append(t)
+            unique_tos = []
+            for t in tos:
+                if t not in unique_tos:
+                    unique_tos.append(t)
+
+            sobo['so_thua'] = " + ".join(unique_thuas) if unique_thuas else ""
+            sobo['so_to'] = " + ".join(unique_tos) if unique_tos else ""
+            sobo['dia_chi'] = max(addresses, key=len) if addresses else ""
+            attachment_preview = f"{len(sobo.get('file_paths', []))} file GCN"
+        else:
+            attachment_preview = "1 file GCN"
+
+        subject = f"[SƠ BỘ] - {sobo.get('source')} - Thửa đất số {sobo.get('so_thua')}, tờ bản đồ số {sobo.get('so_to')}; tại địa chỉ {sobo.get('dia_chi')}"
+        body, body_html = build_sobo_email_content(sobo)
+
     sobo['subject'] = subject
     sobo['body'] = body
     sobo['body_html'] = body_html
-    
-    keyboard = [
+
+    reply_markup = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Gửi Mail ngay", callback_data="sobo_send")],
-        [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
+        [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+    ])
+
     preview_msg = (
         "📧 <b>BẢN XEM TRƯỚC EMAIL:</b>\n\n"
         f"<b>Người nhận:</b> {html.escape(str(email))}\n"
-        f"<b>File đính kèm:</b> {attachment_preview}\n"
+        f"<b>File đính kèm:</b> {html.escape(str(attachment_preview))}\n"
         f"<b>Tiêu đề:</b> <code>{html.escape(subject)}</code>\n\n"
         f"<b>Nội dung:</b>\n{html.escape(body)}\n\n"
         "Bạn có muốn gửi mail này không?"
     )
-    
+
     await update.message.reply_text(preview_msg, reply_markup=reply_markup, parse_mode="HTML")
     return SOBO_CONFIRM
 
@@ -963,6 +979,7 @@ def get_sobo_conversation_handler() -> ConversationHandler:
             ],
             SOBO_LOC: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_loc)],
             SOBO_SOURCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_source)],
+            SOBO_NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_note)],
             SOBO_MACHINERY_DOC: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_machinery_doc),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
