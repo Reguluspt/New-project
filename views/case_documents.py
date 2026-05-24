@@ -20,7 +20,13 @@ from src.case_exports import (
 )
 from src.case_files import case_folder, save_original_file
 from src.case_output_preferences import load_case_output_dir, save_case_output_dir
-from src.database_manager import create_outbound_tracking_record, resolve_records_db_path
+from src.database_manager import (
+    add_delivery_contact,
+    create_outbound_tracking_record,
+    ensure_tracking_record_schema,
+    get_all_delivery_contacts,
+    resolve_records_db_path,
+)
 from src.mail_service import send_appraisal_email
 from src.pdf_exporter import find_soffice_path
 from src.sqlite_store import update_case
@@ -230,6 +236,179 @@ def _persist_before_action(
         return False
 
 
+async def _load_delivery_contacts() -> list[dict[str, object]]:
+    records_db_path = Path(resolve_records_db_path())
+    await ensure_tracking_record_schema(records_db_path)
+    return await get_all_delivery_contacts(records_db_path)
+
+
+def _manual_delivery_contact_error(
+    *,
+    short_name: str,
+    details: str,
+    save_to_contacts: bool,
+    contacts: list[dict[str, object]],
+) -> str | None:
+    if not details.strip():
+        return "Vui lòng nhập thông tin người nhận chuyển phát."
+    if not save_to_contacts:
+        return None
+    if not short_name.strip():
+        return "Vui lòng nhập tên gợi nhớ để lưu người nhận vào danh bạ."
+    normalized_name = short_name.strip().casefold()
+    if any(str(contact.get("short_name") or "").strip().casefold() == normalized_name for contact in contacts):
+        return "Tên gợi nhớ đã có trong danh bạ. Vui lòng đổi tên hoặc bỏ chọn lưu vào danh bạ."
+    return None
+
+
+def _send_phathanh_mail(export_case: dict[str, object], recipient: str) -> None:
+    from src.email_reply_service import send_phathanh_email_for_case
+
+    with st.spinner("Đang gửi mail phát hành chứng thư..."):
+        to_email = asyncio.run(send_phathanh_email_for_case(export_case, recipient=recipient))
+    st.success(f"Đã gửi mail phát hành chứng thư thành công tới {to_email}.")
+
+
+def _render_phathanh_delivery_form(
+    *,
+    export_case: dict[str, object],
+    selected_id: int,
+    output_base_dir: Path,
+    selected_folder: Path,
+    db_path: Path | None,
+    key_prefix: str,
+) -> str | None:
+    from src.email_reply_service import DEFAULT_PHATHANH_RECIPIENT
+
+    try:
+        contacts = asyncio.run(_load_delivery_contacts())
+    except Exception as exc:
+        st.error(f"Không thể tải danh bạ chuyển phát: {exc}")
+        return None
+
+    saved_recipients: list[tuple[str, str]] = [("VP Gia Lai (mặc định)", DEFAULT_PHATHANH_RECIPIENT)]
+    saved_recipients.extend(
+        (
+            f"{str(contact.get('short_name') or '').strip()} (Danh bạ #{contact.get('id')})",
+            str(contact.get("full_details") or "").strip(),
+        )
+        for contact in contacts
+        if str(contact.get("full_details") or "").strip()
+    )
+
+    st.markdown("**Thông tin chuyển phát**")
+    st.caption("Mail phát hành chỉ được gửi sau khi xác nhận người nhận bên dưới.")
+    source = st.radio(
+        "Nguồn thông tin người nhận",
+        ("Chọn từ danh bạ", "Nhập thủ công"),
+        horizontal=True,
+        key=f"{key_prefix}_source",
+    )
+    with st.form(f"{key_prefix}_delivery_form"):
+        short_name = ""
+        save_to_contacts = False
+        if source == "Chọn từ danh bạ":
+            selected_index = st.selectbox(
+                "Người nhận chuyển phát",
+                options=range(len(saved_recipients)),
+                format_func=lambda index: saved_recipients[index][0],
+                key=f"{key_prefix}_selected_recipient",
+            )
+            recipient_details = saved_recipients[selected_index][1]
+            st.text_area(
+                "Thông tin chi tiết",
+                value=recipient_details,
+                height=112,
+                disabled=True,
+                key=f"{key_prefix}_selected_details_{selected_index}",
+            )
+        else:
+            short_name = st.text_input(
+                "Tên gợi nhớ",
+                key=f"{key_prefix}_manual_short_name",
+                help="Bắt buộc khi chọn lưu người nhận này vào danh bạ.",
+            )
+            recipient_details = st.text_area(
+                "Thông tin người nhận",
+                height=112,
+                key=f"{key_prefix}_manual_details",
+                placeholder="Tên người nhận hoặc đơn vị\nĐịa chỉ: ...\nĐiện thoại: ...",
+            )
+            save_to_contacts = st.checkbox(
+                "Lưu người nhận này vào danh bạ chuyển phát",
+                key=f"{key_prefix}_save_manual_recipient",
+            )
+
+        send_clicked = st.form_submit_button("Xác nhận gửi mail", type="primary")
+        cancel_clicked = st.form_submit_button("Hủy")
+
+    if cancel_clicked:
+        return "cancelled"
+    if not send_clicked:
+        return None
+
+    if source == "Nhập thủ công":
+        error = _manual_delivery_contact_error(
+            short_name=short_name,
+            details=recipient_details,
+            save_to_contacts=save_to_contacts,
+            contacts=contacts,
+        )
+        if error:
+            st.error(error)
+            return None
+
+    if not _persist_before_action(
+        db_path=db_path,
+        selected_id=selected_id,
+        output_base_dir=output_base_dir,
+        selected_folder=selected_folder,
+        export_case=export_case,
+    ):
+        return None
+
+    try:
+        _send_phathanh_mail(export_case, recipient_details.strip())
+    except Exception as exc:
+        st.error(f"Gửi mail phát hành thất bại: {exc}")
+        return None
+
+    if source == "Nhập thủ công" and save_to_contacts:
+        try:
+            asyncio.run(
+                add_delivery_contact(
+                    Path(resolve_records_db_path()),
+                    short_name.strip(),
+                    recipient_details.strip(),
+                )
+            )
+            st.info("Đã lưu người nhận vào danh bạ chuyển phát.")
+        except Exception as exc:
+            st.warning(f"Mail đã gửi thành công nhưng không thể lưu người nhận vào danh bạ: {exc}")
+    return "sent"
+
+
+@st.dialog("Chọn thông tin chuyển phát", width="large")
+def open_phathanh_delivery_dialog(
+    *,
+    selected_id: int,
+    export_case: dict[str, object],
+    output_base_dir: Path,
+    selected_folder: Path,
+    db_path: Path | None,
+) -> None:
+    result = _render_phathanh_delivery_form(
+        export_case=export_case,
+        selected_id=selected_id,
+        output_base_dir=output_base_dir,
+        selected_folder=selected_folder,
+        db_path=db_path,
+        key_prefix=f"quick_phathanh_{selected_id}",
+    )
+    if result == "cancelled":
+        st.rerun()
+
+
 def _render_file_actions(paths: list[Path], selected_folder: Path) -> None:
     if not paths:
         return
@@ -323,20 +502,13 @@ def handle_quick_action(
                 st.error(f"Gửi mail thất bại: {exc}")
 
     elif action_type == "mail_phathanh":
-        if _persist_before_action(
-            db_path=db_path,
+        open_phathanh_delivery_dialog(
             selected_id=selected_id,
+            export_case=export_case,
             output_base_dir=output_base_dir,
             selected_folder=selected_folder,
-            export_case=export_case,
-        ):
-            try:
-                from src.email_reply_service import send_phathanh_email_for_case
-                with st.spinner("Đang gửi mail phát hành chứng thư..."):
-                    to_email = asyncio.run(send_phathanh_email_for_case(export_case))
-                st.success(f"Đã gửi mail phát hành chứng thư thành công tới {to_email}.")
-            except Exception as exc:
-                st.error(f"Gửi mail phát hành thất bại: {exc}")
+            db_path=db_path,
+        )
 
     elif action_type == "web":
         if not _ensure_web_ready_or_open_edit(
@@ -463,23 +635,27 @@ def render(
             except Exception as exc:
                 st.error(f"Gửi mail thất bại: {exc}")
 
+    delivery_form_state_key = f"show_phathanh_delivery_form_{selected_id}"
     if mail_phathanh_clicked:
         if not export_case:
             st.error("Không tìm thấy hồ sơ để phát hành.")
-        elif _persist_before_action(
-            db_path=db_path,
+        else:
+            st.session_state[delivery_form_state_key] = True
+
+    if st.session_state.get(delivery_form_state_key) and export_case:
+        st.divider()
+        delivery_form_result = _render_phathanh_delivery_form(
+            export_case=export_case,
             selected_id=selected_id,
             output_base_dir=output_base_dir,
             selected_folder=selected_folder,
-            export_case=export_case,
-        ):
-            try:
-                from src.email_reply_service import send_phathanh_email_for_case
-                with st.spinner("Đang gửi mail phát hành chứng thư..."):
-                    to_email = asyncio.run(send_phathanh_email_for_case(export_case))
-                st.success(f"Đã gửi mail phát hành chứng thư thành công tới {to_email}.")
-            except Exception as exc:
-                st.error(f"Gửi mail phát hành thất bại: {exc}")
+            db_path=db_path,
+            key_prefix=f"case_documents_phathanh_{selected_id}",
+        )
+        if delivery_form_result in {"cancelled", "sent"}:
+            st.session_state[delivery_form_state_key] = False
+            if delivery_form_result == "cancelled":
+                st.rerun()
 
     if web_clicked:
         if not export_case:

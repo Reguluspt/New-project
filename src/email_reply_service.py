@@ -4,6 +4,7 @@ import imaplib
 import email
 from email.header import decode_header
 import smtplib
+import html
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
 import os
@@ -11,6 +12,30 @@ import re
 import asyncio
 from pathlib import Path
 from .mail_service import load_gmail_smtp_settings, _parse_email_list, _clean_header
+
+DEFAULT_PHATHANH_RECIPIENT = (
+    "CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ - VP TẠI GIA LAI\n"
+    "Địa chỉ: 90/60/3 Trường Chinh, phường Pleiku, tỉnh Gia Lai\n"
+    "Điện thoại 0905226968"
+)
+
+
+def format_phathanh_recipient_html(recipient: str | None) -> str:
+    from src.email_utils import format_recipient_info
+
+    recipient_clean = format_recipient_info(recipient or DEFAULT_PHATHANH_RECIPIENT)
+    recipient_html = html.escape(recipient_clean).replace("\n", "<br>")
+    if "Địa chỉ:" in recipient_html:
+        recipient_html = recipient_html.replace("Địa chỉ:", "<strong>Địa chỉ:</strong>")
+    elif "Địa chỉ" in recipient_html:
+        recipient_html = recipient_html.replace("Địa chỉ", "<strong>Địa chỉ</strong>")
+
+    if "Điện thoại:" in recipient_html:
+        recipient_html = recipient_html.replace("Điện thoại:", "<strong>Điện thoại:</strong>")
+    elif "Điện thoại" in recipient_html:
+        recipient_html = recipient_html.replace("Điện thoại", "<strong>Điện thoại</strong>")
+    return recipient_html
+
 
 def _decode_header_str(header_value):
     if not header_value:
@@ -319,26 +344,7 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
         if citizen_id:
             customer_extra_html = f'<br><i style="color: #7f8c8d; font-size: 12px;">(CCCD: {citizen_id})</i>'
             
-    # Bold the labels "Địa chỉ" and "Điện thoại" in recipient details
-    if not recipient:
-        recipient = (
-            "CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ - VP TẠI GIA LAI\n"
-            "Địa chỉ: 90/60/3 Trường Chinh, phường Pleiku, tỉnh Gia Lai\n"
-            "Điện thoại 0905226968"
-        )
-    
-    from src.email_utils import format_recipient_info
-    recipient_clean = format_recipient_info(recipient)
-    recipient_html = recipient_clean.replace("\n", "<br>")
-    if "Địa chỉ:" in recipient_html:
-        recipient_html = recipient_html.replace("Địa chỉ:", "<strong>Địa chỉ:</strong>")
-    elif "Địa chỉ" in recipient_html:
-        recipient_html = recipient_html.replace("Địa chỉ", "<strong>Địa chỉ</strong>")
-        
-    if "Điện thoại:" in recipient_html:
-        recipient_html = recipient_html.replace("Điện thoại:", "<strong>Điện thoại:</strong>")
-    elif "Điện thoại" in recipient_html:
-        recipient_html = recipient_html.replace("Điện thoại", "<strong>Điện thoại</strong>")
+    recipient_html = format_phathanh_recipient_html(recipient)
     
     replacements = {
         "{{ customer_name }}": case.get("customer_info", case.get("owner_name", "N/A")),
