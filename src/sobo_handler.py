@@ -971,6 +971,9 @@ def get_sobo_conversation_handler() -> ConversationHandler:
             ],
             SOBO_DOC_MULTI: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_doc_multi),
+                # File extraction runs in a background task, so the conversation remains in
+                # this state when the post-scan action buttons are displayed.
+                CallbackQueryHandler(sobo_multi_doc_choice, pattern="^sobo_multi_"),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
             ],
             SOBO_DOC_MULTI_CHOICE: [

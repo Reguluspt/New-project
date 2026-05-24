@@ -30,6 +30,7 @@ from src.sobo_handler import (
     sobo_require_machinery_file,
     sobo_select_asset_type,
     sobo_select_email,
+    get_sobo_conversation_handler,
     SOBO_RE_SUB_TYPE,
     SOBO_DOC_MULTI,
     SOBO_DOC_MULTI_CHOICE,
@@ -395,6 +396,16 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.user_data["sobo"]["assets_list"], [])
         self.assertEqual(context.user_data["sobo"]["file_paths"], [])
         update.callback_query.edit_message_text.assert_awaited_once()
+
+    def test_multi_document_state_accepts_post_scan_choice_callbacks(self) -> None:
+        conversation = get_sobo_conversation_handler()
+        callbacks = [
+            handler.callback
+            for handler in conversation.states[SOBO_DOC_MULTI]
+            if hasattr(handler, "callback")
+        ]
+
+        self.assertIn(sobo_multi_doc_choice, callbacks)
 
     async def test_multi_asset_scanning_loop(self) -> None:
         # Asset 1
