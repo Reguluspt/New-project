@@ -62,12 +62,24 @@ def _find_latest_email_by_subject_sync(contract_number: str):
         msg_ids = messages[0].split()
         latest_id = msg_ids[-1]
         
-        # Fetch headers
-        status, data = mail.fetch(latest_id, "(RFC822.HEADER)")
+        # Fetch headers and Gmail thread ID (X-GM-THRID) for proper threading
+        fetch_items = "(RFC822.HEADER)"
+        if imap_host == "imap.gmail.com":
+            fetch_items = "(X-GM-THRID RFC822.HEADER)"
+        status, data = mail.fetch(latest_id, fetch_items)
         if status != "OK":
             mail.logout()
             return None
-            
+
+        # Extract Gmail thread ID from IMAP response metadata
+        thread_id = ""
+        if imap_host == "imap.gmail.com" and data[0][0]:
+            import re as _re
+            thrid_match = _re.search(rb'X-GM-THRID\s+(\d+)', data[0][0])
+            if thrid_match:
+                # Convert decimal X-GM-THRID to hex (Gmail API threadId format)
+                thread_id = format(int(thrid_match.group(1)), 'x')
+
         raw_email = data[0][1]
         msg = email.message_from_bytes(raw_email)
         
@@ -77,7 +89,8 @@ def _find_latest_email_by_subject_sync(contract_number: str):
             "from": _clean_header(_decode_header_str(msg.get("From"))),
             "to": _clean_header(_decode_header_str(msg.get("To"))),
             "cc": _clean_header(_decode_header_str(msg.get("Cc"))),
-            "references": _clean_header(msg.get("References", ""))
+            "references": _clean_header(msg.get("References", "")),
+            "thread_id": thread_id,
         }
         
         mail.logout()
@@ -217,13 +230,14 @@ async def send_phathanh_reply(original_mail, html_body, settings):
             print(f"Replying to email using OAuth2 API for provider: {provider}")
             await send_email_via_oauth2(
                 provider=provider,
-                from_email=settings.mail_from or settings.username,
+                from_email=_clean_header(settings.mail_from or settings.username),
                 to_email=", ".join(final_to),
                 subject=subject,
                 html_body=html_body,
                 cc_emails=final_cc,
                 reply_to_msg_id=original_mail["msg_id"],
-                references=original_mail["references"]
+                references=original_mail["references"],
+                thread_id=original_mail.get("thread_id") or None,
             )
             return True
         except Exception as exc:
@@ -252,7 +266,10 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
     if provider:
         try:
             print(f"Finding original email for {contract_number} via OAuth2 API for provider: {provider}")
-            oauth_emails = await fetch_emails_via_oauth2(provider, query_contract=contract_number, limit=5)
+            # Search ALL emails (not just unread) to find the original thread
+            oauth_emails = await fetch_emails_via_oauth2(
+                provider, query_contract=contract_number, limit=5, unread_only=False
+            )
             if oauth_emails:
                 # Get latest raw email
                 latest_item = oauth_emails[0]
@@ -264,8 +281,10 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
                     "from": _clean_header(_decode_header_str(msg.get("From"))),
                     "to": _clean_header(_decode_header_str(msg.get("To"))),
                     "cc": _clean_header(_decode_header_str(msg.get("Cc"))),
-                    "references": _clean_header(msg.get("References", ""))
+                    "references": _clean_header(msg.get("References", "")),
+                    "thread_id": latest_item.get("thread_id", ""),
                 }
+                print(f"Found original email: subject='{original_mail['subject']}', thread_id='{original_mail.get('thread_id', '')}', msg_id='{original_mail['msg_id']}'")
         except Exception as exc:
             print(f"OAuth2 email lookup failed: {exc}, falling back to IMAP.")
             provider = None
@@ -373,16 +392,18 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
             orig_subject = original_mail["subject"]
             subject = orig_subject if orig_subject.lower().startswith("re:") else f"Re: {orig_subject}"
 
-            print(f"Replying to email using OAuth2 API for provider: {provider}")
+            thread_id = original_mail.get("thread_id") or None
+            print(f"Replying to email using OAuth2 API for provider: {provider}, thread_id={thread_id}")
             await send_email_via_oauth2(
                 provider=provider,
-                from_email=settings.mail_from or settings.username,
+                from_email=_clean_header(settings.mail_from or settings.username),
                 to_email=", ".join(final_to),
                 subject=subject,
                 html_body=html_body,
                 cc_emails=final_cc,
                 reply_to_msg_id=original_mail["msg_id"],
-                references=original_mail["references"]
+                references=original_mail["references"],
+                thread_id=thread_id,
             )
             success = True
         except Exception as exc:

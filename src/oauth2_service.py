@@ -444,7 +444,8 @@ async def send_email_via_oauth2(
 async def fetch_emails_via_oauth2(
     provider: str,
     query_contract: str | None = None,
-    limit: int = 15
+    limit: int = 15,
+    unread_only: bool = True,
 ) -> list[dict[str, Any]]:
     """Tải và parse danh sách email thông qua REST API Google/Microsoft."""
     access_token = await get_valid_access_token_async(provider)
@@ -456,7 +457,9 @@ async def fetch_emails_via_oauth2(
             # Search messages
             search_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
             params: dict[str, Any] = {"maxResults": limit}
-            q_parts = ["is:unread", "label:INBOX"]
+            q_parts: list[str] = []
+            if unread_only:
+                q_parts.extend(["is:unread", "label:INBOX"])
             if query_contract:
                 q_parts.append(f'subject:"{query_contract}"')
             params["q"] = " ".join(q_parts)
@@ -490,10 +493,13 @@ async def fetch_emails_via_oauth2(
                 "$select": "id,subject",
                 "$orderby": "receivedDateTime desc"
             }
-            filter_parts = ["isRead eq false"]
+            filter_parts: list[str] = []
+            if unread_only:
+                filter_parts.append("isRead eq false")
             if query_contract:
                 filter_parts.append(f"contains(subject, '{query_contract}')")
-            params["$filter"] = " and ".join(filter_parts)
+            if filter_parts:
+                params["$filter"] = " and ".join(filter_parts)
 
             response = await client.get(search_url, headers=headers, params=params)
             if response.status_code != 200:
