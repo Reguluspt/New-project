@@ -94,19 +94,19 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             safe_asset_to = html.escape(asset.get("so_to", ""))
             safe_asset_dia_chi = html.escape(asset.get("dia_chi", ""))
             table_rows_html += f"""
-              <tr><td colspan="2" style="padding:10px 16px;border-top:1px solid #cae4e5;background:#f5fbfb;color:#006a70;font-weight:bold;">Tài sản {idx}</td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_asset_thua}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_asset_to}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_dia_chi}</td></tr>
+              <tr><td colspan="2" style="padding:10px 16px;border-top:1px solid #cae4e5;background:#fdfbf7;color:#024743;font-weight:bold;">Tài sản {idx}</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_asset_thua}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_asset_to}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_dia_chi}</td></tr>
             """
             
         detail_table_html = f"""
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;">
               <tr>
-                <td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#006a70;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td>
+                <td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#024743;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td>
               </tr>
-              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
+              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
               {table_rows_html}
             </table>
         """
@@ -134,20 +134,24 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
         detail_table_html = f"""
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;">
               <tr>
-                <td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#006a70;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td>
+                <td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#024743;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td>
               </tr>
-              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_thua}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_to}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_dia_chi}</td></tr>
+              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_thua}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_to}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_dia_chi}</td></tr>
             </table>
         """
 
     body_html = f"""
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fb;margin:0;padding:20px 0;font-family:Arial,'Segoe UI',sans-serif;color:#11284d;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAF6F0;margin:0;padding:20px 0;font-family:'Montserrat',Arial,sans-serif;color:#11284d;">
   <tr>
     <td align="center">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+        * {{ font-family: 'Montserrat', Arial, sans-serif !important; }}
+      </style>
       <table role="presentation" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
         <tr>
           <td style="padding:15px 28px;background:#ffffff;">
@@ -155,34 +159,34 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
           </td>
         </tr>
         <tr>
-          <td style="padding:19px 28px;background:#008e96;color:#ffffff;font-size:14px;font-weight:bold;line-height:1.4;">
+          <td style="padding:19px 28px;background:#008B95;color:#ffffff;font-size:14px;font-weight:bold;line-height:1.4;">
             YÊU CẦU THAM KHẢO GIÁ TRỊ SƠ BỘ TÀI SẢN
           </td>
         </tr>
         <tr>
-          <td style="padding:28px;font-size:15px;line-height:1.55;color:#283952;">
-            <p style="margin:0 0 18px;">Kính gửi Anh/Chị,</p>
+          <td style="padding:28px;font-size:15px;line-height:1.55;color:#024743;">
+            <p style="margin:0 0 18px;font-weight:500;">Kính gửi Anh/Chị,</p>
             <p style="margin:0 0 22px;">Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:</p>
             {detail_table_html}
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e2e8f0;background:#f7fafc;border-radius:7px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e2e8f0;background:#fdfbf7;border-radius:7px;">
               <tr>
                 <td style="padding:14px 16px;">
-                  <strong style="display:block;font-size:14px;color:#11284d;">Định vị tài sản</strong>
+                  <strong style="display:block;font-size:14px;color:#024743;">Định vị tài sản</strong>
                   <span style="font-size:13px;color:#64748b;">Đường dẫn Google Maps từ quy trình /sobo</span>
                 </td>
                 <td align="right" style="padding:14px 16px;">
-                  <a href="{safe_href}" style="display:inline-block;padding:10px 14px;border-radius:6px;background:#008e96;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;">Xem vị trí tài sản</a>
+                  <a href="{safe_href}" style="display:inline-block;padding:10px 14px;border-radius:6px;background:#008B95;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;">Xem vị trí tài sản</a>
                 </td>
               </tr>
             </table>
             <p style="margin:0 0 18px;">Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để Phòng Kinh Doanh tiếp tục làm việc với khách hàng.</p>
             <p style="margin:0 0 24px;">Trân trọng cảm ơn Anh/Chị.</p>
             <div style="padding-top:20px;border-top:1px solid #e2e8f0;font-size:13px;line-height:1.5;color:#45566f;">
-              <div style="font-size:16px;font-weight:bold;color:#006a70;">PHẠM NGỌC THANH TRƯỜNG</div>
-              <div style="font-weight:bold;color:#d39a58;margin-bottom:6px;">Trưởng phòng Kinh Doanh Khu vực Tây Nguyên</div>
-              <div>Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE</div>
+              <div style="font-size:16px;font-weight:bold;color:#024743;">PHẠM NGỌC THANH TRƯỜNG</div>
+              <div style="font-weight:bold;color:#D49959;margin-bottom:6px;">Trưởng phòng Kinh Doanh Khu vực Tây Nguyên</div>
+              <div style="font-weight:500;">Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE</div>
               <div>Điện thoại: 0905 22 69 68 - 0913 503 051</div>
-              <div>Email: <a href="mailto:truongpnt@cenvalue.vn" style="color:#006a70;text-decoration:none;">truongpnt@cenvalue.vn</a></div>
+              <div>Email: <a href="mailto:truongpnt@cenvalue.vn" style="color:#024743;text-decoration:none;font-weight:500;">truongpnt@cenvalue.vn</a></div>
             </div>
           </td>
         </tr>
@@ -213,29 +217,33 @@ def build_machinery_email_content(sobo: dict) -> tuple[str, str]:
         "Email: truongpnt@cenvalue.vn"
     )
     body_html = f"""
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fb;margin:0;padding:20px 0;font-family:Arial,'Segoe UI',sans-serif;color:#11284d;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAF6F0;margin:0;padding:20px 0;font-family:'Montserrat',Arial,sans-serif;color:#11284d;">
   <tr>
     <td align="center">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+        * {{ font-family: 'Montserrat', Arial, sans-serif !important; }}
+      </style>
       <table role="presentation" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
         <tr><td style="padding:15px 28px;background:#ffffff;"><img src="cid:cenvalue_logo" width="170" alt="CENVALUE" style="display:block;width:170px;max-width:100%;height:auto;border:0;"></td></tr>
-        <tr><td style="padding:19px 28px;background:#008e96;color:#ffffff;font-size:14px;font-weight:bold;line-height:1.4;">YÊU CẦU THAM KHẢO GIÁ TRỊ SƠ BỘ TÀI SẢN</td></tr>
+        <tr><td style="padding:19px 28px;background:#008B95;color:#ffffff;font-size:14px;font-weight:bold;line-height:1.4;">YÊU CẦU THAM KHẢO GIÁ TRỊ SƠ BỘ TÀI SẢN</td></tr>
         <tr>
-          <td style="padding:28px;font-size:15px;line-height:1.55;color:#283952;">
-            <p style="margin:0 0 18px;">Kính gửi Anh/Chị,</p>
+          <td style="padding:28px;font-size:15px;line-height:1.55;color:#024743;">
+            <p style="margin:0 0 18px;font-weight:500;">Kính gửi Anh/Chị,</p>
             <p style="margin:0 0 22px;">Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;">
-              <tr><td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#006a70;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td></tr>
-              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">Máy móc thiết bị</td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Tên thiết bị</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_name}</strong></td></tr>
+              <tr><td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#024743;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td></tr>
+              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">Máy móc thiết bị</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Tên thiết bị</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_name}</strong></td></tr>
             </table>
             <p style="margin:22px 0 18px;">Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để Phòng Kinh Doanh tiếp tục làm việc với khách hàng.</p>
             <p style="margin:0 0 24px;">Trân trọng cảm ơn Anh/Chị.</p>
             <div style="padding-top:20px;border-top:1px solid #e2e8f0;font-size:13px;line-height:1.5;color:#45566f;">
-              <div style="font-size:16px;font-weight:bold;color:#006a70;">PHẠM NGỌC THANH TRƯỜNG</div>
-              <div style="font-weight:bold;color:#d39a58;margin-bottom:6px;">Trưởng phòng Kinh Doanh Khu vực Tây Nguyên</div>
-              <div>Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE</div>
+              <div style="font-size:16px;font-weight:bold;color:#024743;">PHẠM NGỌC THANH TRƯỜNG</div>
+              <div style="font-weight:bold;color:#D49959;margin-bottom:6px;">Trưởng phòng Kinh Doanh Khu vực Tây Nguyên</div>
+              <div style="font-weight:500;">Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE</div>
               <div>Điện thoại: 0905 22 69 68 - 0913 503 051</div>
-              <div>Email: <a href="mailto:truongpnt@cenvalue.vn" style="color:#006a70;text-decoration:none;">truongpnt@cenvalue.vn</a></div>
+              <div>Email: <a href="mailto:truongpnt@cenvalue.vn" style="color:#024743;text-decoration:none;font-weight:500;">truongpnt@cenvalue.vn</a></div>
             </div>
           </td>
         </tr>
