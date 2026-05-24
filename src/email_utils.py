@@ -54,10 +54,17 @@ async def send_sobo_email_with_result(
     subject: str,
     body: str,
     html_body: str = None,
-    attachment_path: str = None,
+    attachment_path: str | list[str] = None,
     cc_emails: list[str] = None,
 ) -> SoboEmailResult:
     _load_env()
+    
+    attachment_paths = []
+    if attachment_path:
+        if isinstance(attachment_path, list):
+            attachment_paths = attachment_path
+        else:
+            attachment_paths = [attachment_path]
     
     # --- TÍCH HỢP OAUTH2 ---
     from .oauth2_service import is_oauth_enabled, get_valid_access_token_async
@@ -91,18 +98,19 @@ async def send_sobo_email_with_result(
                 msg.add_alternative(html_body, subtype="html")
                 _attach_sobo_logo(msg)
                         
-            if attachment_path and os.path.exists(attachment_path):
-                filename = os.path.basename(attachment_path)
-                with open(attachment_path, "rb") as f:
-                    file_data = f.read()
-                maintype = "application"
-                subtype = "octet-stream"
-                if filename.lower().endswith(".pdf"):
-                    subtype = "pdf"
-                elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                    maintype = "image"
-                    subtype = "jpeg" if filename.lower().endswith(".jpg") else filename.lower().split(".")[-1]
-                msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
+            for path in attachment_paths:
+                if path and os.path.exists(path):
+                    filename = os.path.basename(path)
+                    with open(path, "rb") as f:
+                        file_data = f.read()
+                    maintype = "application"
+                    subtype = "octet-stream"
+                    if filename.lower().endswith(".pdf"):
+                        subtype = "pdf"
+                    elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                        maintype = "image"
+                        subtype = "jpeg" if filename.lower().endswith(".jpg") else filename.lower().split(".")[-1]
+                    msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
                 
             access_token = await get_valid_access_token_async(provider)
             
@@ -145,15 +153,16 @@ async def send_sobo_email_with_result(
                             "isInline": True,
                             "contentId": "cenvalue_logo",
                         })
-                if attachment_path and os.path.exists(attachment_path):
-                    filename = os.path.basename(attachment_path)
-                    content_bytes = base64.b64encode(open(attachment_path, "rb").read()).decode("utf-8")
-                    attachments_payload.append({
-                        "@odata.type": "#microsoft.graph.fileAttachment",
-                        "name": filename,
-                        "contentType": "application/pdf" if filename.lower().endswith(".pdf") else "image/jpeg",
-                        "contentBytes": content_bytes
-                    })
+                for path in attachment_paths:
+                    if path and os.path.exists(path):
+                        filename = os.path.basename(path)
+                        content_bytes = base64.b64encode(open(path, "rb").read()).decode("utf-8")
+                        attachments_payload.append({
+                            "@odata.type": "#microsoft.graph.fileAttachment",
+                            "name": filename,
+                            "contentType": "application/pdf" if filename.lower().endswith(".pdf") else "image/jpeg",
+                            "contentBytes": content_bytes
+                        })
                     
                 email_payload = {
                     "message": {
@@ -209,25 +218,26 @@ async def send_sobo_email_with_result(
         msg.add_alternative(html_body, subtype="html")
         _attach_sobo_logo(msg)
 
-    if attachment_path and os.path.exists(attachment_path):
-        filename = os.path.basename(attachment_path)
-        try:
-            with open(attachment_path, "rb") as f:
-                file_data = f.read()
-                maintype = "application"
-                if filename.lower().endswith(".pdf"):
-                    subtype = "pdf"
-                elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                    maintype = "image"
-                    subtype = filename.lower().split(".")[-1]
-                    if subtype == "jpg":
-                        subtype = "jpeg"
-                else:
-                    subtype = "octet-stream"
+    for path in attachment_paths:
+        if path and os.path.exists(path):
+            filename = os.path.basename(path)
+            try:
+                with open(path, "rb") as f:
+                    file_data = f.read()
+                    maintype = "application"
+                    if filename.lower().endswith(".pdf"):
+                        subtype = "pdf"
+                    elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                        maintype = "image"
+                        subtype = filename.lower().split(".")[-1]
+                        if subtype == "jpg":
+                            subtype = "jpeg"
+                    else:
+                        subtype = "octet-stream"
 
-                msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
-        except Exception as e:
-            logger.error(f"Loi khi doc file dinh kem {attachment_path}: {e}")
+                    msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
+            except Exception as e:
+                logger.error(f"Loi khi doc file dinh kem {path}: {e}")
 
     try:
         logger.info(f"Dang gui email so bo toi {to_email}...")
@@ -256,7 +266,7 @@ async def send_sobo_email(
     subject: str,
     body: str,
     html_body: str = None,
-    attachment_path: str = None,
+    attachment_path: str | list[str] = None,
     cc_emails: list[str] = None,
 ) -> bool:
     result = await send_sobo_email_with_result(

@@ -27,6 +27,12 @@ from src.sobo_handler import (
     sobo_require_machinery_file,
     sobo_select_asset_type,
     sobo_select_email,
+    SOBO_RE_SUB_TYPE,
+    SOBO_DOC_MULTI,
+    SOBO_DOC_MULTI_CHOICE,
+    sobo_select_re_sub_type,
+    _process_sobo_extracted_file_multi,
+    sobo_multi_doc_choice,
 )
 
 
@@ -273,6 +279,141 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(state, ConversationHandler.END)
         self.assertNotIn("sobo", context.user_data)
+
+    async def test_real_estate_asset_select_sub_types(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_asset_real_estate"
+        context = Mock()
+        context.user_data = {"sobo": {}}
+
+        state = await sobo_select_asset_type(update, context)
+
+        self.assertEqual(state, SOBO_RE_SUB_TYPE)
+        self.assertEqual(context.user_data["sobo"]["asset_type"], "real_estate")
+        update.callback_query.edit_message_text.assert_awaited_once()
+        keyboard = update.callback_query.edit_message_text.await_args.kwargs["reply_markup"]
+        labels = [row[0].text for row in keyboard.inline_keyboard]
+        self.assertIn("📄 Hồ sơ 1 tài sản", labels)
+        self.assertIn("📚 Hồ sơ nhiều tài sản", labels)
+
+    async def test_re_sub_type_select_single(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_re_single"
+        context = Mock()
+        context.user_data = {"sobo": {}}
+
+        state = await sobo_select_re_sub_type(update, context)
+
+        self.assertEqual(state, SOBO_DOC)
+        self.assertEqual(context.user_data["sobo"]["asset_sub_type"], "single")
+        update.callback_query.edit_message_text.assert_awaited_once()
+
+    async def test_re_sub_type_select_multi(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_re_multi"
+        context = Mock()
+        context.user_data = {"sobo": {}}
+
+        state = await sobo_select_re_sub_type(update, context)
+
+        self.assertEqual(state, SOBO_DOC_MULTI)
+        self.assertEqual(context.user_data["sobo"]["asset_sub_type"], "multi")
+        self.assertEqual(context.user_data["sobo"]["assets_list"], [])
+        self.assertEqual(context.user_data["sobo"]["file_paths"], [])
+        update.callback_query.edit_message_text.assert_awaited_once()
+
+    async def test_multi_asset_scanning_loop(self) -> None:
+        # Asset 1
+        extraction1 = LandCertificateExtraction(
+            so_thua_dat=_value("234"),
+            so_to_ban_do=_value("54"),
+            dia_chi_thua_dat=_value("Phường Pleiku, Gia Lai"),
+            ten_chu_so_huu_cuoi_cung=_value("Nguyen Van A"),
+            dia_chi_chu_so_huu_cuoi_cung=_value("Gia Lai"),
+            so_cccd_chu_so_huu_cuoi_cung=_value("012345678901"),
+            notes=[],
+        )
+        update1 = Mock()
+        update1.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {"sobo": {"asset_type": "real_estate", "asset_sub_type": "multi", "assets_list": [], "file_paths": [], "attachment_names": []}}
+
+        with patch("asyncio.to_thread", AsyncMock(return_value=extraction1)):
+            state = await _process_sobo_extracted_file_multi(update1, context, str(Path("gcn1.pdf")))
+
+        self.assertEqual(state, SOBO_DOC_MULTI_CHOICE)
+        self.assertEqual(len(context.user_data["sobo"]["assets_list"]), 1)
+        self.assertEqual(context.user_data["sobo"]["assets_list"][0]["so_thua"], "234")
+        self.assertEqual(context.user_data["sobo"]["assets_list"][0]["so_to"], "54")
+        self.assertEqual(context.user_data["sobo"]["assets_list"][0]["dia_chi"], "Phường Pleiku, Gia Lai")
+
+        # Select next
+        update_query_next = Mock()
+        update_query_next.callback_query.answer = AsyncMock()
+        update_query_next.callback_query.edit_message_text = AsyncMock()
+        update_query_next.callback_query.data = "sobo_multi_next"
+
+        state_next = await sobo_multi_doc_choice(update_query_next, context)
+        self.assertEqual(state_next, SOBO_DOC_MULTI)
+
+        # Asset 2
+        extraction2 = LandCertificateExtraction(
+            so_thua_dat=_value("235"),
+            so_to_ban_do=_value("54"),
+            dia_chi_thua_dat=_value("Phường Pleiku, Gia Lai"),
+            ten_chu_so_huu_cuoi_cung=_value("Nguyen Van A"),
+            dia_chi_chu_so_huu_cuoi_cung=_value("Gia Lai"),
+            so_cccd_chu_so_huu_cuoi_cung=_value("012345678901"),
+            notes=[],
+        )
+        update2 = Mock()
+        update2.message.reply_text = AsyncMock()
+
+        with patch("asyncio.to_thread", AsyncMock(return_value=extraction2)):
+            state = await _process_sobo_extracted_file_multi(update2, context, str(Path("gcn2.pdf")))
+
+        self.assertEqual(state, SOBO_DOC_MULTI_CHOICE)
+        self.assertEqual(len(context.user_data["sobo"]["assets_list"]), 2)
+        self.assertEqual(context.user_data["sobo"]["assets_list"][1]["so_thua"], "235")
+
+        # Select done
+        update_query_done = Mock()
+        update_query_done.callback_query.answer = AsyncMock()
+        update_query_done.callback_query.edit_message_text = AsyncMock()
+        update_query_done.callback_query.data = "sobo_multi_done"
+
+        state_done = await sobo_multi_doc_choice(update_query_done, context)
+        self.assertEqual(state_done, SOBO_DOC)
+        self.assertEqual(context.user_data["sobo"]["suggested_email"], "Sobo.taynguyen@gmail.com")
+
+    def test_build_email_content_multi(self) -> None:
+        sobo = {
+            "source": "KH Hợp Khối",
+            "asset_sub_type": "multi",
+            "assets_list": [
+                {"so_thua": "234", "so_to": "54", "dia_chi": "Pleiku, Gia Lai"},
+                {"so_thua": "235", "so_to": "54", "dia_chi": "Pleiku, Gia Lai"}
+            ],
+            "link": "https://maps.google.com/?q=1&z=2"
+        }
+        body, body_html = build_sobo_email_content(sobo)
+
+        self.assertIn("DANH SÁCH CHI TIẾT TÀI SẢN:", body)
+        self.assertIn("Tài sản 1:", body)
+        self.assertIn("Số thửa đất: 234", body)
+        self.assertIn("Tài sản 2:", body)
+        self.assertIn("Số thửa đất: 235", body)
+
+        self.assertIn("Thông tin chi tiết thửa đất", body_html)
+        self.assertIn("Tài sản 1", body_html)
+        self.assertIn("Tài sản 2", body_html)
+        self.assertIn("Pleiku, Gia Lai", body_html)
 
 
 if __name__ == "__main__":

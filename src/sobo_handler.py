@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
     SOBO_MACHINERY_DOC,
     SOBO_MACHINERY_NAME,
     SOBO_MACHINERY_EMAIL,
-) = range(20, 28)
+    SOBO_RE_SUB_TYPE,
+    SOBO_DOC_MULTI,
+    SOBO_DOC_MULTI_CHOICE,
+) = range(20, 31)
 
 # Danh sách Mapping
 SOBO_MAPPING = {
@@ -48,32 +51,101 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
     parsed_link = urlparse(link)
     href = link if parsed_link.scheme in {"http", "https"} else "#"
 
-    body = (
-        "Kính gửi Anh/Chị,\n\n"
-        "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
-        "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
-        f"- Nguồn khách hàng: {source}\n"
-        f"- Loại tài sản: {SOBO_ASSET_TYPE}\n"
-        f"- Số thửa đất: {so_thua}\n"
-        f"- Số tờ bản đồ: {so_to}\n"
-        f"- Địa chỉ tài sản: {dia_chi}\n"
-        f"- Định vị tài sản: {link}\n\n"
-        "Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để "
-        "Phòng Kinh Doanh tiếp tục làm việc với khách hàng.\n\n"
-        "Trân trọng cảm ơn Anh/Chị.\n\n"
-        "PHẠM NGỌC THANH TRƯỜNG\n"
-        "Trưởng phòng Kinh Doanh Khu vực Tây Nguyên\n"
-        "Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE\n"
-        "Điện thoại: 0905 22 69 68 - 0913 503 051\n"
-        "Email: truongpnt@cenvalue.vn"
-    )
-
     safe_source = html.escape(source)
     safe_so_thua = html.escape(so_thua)
     safe_so_to = html.escape(so_to)
     safe_dia_chi = html.escape(dia_chi)
     safe_href = html.escape(href, quote=True)
     safe_asset_type = html.escape(SOBO_ASSET_TYPE)
+
+    if sobo.get("asset_sub_type") == "multi":
+        assets_list = sobo.get("assets_list", [])
+        assets_text = ""
+        for idx, asset in enumerate(assets_list, 1):
+            assets_text += (
+                f"Tài sản {idx}:\n"
+                f"- Số thửa đất: {asset.get('so_thua', '')}\n"
+                f"- Số tờ bản đồ: {asset.get('so_to', '')}\n"
+                f"- Địa chỉ tài sản: {asset.get('dia_chi', '')}\n\n"
+            )
+            
+        body = (
+            "Kính gửi Anh/Chị,\n\n"
+            "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
+            "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
+            f"- Nguồn khách hàng: {source}\n"
+            f"- Loại tài sản: {SOBO_ASSET_TYPE}\n"
+            f"- Định vị tài sản: {link}\n\n"
+            f"DANH SÁCH CHI TIẾT TÀI SẢN:\n"
+            f"{assets_text}"
+            "Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để "
+            "Phòng Kinh Doanh tiếp tục làm việc với khách hàng.\n\n"
+            "Trân trọng cảm ơn Anh/Chị.\n\n"
+            "PHẠM NGỌC THANH TRƯỜNG\n"
+            "Trưởng phòng Kinh Doanh Khu vực Tây Nguyên\n"
+            "Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE\n"
+            "Điện thoại: 0905 22 69 68 - 0913 503 051\n"
+            "Email: truongpnt@cenvalue.vn"
+        )
+        
+        table_rows_html = ""
+        for idx, asset in enumerate(assets_list, 1):
+            safe_asset_thua = html.escape(asset.get("so_thua", ""))
+            safe_asset_to = html.escape(asset.get("so_to", ""))
+            safe_asset_dia_chi = html.escape(asset.get("dia_chi", ""))
+            table_rows_html += f"""
+              <tr>
+                <td align="center" style="padding:12px 16px;border-top:1px solid #edf2f8;border-right:1px solid #cae4e5;font-weight:bold;color:#64748b;vertical-align:top;background:#fcfdfd;">Tài sản {idx}</td>
+                <td style="padding:12px 16px;border-top:1px solid #edf2f8;line-height:1.6;">
+                  Số thửa đất: <strong>{safe_asset_thua}</strong><br/>
+                  Số tờ bản đồ: <strong>{safe_asset_to}</strong><br/>
+                  Địa chỉ tài sản: {safe_asset_dia_chi}
+                </td>
+              </tr>
+            """
+            
+        detail_table_html = f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;border-collapse:collapse;">
+              <tr style="background:#eff9f9;color:#006a70;font-weight:bold;">
+                <td style="padding:12px 16px;border-bottom:1px solid #cae4e5;width:90px;text-align:center;border-right:1px solid #cae4e5;">Tài sản</td>
+                <td style="padding:12px 16px;border-bottom:1px solid #cae4e5;">Thông tin chi tiết thửa đất</td>
+              </tr>
+              {table_rows_html}
+            </table>
+        """
+    else:
+        body = (
+            "Kính gửi Anh/Chị,\n\n"
+            "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
+            "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
+            f"- Nguồn khách hàng: {source}\n"
+            f"- Loại tài sản: {SOBO_ASSET_TYPE}\n"
+            f"- Số thửa đất: {so_thua}\n"
+            f"- Số tờ bản đồ: {so_to}\n"
+            f"- Địa chỉ tài sản: {dia_chi}\n"
+            f"- Định vị tài sản: {link}\n\n"
+            "Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để "
+            "Phòng Kinh Doanh tiếp tục làm việc với khách hàng.\n\n"
+            "Trân trọng cảm ơn Anh/Chị.\n\n"
+            "PHẠM NGỌC THANH TRƯỜNG\n"
+            "Trưởng phòng Kinh Doanh Khu vực Tây Nguyên\n"
+            "Công ty Cổ phần Thẩm định giá Thế Kỷ - CENVALUE\n"
+            "Điện thoại: 0905 22 69 68 - 0913 503 051\n"
+            "Email: truongpnt@cenvalue.vn"
+        )
+        
+        detail_table_html = f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;">
+              <tr>
+                <td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#006a70;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td>
+              </tr>
+              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_thua}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_to}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_dia_chi}</td></tr>
+            </table>
+        """
 
     body_html = f"""
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fb;margin:0;padding:20px 0;font-family:Arial,'Segoe UI',sans-serif;color:#11284d;">
@@ -94,16 +166,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
           <td style="padding:28px;font-size:15px;line-height:1.55;color:#283952;">
             <p style="margin:0 0 18px;">Kính gửi Anh/Chị,</p>
             <p style="margin:0 0 22px;">Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:</p>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;">
-              <tr>
-                <td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#006a70;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td>
-              </tr>
-              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_thua}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_so_to}</strong></td></tr>
-              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_dia_chi}</td></tr>
-            </table>
+            {detail_table_html}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e2e8f0;background:#f7fafc;border-radius:7px;">
               <tr>
                 <td style="padding:14px 16px;">
@@ -218,6 +281,22 @@ def build_asset_type_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def build_re_sub_type_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📄 Hồ sơ 1 tài sản", callback_data="sobo_re_single")],
+        [InlineKeyboardButton("📚 Hồ sơ nhiều tài sản", callback_data="sobo_re_multi")],
+        [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+    ])
+
+
+def build_multi_doc_choice_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Quét tài sản tiếp theo", callback_data="sobo_multi_next")],
+        [InlineKeyboardButton("✅ Kết thúc quét", callback_data="sobo_multi_done")],
+        [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+    ])
+
+
 async def cmd_sobo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📝 *Bắt đầu quy trình Gửi Sơ bộ*\n\n"
@@ -237,10 +316,10 @@ async def sobo_select_asset_type(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data['sobo']['asset_type'] = "real_estate"
         await query.edit_message_text(
             "🏠 Đã chọn Bất động sản.\n\n"
-            "Vui lòng gửi Ảnh chụp hoặc File PDF Giấy chứng nhận quyền sử dụng đất "
-            "để tôi quét thông tin Tỉnh/Thành phố và Thửa đất."
+            "Vui lòng chọn loại hồ sơ cần gửi sơ bộ:",
+            reply_markup=build_re_sub_type_keyboard(),
         )
-        return SOBO_DOC
+        return SOBO_RE_SUB_TYPE
 
     if query.data != "sobo_asset_machinery":
         await query.edit_message_text("❌ Loại tài sản không hợp lệ. Vui lòng bắt đầu lại bằng /sobo.")
@@ -254,6 +333,36 @@ async def sobo_select_asset_type(update: Update, context: ContextTypes.DEFAULT_T
         "File sẽ không được quét hoặc phân tích."
     )
     return SOBO_MACHINERY_DOC
+
+
+async def sobo_select_re_sub_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    sobo = context.user_data.setdefault('sobo', {})
+    
+    if query.data == "sobo_re_single":
+        sobo['asset_sub_type'] = "single"
+        await query.edit_message_text(
+            "📄 Đã chọn Hồ sơ 1 tài sản.\n\n"
+            "Vui lòng gửi Ảnh chụp hoặc File PDF Giấy chứng nhận quyền sử dụng đất "
+            "để tôi quét thông tin Tỉnh/Thành phố và Thửa đất."
+        )
+        return SOBO_DOC
+        
+    elif query.data == "sobo_re_multi":
+        sobo['asset_sub_type'] = "multi"
+        sobo['assets_list'] = []
+        sobo['file_paths'] = []
+        sobo['attachment_names'] = []
+        await query.edit_message_text(
+            "📚 Đã chọn Hồ sơ nhiều tài sản.\n\n"
+            "Vui lòng gửi Ảnh chụp hoặc File PDF của **Tài sản thứ 1** để tôi quét thông tin:"
+        )
+        return SOBO_DOC_MULTI
+        
+    await query.edit_message_text("❌ Lựa chọn không hợp lệ. Vui lòng bắt đầu lại bằng /sobo.")
+    context.user_data.pop('sobo', None)
+    return ConversationHandler.END
 
 import asyncio
 import fitz
@@ -282,6 +391,185 @@ async def sobo_receive_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     else:
         await update.message.reply_text("❌ Vui lòng gửi một tài liệu (PDF) hoặc hình ảnh (JPG/PNG).")
+        return SOBO_DOC
+
+
+async def sobo_receive_doc_multi(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    if message.document:
+        asyncio.create_task(_process_sobo_single_file_multi(update, context, message.document, "pdf"))
+        return SOBO_DOC_MULTI
+    elif message.photo:
+        media_group_id = message.media_group_id
+        if not media_group_id:
+            asyncio.create_task(_process_sobo_single_file_multi(update, context, message.photo[-1], "jpg"))
+            return SOBO_DOC_MULTI
+
+        if "sobo_media_groups_multi" not in context.bot_data:
+            context.bot_data["sobo_media_groups_multi"] = {}
+        
+        if media_group_id not in context.bot_data["sobo_media_groups_multi"]:
+            context.bot_data["sobo_media_groups_multi"][media_group_id] = []
+            asyncio.create_task(_wait_and_process_sobo_media_group_multi(media_group_id, context))
+        
+        context.bot_data["sobo_media_groups_multi"][media_group_id].append(update)
+        return SOBO_DOC_MULTI
+            
+    else:
+        await update.message.reply_text("❌ Vui lòng gửi một tài liệu (PDF) hoặc hình ảnh (JPG/PNG).")
+        return SOBO_DOC_MULTI
+
+
+async def _wait_and_process_sobo_media_group_multi(media_group_id: str, context: ContextTypes.DEFAULT_TYPE):
+    await asyncio.sleep(1.5)
+    updates = context.bot_data["sobo_media_groups_multi"].pop(media_group_id, [])
+    if updates:
+        await _handle_sobo_media_group_photos_multi(updates, context)
+
+
+async def _process_sobo_single_file_multi(update: Update, context: ContextTypes.DEFAULT_TYPE, file_ref, ext: str):
+    file = await context.bot.get_file(file_ref.file_id)
+    await update.message.reply_text("⏳ Đang tải và phân tích GCN bằng AI Gemini, vui lòng đợi giây lát...")
+    
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, f"sobo_multi_{uuid4().hex}.{ext}")
+    await file.download_to_drive(file_path)
+    
+    return await _process_sobo_extracted_file_multi(update, context, file_path)
+
+
+async def _handle_sobo_media_group_photos_multi(updates: list[Update], context: ContextTypes.DEFAULT_TYPE):
+    first_update = updates[0]
+    await first_update.message.reply_text(f"Đã nhận album gồm {len(updates)} ảnh. Đang ghép thành file PDF và quét bằng AI...")
+    
+    try:
+        updates.sort(key=lambda u: u.message.message_id)
+        image_paths = []
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        for i, up in enumerate(updates):
+            photo = up.message.photo[-1]
+            file = await context.bot.get_file(photo.file_id)
+            temp_path = os.path.join(upload_dir, f"sobo_part_multi_{i}_{photo.file_unique_id}.jpg")
+            await file.download_to_drive(temp_path)
+            image_paths.append(temp_path)
+            
+        merged_pdf_path = os.path.join(upload_dir, f"sobo_merged_multi_{uuid4().hex[:8]}.pdf")
+        
+        # Merge PDF
+        doc = fitz.open()
+        for img_path in image_paths:
+            try:
+                img_doc = fitz.open(img_path)
+                pdf_bytes = img_doc.convert_to_pdf()
+                img_doc.close()
+                with fitz.open("pdf", pdf_bytes) as img_pdf:
+                    doc.insert_pdf(img_pdf)
+            except Exception:
+                pass
+        doc.save(merged_pdf_path)
+        doc.close()
+        
+        for p in image_paths:
+            try: os.remove(p)
+            except: pass
+            
+        return await _process_sobo_extracted_file_multi(first_update, context, merged_pdf_path)
+        
+    except Exception as exc:
+        await first_update.message.reply_text(f"Xử lý album ảnh thất bại: {exc}")
+        return SOBO_DOC_MULTI
+
+
+async def _process_sobo_extracted_file_multi(update: Update, context: ContextTypes.DEFAULT_TYPE, file_path: str):
+    try:
+        api_key = os.getenv("GEMINI_API_KEY", "")
+        model_id = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        
+        import asyncio
+        from asyncio import to_thread
+        extraction = await to_thread(extract_land_certificate_with_gemini, file_path, api_key=api_key, model=model_id)
+        
+        if hasattr(extraction, "assets") and extraction.assets:
+            asset = extraction.assets[0]
+        else:
+            asset = extraction
+            
+        so_thua = asset.so_thua_dat.value.strip() if hasattr(asset, "so_thua_dat") and asset.so_thua_dat else ""
+        so_to = asset.so_to_ban_do.value.strip() if hasattr(asset, "so_to_ban_do") and asset.so_to_ban_do else ""
+        dia_chi = asset.dia_chi_thua_dat.value.strip() if hasattr(asset, "dia_chi_thua_dat") and asset.dia_chi_thua_dat else ""
+        
+        sobo = context.user_data.setdefault('sobo', {})
+        assets_list = sobo.setdefault('assets_list', [])
+        
+        current_asset = {
+            'so_thua': so_thua,
+            'so_to': so_to,
+            'dia_chi': dia_chi
+        }
+        assets_list.append(current_asset)
+        
+        sobo.setdefault('file_paths', []).append(file_path)
+        filename = os.path.basename(file_path)
+        sobo.setdefault('attachment_names', []).append(filename)
+        
+        current_idx = len(assets_list)
+        await update.message.reply_text(
+            f"✅ **Đã quét thành công Tài sản {current_idx}:**\n"
+            f"- Thửa: {so_thua}\n"
+            f"- Tờ: {so_to}\n"
+            f"- Địa chỉ: {dia_chi}\n\n"
+            f"Bạn muốn quét tiếp hay kết thúc quét?",
+            reply_markup=build_multi_doc_choice_keyboard(),
+            parse_mode="Markdown"
+        )
+        return SOBO_DOC_MULTI_CHOICE
+    except Exception as e:
+        logger.error(f"Lỗi extract sơ bộ nhiều tài sản: {e}")
+        await update.message.reply_text("❌ Có lỗi xảy ra trong quá trình nhận diện AI. Vui lòng gửi lại GCN rõ nét hơn.")
+        return SOBO_DOC_MULTI
+
+
+async def sobo_multi_doc_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    sobo = context.user_data.get('sobo', {})
+    assets_list = sobo.get('assets_list', [])
+    
+    if query.data == "sobo_multi_next":
+        next_idx = len(assets_list) + 1
+        await query.edit_message_text(
+            f"📚 Tiếp tục quy trình.\n\n"
+            f"Vui lòng gửi Ảnh chụp hoặc File PDF của **Tài sản thứ {next_idx}** để tôi quét thông tin:"
+        )
+        return SOBO_DOC_MULTI
+        
+    elif query.data == "sobo_multi_done":
+        if not assets_list:
+            await query.edit_message_text("❌ Lỗi: Bạn chưa quét tài sản nào. Vui lòng gửi file hoặc bấm hủy bỏ.")
+            return SOBO_DOC_MULTI
+            
+        first_asset = assets_list[0]
+        suggested_email = find_department_email(first_asset.get('dia_chi', ''))
+        sobo['suggested_email'] = suggested_email
+        sobo.pop('email', None)
+        
+        email_info = ""
+        if suggested_email:
+            email_info = f"✅ Đã nhận diện Tỉnh/Thành phố dựa trên tài sản 1. Email gợi ý: **{suggested_email}**"
+        else:
+            email_info = "⚠️ Không thể tự động nhận diện Tỉnh/Thành phố từ tài sản 1."
+            
+        await query.edit_message_text(
+            f"📋 Đã kết thúc quét. Tổng số tài sản đã nhận: **{len(assets_list)}**.\n\n"
+            f"{email_info}\n\n"
+            f"📧 Vui lòng chọn **email nhận sơ bộ** từ danh sách dưới đây:",
+            reply_markup=build_department_email_keyboard(suggested_email),
+            parse_mode="Markdown"
+        )
         return SOBO_DOC
 
 
@@ -541,12 +829,34 @@ async def sobo_receive_loc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def sobo_receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"DEBUG: sobo_receive_source received: {update.message.text}")
-    source = update.message.text
+    source = update.message.text.strip()
     sobo = context.user_data['sobo']
     sobo['source'] = source
     
     email = sobo.get('email')
     
+    if sobo.get("asset_sub_type") == "multi":
+        assets_list = sobo.get('assets_list', [])
+        thuas = [a.get('so_thua', '') for a in assets_list if a.get('so_thua')]
+        tos = [a.get('so_to', '') for a in assets_list if a.get('so_to')]
+        addresses = [a.get('dia_chi', '') for a in assets_list if a.get('dia_chi')]
+        
+        unique_thuas = []
+        for t in thuas:
+            if t not in unique_thuas:
+                unique_thuas.append(t)
+        unique_tos = []
+        for t in tos:
+            if t not in unique_tos:
+                unique_tos.append(t)
+                
+        sobo['so_thua'] = " + ".join(unique_thuas) if unique_thuas else ""
+        sobo['so_to'] = " + ".join(unique_tos) if unique_tos else ""
+        sobo['dia_chi'] = max(addresses, key=len) if addresses else ""
+        attachment_preview = f"{len(sobo.get('file_paths', []))} file GCN"
+    else:
+        attachment_preview = "1 file GCN"
+        
     # Generate Preview
     subject = f"[SƠ BỘ] - {source} - Thửa đất số {sobo.get('so_thua')}, tờ bản đồ số {sobo.get('so_to')}; tại địa chỉ {sobo.get('dia_chi')}"
     body, body_html = build_sobo_email_content(sobo)
@@ -564,7 +874,7 @@ async def sobo_receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE
     preview_msg = (
         "📧 <b>BẢN XEM TRƯỚC EMAIL:</b>\n\n"
         f"<b>Người nhận:</b> {html.escape(str(email))}\n"
-        f"<b>File đính kèm:</b> 1 file GCN\n"
+        f"<b>File đính kèm:</b> {attachment_preview}\n"
         f"<b>Tiêu đề:</b> <code>{html.escape(subject)}</code>\n\n"
         f"<b>Nội dung:</b>\n{html.escape(body)}\n\n"
         "Bạn có muốn gửi mail này không?"
@@ -584,7 +894,7 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         subject = sobo.get('subject')
         body = sobo.get('body')
         body_html = sobo.get('body_html')
-        file_path = sobo.get('file_path')
+        file_path = sobo.get('file_paths') if sobo.get('asset_sub_type') == "multi" else sobo.get('file_path')
         
         # Bắt buộc phải có email gửi
         if email == "Chưa xác định" or not email:
@@ -602,10 +912,6 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         if not result.success:
             await query.edit_message_text(f"Loi: {result.user_message}")
-            return ConversationHandler.END
-
-        if False:
-            await query.edit_message_text(f"âŒ {result.user_message}")
             return ConversationHandler.END
 
         if result.success:
@@ -632,11 +938,23 @@ def get_sobo_conversation_handler() -> ConversationHandler:
                 CallbackQueryHandler(sobo_select_asset_type, pattern="^sobo_asset_"),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
             ],
+            SOBO_RE_SUB_TYPE: [
+                CallbackQueryHandler(sobo_select_re_sub_type, pattern="^sobo_re_"),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+            ],
             SOBO_DOC: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_doc),
                 CallbackQueryHandler(sobo_select_email, pattern="^sobo_email_"),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_require_email_selection)
+            ],
+            SOBO_DOC_MULTI: [
+                MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_doc_multi),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+            ],
+            SOBO_DOC_MULTI_CHOICE: [
+                CallbackQueryHandler(sobo_multi_doc_choice, pattern="^sobo_multi_"),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
             ],
             SOBO_LOC: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_loc)],
             SOBO_SOURCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_source)],
