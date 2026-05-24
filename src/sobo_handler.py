@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
     SOBO_DOC_MULTI,
     SOBO_DOC_MULTI_CHOICE,
     SOBO_NOTE,
-) = range(20, 32)
+    SOBO_MACHINERY_DOC_CHOICE,
+) = range(20, 33)
 
 # Danh sách Mapping
 SOBO_MAPPING = {
@@ -315,6 +316,14 @@ def build_multi_doc_choice_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def build_machinery_doc_choice_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Tải thêm tài liệu", callback_data="sobo_machinery_more")],
+        [InlineKeyboardButton("✅ Kết thúc", callback_data="sobo_machinery_done")],
+        [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+    ])
+
+
 async def cmd_sobo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📝 *Bắt đầu quy trình Gửi Sơ bộ*\n\n"
@@ -345,10 +354,13 @@ async def sobo_select_asset_type(update: Update, context: ContextTypes.DEFAULT_T
         return ConversationHandler.END
 
     context.user_data['sobo']['asset_type'] = "machinery"
+    context.user_data['sobo']['file_paths'] = []
+    context.user_data['sobo']['attachment_names'] = []
     await query.edit_message_text(
         "⚙️ Đã chọn Máy móc thiết bị.\n\n"
         "Vui lòng tải lên file hồ sơ hoặc hình ảnh thiết bị để đính kèm vào email. "
-        "File sẽ không được quét hoặc phân tích."
+        "Các ảnh gửi cùng một album sẽ được ghép thành một file PDF. "
+        "Tài liệu sẽ không được quét hoặc phân tích."
     )
     return SOBO_MACHINERY_DOC
 
@@ -593,7 +605,6 @@ async def sobo_multi_doc_choice(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def sobo_receive_machinery_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
-    filename = ""
     if message.document:
         file_ref = message.document
         filename = message.document.file_name or "ho_so_may_moc"
@@ -601,6 +612,15 @@ async def sobo_receive_machinery_doc(update: Update, context: ContextTypes.DEFAU
         if not extension or len(extension) > 10 or not extension[1:].isalnum():
             extension = ".bin"
     elif message.photo:
+        media_group_id = message.media_group_id
+        if media_group_id:
+            groups = context.bot_data.setdefault("sobo_machinery_media_groups", {})
+            if media_group_id not in groups:
+                groups[media_group_id] = []
+                asyncio.create_task(_wait_and_process_machinery_media_group(media_group_id, context))
+            groups[media_group_id].append(update)
+            return SOBO_MACHINERY_DOC
+
         file_ref = message.photo[-1]
         filename = "hinh_anh_may_moc.jpg"
         extension = ".jpg"
@@ -615,14 +635,101 @@ async def sobo_receive_machinery_doc(update: Update, context: ContextTypes.DEFAU
     await file.download_to_drive(file_path)
 
     sobo = context.user_data.setdefault('sobo', {})
-    sobo['file_path'] = file_path
-    sobo['attachment_name'] = filename
+    sobo.setdefault('file_paths', []).append(file_path)
+    sobo.setdefault('attachment_names', []).append(filename)
     await message.reply_text(
-        "✅ Đã nhận file đính kèm. File không được quét hoặc phân tích.\n\n"
-        "Vui lòng nhập *Tên thiết bị*:",
-        parse_mode="Markdown",
+        f"✅ Đã nhận tài liệu đính kèm số {len(sobo['file_paths'])}: <b>{html.escape(filename)}</b>.\n\n"
+        "Bạn muốn tải thêm tài liệu hay kết thúc?",
+        reply_markup=build_machinery_doc_choice_keyboard(),
+        parse_mode="HTML",
     )
-    return SOBO_MACHINERY_NAME
+    return SOBO_MACHINERY_DOC_CHOICE
+
+
+async def _wait_and_process_machinery_media_group(media_group_id: str, context: ContextTypes.DEFAULT_TYPE):
+    await asyncio.sleep(1.5)
+    updates = context.bot_data["sobo_machinery_media_groups"].pop(media_group_id, [])
+    if updates:
+        await _handle_machinery_media_group_photos(updates, context)
+
+
+async def _handle_machinery_media_group_photos(updates: list[Update], context: ContextTypes.DEFAULT_TYPE):
+    first_update = updates[0]
+    await first_update.message.reply_text(
+        f"Đã nhận album gồm {len(updates)} ảnh. Đang ghép thành file PDF để đính kèm..."
+    )
+
+    try:
+        updates.sort(key=lambda item: item.message.message_id)
+        image_paths = []
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        for index, item in enumerate(updates):
+            photo = item.message.photo[-1]
+            file = await context.bot.get_file(photo.file_id)
+            image_path = os.path.join(upload_dir, f"sobo_machinery_part_{index}_{photo.file_unique_id}.jpg")
+            await file.download_to_drive(image_path)
+            image_paths.append(image_path)
+
+        merged_pdf_path = os.path.join(upload_dir, f"sobo_machinery_merged_{uuid4().hex[:8]}.pdf")
+        document = fitz.open()
+        for image_path in image_paths:
+            image_doc = fitz.open(image_path)
+            pdf_bytes = image_doc.convert_to_pdf()
+            image_doc.close()
+            with fitz.open("pdf", pdf_bytes) as image_pdf:
+                document.insert_pdf(image_pdf)
+        document.save(merged_pdf_path)
+        document.close()
+
+        for image_path in image_paths:
+            try:
+                os.remove(image_path)
+            except OSError:
+                pass
+
+        sobo = context.user_data.setdefault('sobo', {})
+        sobo.setdefault('file_paths', []).append(merged_pdf_path)
+        attachment_name = os.path.basename(merged_pdf_path)
+        sobo.setdefault('attachment_names', []).append(attachment_name)
+        await first_update.message.reply_text(
+            f"✅ Đã ghép album thành PDF đính kèm số {len(sobo['file_paths'])}: <b>{html.escape(attachment_name)}</b>.\n\n"
+            "Bạn muốn tải thêm tài liệu hay kết thúc?",
+            reply_markup=build_machinery_doc_choice_keyboard(),
+            parse_mode="HTML",
+        )
+        return SOBO_MACHINERY_DOC_CHOICE
+    except Exception as exc:
+        await first_update.message.reply_text(f"Xử lý album ảnh thất bại: {exc}")
+        return SOBO_MACHINERY_DOC
+
+
+async def sobo_machinery_doc_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    sobo = context.user_data.get('sobo', {})
+    attachment_names = sobo.get('attachment_names', [])
+
+    if query.data == "sobo_machinery_more":
+        await query.edit_message_text(
+            "📎 Vui lòng tải lên file hồ sơ hoặc hình ảnh thiết bị tiếp theo. "
+            "Các ảnh gửi cùng một album sẽ được ghép thành một file PDF."
+        )
+        return SOBO_MACHINERY_DOC
+
+    if query.data == "sobo_machinery_done":
+        if not attachment_names:
+            await query.edit_message_text("❌ Chưa có tài liệu đính kèm. Vui lòng tải lên tài liệu trước.")
+            return SOBO_MACHINERY_DOC
+        await query.edit_message_text(
+            f"✅ Đã nhận {len(attachment_names)} tài liệu đính kèm.\n\n"
+            "Vui lòng nhập *Tên thiết bị*:",
+            parse_mode="Markdown",
+        )
+        return SOBO_MACHINERY_NAME
+
+    return SOBO_MACHINERY_DOC
 
 
 async def sobo_receive_machinery_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -856,7 +963,8 @@ async def sobo_receive_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
         equipment_name = sobo.get('equipment_name', '')
         subject = f"[SƠ BỘ] - Máy móc thiết bị - {equipment_name}"
         body, body_html = build_machinery_email_content(sobo)
-        attachment_preview = sobo.get('attachment_name', '1 file hồ sơ')
+        attachment_names = sobo.get('attachment_names', [])
+        attachment_preview = ", ".join(attachment_names) or "Chưa có file hồ sơ"
     else:
         if sobo.get("asset_sub_type") == "multi":
             assets_list = sobo.get('assets_list', [])
@@ -915,7 +1023,10 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         subject = sobo.get('subject')
         body = sobo.get('body')
         body_html = sobo.get('body_html')
-        file_path = sobo.get('file_paths') if sobo.get('asset_sub_type') == "multi" else sobo.get('file_path')
+        if sobo.get('asset_sub_type') == "multi" or sobo.get('asset_type') == "machinery":
+            file_path = sobo.get('file_paths')
+        else:
+            file_path = sobo.get('file_path')
         
         # Bắt buộc phải có email gửi
         if email == "Chưa xác định" or not email:
@@ -985,8 +1096,14 @@ def get_sobo_conversation_handler() -> ConversationHandler:
             SOBO_NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_note)],
             SOBO_MACHINERY_DOC: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_machinery_doc),
+                # Album processing is asynchronous and presents these buttons while this state remains active.
+                CallbackQueryHandler(sobo_machinery_doc_choice, pattern="^sobo_machinery_"),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_require_machinery_file),
+            ],
+            SOBO_MACHINERY_DOC_CHOICE: [
+                CallbackQueryHandler(sobo_machinery_doc_choice, pattern="^sobo_machinery_"),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
             ],
             SOBO_MACHINERY_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_machinery_name)],
             SOBO_MACHINERY_EMAIL: [

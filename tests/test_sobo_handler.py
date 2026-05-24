@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
@@ -13,6 +14,7 @@ from src.sobo_handler import (
     SOBO_EMAIL_OPTIONS,
     SOBO_LOC,
     SOBO_MACHINERY_DOC,
+    SOBO_MACHINERY_DOC_CHOICE,
     SOBO_MACHINERY_EMAIL,
     SOBO_MACHINERY_NAME,
     SOBO_CONFIRM,
@@ -24,8 +26,10 @@ from src.sobo_handler import (
     cmd_sobo,
     sobo_receive_machinery_doc,
     sobo_receive_machinery_name,
+    sobo_machinery_doc_choice,
     sobo_receive_note,
     sobo_receive_source,
+    sobo_handle_confirm,
     sobo_require_email_selection,
     sobo_require_machinery_file,
     sobo_select_asset_type,
@@ -37,6 +41,7 @@ from src.sobo_handler import (
     sobo_select_re_sub_type,
     _process_sobo_extracted_file_multi,
     sobo_multi_doc_choice,
+    _handle_machinery_media_group_photos,
 )
 
 
@@ -196,13 +201,15 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(state, SOBO_MACHINERY_DOC)
         self.assertEqual(context.user_data["sobo"]["asset_type"], "machinery")
+        self.assertEqual(context.user_data["sobo"]["file_paths"], [])
+        self.assertEqual(context.user_data["sobo"]["attachment_names"], [])
         message = update.callback_query.edit_message_text.await_args.args[0]
         self.assertIn("không được quét hoặc phân tích", message)
 
-    async def test_machinery_uploaded_file_is_kept_as_attachment_without_scanning(self) -> None:
+    async def test_machinery_uploaded_file_opens_add_more_or_finish_choice_without_scanning(self) -> None:
         update = Mock()
         update.message.document.file_id = "file-1"
-        update.message.document.file_name = "may_cat.pdf"
+        update.message.document.file_name = "may_<cat>.pdf"
         update.message.photo = None
         update.message.reply_text = AsyncMock()
         telegram_file = Mock()
@@ -214,10 +221,81 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         with patch("src.sobo_handler.extract_land_certificate_with_gemini") as extract:
             state = await sobo_receive_machinery_doc(update, context)
 
-        self.assertEqual(state, SOBO_MACHINERY_NAME)
-        self.assertEqual(context.user_data["sobo"]["attachment_name"], "may_cat.pdf")
+        self.assertEqual(state, SOBO_MACHINERY_DOC_CHOICE)
+        self.assertEqual(context.user_data["sobo"]["attachment_names"], ["may_<cat>.pdf"])
+        self.assertEqual(len(context.user_data["sobo"]["file_paths"]), 1)
         telegram_file.download_to_drive.assert_awaited_once()
         extract.assert_not_called()
+        keyboard = update.message.reply_text.await_args.kwargs["reply_markup"]
+        labels = [row[0].text for row in keyboard.inline_keyboard]
+        self.assertIn("➕ Tải thêm tài liệu", labels)
+        self.assertIn("✅ Kết thúc", labels)
+        self.assertIn("may_&lt;cat&gt;.pdf", update.message.reply_text.await_args.args[0])
+
+    async def test_machinery_finish_after_documents_prompts_for_equipment_name(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_machinery_done"
+        context = Mock()
+        context.user_data = {"sobo": {"attachment_names": ["ho_so.pdf"], "file_paths": ["ho_so.pdf"]}}
+
+        state = await sobo_machinery_doc_choice(update, context)
+
+        self.assertEqual(state, SOBO_MACHINERY_NAME)
+        self.assertIn("Tên thiết bị", update.callback_query.edit_message_text.await_args.args[0])
+
+    async def test_machinery_additional_document_returns_to_upload_step(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_machinery_more"
+        context = Mock()
+        context.user_data = {"sobo": {"attachment_names": ["ho_so.pdf"], "file_paths": ["ho_so.pdf"]}}
+
+        state = await sobo_machinery_doc_choice(update, context)
+
+        self.assertEqual(state, SOBO_MACHINERY_DOC)
+        self.assertIn("tiếp theo", update.callback_query.edit_message_text.await_args.args[0])
+
+    async def test_machinery_photo_album_is_merged_into_one_pdf_attachment(self) -> None:
+        update1 = Mock()
+        update1.message.message_id = 1
+        update1.message.photo = [Mock(file_id="photo-1", file_unique_id="unique-1")]
+        update1.message.reply_text = AsyncMock()
+        update2 = Mock()
+        update2.message.message_id = 2
+        update2.message.photo = [Mock(file_id="photo-2", file_unique_id="unique-2")]
+        context = Mock()
+        context.user_data = {"sobo": {"asset_type": "machinery", "file_paths": [], "attachment_names": []}}
+        logo_path = Path("src/templates/logo.jpg")
+        file1 = Mock()
+        file1.download_to_drive = AsyncMock(side_effect=lambda path: shutil.copyfile(logo_path, path))
+        file2 = Mock()
+        file2.download_to_drive = AsyncMock(side_effect=lambda path: shutil.copyfile(logo_path, path))
+        context.bot.get_file = AsyncMock(side_effect=[file1, file2])
+
+        state = await _handle_machinery_media_group_photos([update1, update2], context)
+        merged_path = Path(context.user_data["sobo"]["file_paths"][0])
+        try:
+            import fitz
+
+            with fitz.open(merged_path) as document:
+                self.assertEqual(document.page_count, 2)
+            self.assertEqual(state, SOBO_MACHINERY_DOC_CHOICE)
+            self.assertEqual(len(context.user_data["sobo"]["attachment_names"]), 1)
+        finally:
+            merged_path.unlink(missing_ok=True)
+
+    def test_machinery_upload_state_accepts_background_album_choice_callbacks(self) -> None:
+        conversation = get_sobo_conversation_handler()
+        callbacks = [
+            handler.callback
+            for handler in conversation.states[SOBO_MACHINERY_DOC]
+            if hasattr(handler, "callback")
+        ]
+
+        self.assertIn(sobo_machinery_doc_choice, callbacks)
 
     async def test_machinery_name_prompts_for_email_selection(self) -> None:
         update = Mock()
@@ -253,7 +331,7 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
             "sobo": {
                 "asset_type": "machinery",
                 "equipment_name": "Máy cắt CNC",
-                "attachment_name": "may_cat.pdf",
+                "attachment_names": ["may_cat.pdf", "anh_thiet_bi.pdf"],
             }
         }
 
@@ -273,7 +351,7 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
             "sobo": {
                 "asset_type": "machinery",
                 "equipment_name": "Máy cắt CNC",
-                "attachment_name": "may_cat.pdf",
+                "attachment_names": ["may_cat.pdf", "anh_thiet_bi.pdf"],
                 "email": SOBO_EMAIL_OPTIONS[0],
             }
         }
@@ -287,7 +365,34 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         )
         preview = update.message.reply_text.await_args.args[0]
         self.assertIn("may_cat.pdf", preview)
+        self.assertIn("anh_thiet_bi.pdf", preview)
         self.assertIn("Ghi chú: Ưu tiên phản hồi trong ngày", preview)
+
+    async def test_machinery_send_includes_all_collected_attachments(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_send"
+        context = Mock()
+        context.user_data = {
+            "sobo": {
+                "asset_type": "machinery",
+                "email": SOBO_EMAIL_OPTIONS[0],
+                "subject": "Subject",
+                "body": "Body",
+                "body_html": "<p>Body</p>",
+                "file_paths": ["may_cat.pdf", "anh_thiet_bi.pdf"],
+            }
+        }
+
+        with patch(
+            "src.sobo_handler.send_sobo_email_with_result",
+            AsyncMock(return_value=Mock(success=True)),
+        ) as send:
+            state = await sobo_handle_confirm(update, context)
+
+        self.assertEqual(state, ConversationHandler.END)
+        self.assertEqual(send.await_args.kwargs["attachment_path"], ["may_cat.pdf", "anh_thiet_bi.pdf"])
 
     async def test_real_estate_source_prompts_for_note_before_preview(self) -> None:
         update = Mock()
