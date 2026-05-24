@@ -69,14 +69,14 @@ def _int_env(name: str, default: int) -> int:
 
 
 def _parse_email_list(value: str) -> list[str]:
-    return [email.strip() for email in value.split(",") if email.strip()]
+    return [email for item in value.split(",") if (email := _clean_header(item))]
 
 
 def _dedupe_emails(values: list[str]) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
     for value in values:
-        email = value.strip()
+        email = _clean_header(value)
         key = email.casefold()
         if email and key not in seen:
             seen.add(key)
@@ -136,14 +136,14 @@ def _mail_data_from_payload(data_dict: Mapping[str, Any]) -> MailData:
 
 def _recipient_from_payload(data_dict: Mapping[str, Any], settings: GmailSmtpSettings) -> str:
     if data_dict.get("allow_recipient_override"):
-        explicit = str(data_dict.get("to_email") or data_dict.get("recipient_email") or data_dict.get("mail_to") or "").strip()
+        explicit = _clean_header(data_dict.get("to_email") or data_dict.get("recipient_email") or data_dict.get("mail_to") or "")
         if explicit:
             return explicit
-    return str(settings.admin_email or settings.mail_to or "").strip()
+    return _clean_header(settings.admin_email or settings.mail_to or "")
 
 
 def _subject_from_payload(data_dict: Mapping[str, Any], mail_data: MailData) -> str:
-    explicit_subject = str(data_dict.get("subject") or "").strip()
+    explicit_subject = _clean_header(data_dict.get("subject") or "")
     if explicit_subject:
         return explicit_subject
     source = _remove_phone_numbers(str(data_dict.get("source") or mail_data.source or "").strip())
@@ -157,7 +157,7 @@ def _subject_from_payload(data_dict: Mapping[str, Any], mail_data: MailData) -> 
         parts.append(asset_description.rstrip("."))
     if len(parts) == 1:
         parts.append(mail_data.contract_id or mail_data.customer_info or "Hồ sơ thẩm định")
-    return " - ".join(parts) + "."
+    return _clean_header(" - ".join(parts) + ".")
 
 
 def _subject_asset_text(asset_description: str) -> str:
@@ -201,8 +201,9 @@ def attach_inline_logo(message: EmailMessage) -> None:
 
 def _send_sync(message: EmailMessage, recipients: list[str], settings: GmailSmtpSettings) -> None:
     from email.utils import parseaddr
-    envelope_from = parseaddr(settings.mail_from)[1] or settings.mail_from.strip()
-    envelope_to = [parseaddr(r)[1] or r.strip() for e in recipients for r in e.split(",") if r.strip()]
+    mail_from = _clean_header(settings.mail_from)
+    envelope_from = parseaddr(mail_from)[1] or mail_from
+    envelope_to = [parseaddr(r)[1] or r for e in recipients for r in _clean_header(e).split(",") if r.strip()]
     envelope_to = _dedupe_emails(envelope_to)
     
     with smtplib.SMTP(settings.host, settings.port, timeout=30) as smtp:
@@ -218,6 +219,7 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
     to_email = _recipient_from_payload(data_dict, settings)
     subject = _subject_from_payload(data_dict, mail_data)
     cc_emails = _dedupe_emails(list(settings.monitor_cc_list or []))
+    mail_from = _clean_header(settings.mail_from or settings.username)
 
     # --- BẮT ĐẦU TÍCH HỢP OAUTH2 ---
     from .oauth2_service import is_oauth_enabled, send_email_via_oauth2
@@ -234,7 +236,7 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
             print(f"Sending appraisal email using OAuth2 API for provider: {provider}")
             oauth_msg_id = await send_email_via_oauth2(
                 provider=provider,
-                from_email=settings.mail_from or settings.username,
+                from_email=mail_from,
                 to_email=to_email,
                 subject=subject,
                 html_body=html,
@@ -256,7 +258,7 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
         for name, value in {
             "SMTP_USERNAME/MAIL_USERNAME": settings.username,
             "SMTP_PASSWORD/MAIL_PASSWORD": settings.password,
-            "MAIL_FROM": settings.mail_from,
+            "MAIL_FROM": mail_from,
             "ADMIN_EMAIL/MAIL_TO": to_email,
         }.items()
         if not value
@@ -265,7 +267,7 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
         raise RuntimeError(f"Thiếu cấu hình gửi mail: {', '.join(missing)}")
 
     message = EmailMessage()
-    message["From"] = settings.mail_from
+    message["From"] = mail_from
     message["To"] = to_email
     message["Subject"] = subject
     message["Message-ID"] = message_id

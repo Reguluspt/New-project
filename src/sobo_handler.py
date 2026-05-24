@@ -409,17 +409,47 @@ async def _process_sobo_extracted_file(update: Update, context: ContextTypes.DEF
         from asyncio import to_thread
         extraction = await to_thread(extract_land_certificate_with_gemini, file_path, api_key=api_key, model=model_id)
         
-        # Handle LandCertificateMultiExtraction
-        if hasattr(extraction, "assets"):
-            asset = extraction.assets[0] if extraction.assets else extraction
-        elif hasattr(extraction, "assets"):
-            asset = extraction.assets[0] if extraction.assets else extraction
+        # Handle LandCertificateMultiExtraction and auto merge for multiple assets (hợp khối)
+        if hasattr(extraction, "assets") and extraction.assets:
+            if len(extraction.assets) > 1:
+                thuas = []
+                tos = []
+                addresses = []
+                for a in extraction.assets:
+                    thua_val = a.so_thua_dat.value.strip() if a.so_thua_dat and a.so_thua_dat.value else ""
+                    to_val = a.so_to_ban_do.value.strip() if a.so_to_ban_do and a.so_to_ban_do.value else ""
+                    addr_val = a.dia_chi_thua_dat.value.strip() if a.dia_chi_thua_dat and a.dia_chi_thua_dat.value else ""
+                    
+                    if thua_val:
+                        thuas.append(thua_val)
+                    if to_val:
+                        tos.append(to_val)
+                    if addr_val:
+                        addresses.append(addr_val)
+                
+                # Keep order and unique values
+                unique_thuas = []
+                for t in thuas:
+                    if t not in unique_thuas:
+                        unique_thuas.append(t)
+                unique_tos = []
+                for t in tos:
+                    if t not in unique_tos:
+                        unique_tos.append(t)
+                
+                so_thua = " + ".join(unique_thuas) if unique_thuas else ""
+                so_to = " + ".join(unique_tos) if unique_tos else ""
+                dia_chi = max(addresses, key=len) if addresses else ""
+            else:
+                asset = extraction.assets[0]
+                so_thua = asset.so_thua_dat.value.strip()
+                so_to = asset.so_to_ban_do.value.strip()
+                dia_chi = asset.dia_chi_thua_dat.value.strip()
         else:
             asset = extraction
-        
-        so_thua = asset.so_thua_dat.value.strip()
-        so_to = asset.so_to_ban_do.value.strip()
-        dia_chi = asset.dia_chi_thua_dat.value.strip()
+            so_thua = asset.so_thua_dat.value.strip()
+            so_to = asset.so_to_ban_do.value.strip()
+            dia_chi = asset.dia_chi_thua_dat.value.strip()
         
         context.user_data['sobo']['so_thua'] = so_thua
         context.user_data['sobo']['so_to'] = so_to

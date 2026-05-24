@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from telegram.ext import ConversationHandler
 
-from src.models import ExtractedValue, LandCertificateExtraction
+from src.models import ExtractedValue, LandCertificateExtraction, LandCertificateMultiExtraction
 from src.sobo_handler import (
     SOBO_ASSET_SELECT,
     SOBO_DOC,
@@ -115,6 +115,43 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         args, kwargs = update.message.reply_text.await_args
         self.assertIn("chọn", args[0].lower())
         self.assertIsNotNone(kwargs["reply_markup"])
+
+    async def test_extraction_merges_multiple_assets_for_hop_khoi(self) -> None:
+        extraction = LandCertificateMultiExtraction(
+            assets=[
+                LandCertificateExtraction(
+                    so_thua_dat=_value("234"),
+                    so_to_ban_do=_value("54"),
+                    dia_chi_thua_dat=_value("Phường Pleiku, Gia Lai"),
+                    ten_chu_so_huu_cuoi_cung=_value("Nguyen Van A"),
+                    dia_chi_chu_so_huu_cuoi_cung=_value("Gia Lai"),
+                    so_cccd_chu_so_huu_cuoi_cung=_value("012345678901"),
+                    notes=[],
+                ),
+                LandCertificateExtraction(
+                    so_thua_dat=_value("235"),
+                    so_to_ban_do=_value("54"),
+                    dia_chi_thua_dat=_value("Phường Pleiku, Gia Lai"),
+                    ten_chu_so_huu_cuoi_cung=_value("Nguyen Van A"),
+                    dia_chi_chu_so_huu_cuoi_cung=_value("Gia Lai"),
+                    so_cccd_chu_so_huu_cuoi_cung=_value("012345678901"),
+                    notes=[],
+                )
+            ]
+        )
+        update = Mock()
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {"sobo": {}}
+
+        with patch("asyncio.to_thread", AsyncMock(return_value=extraction)):
+            state = await _process_sobo_extracted_file(update, context, str(Path("gcn.pdf")))
+
+        self.assertEqual(state, SOBO_DOC)
+        self.assertEqual(context.user_data["sobo"]["so_thua"], "234 + 235")
+        self.assertEqual(context.user_data["sobo"]["so_to"], "54")
+        self.assertEqual(context.user_data["sobo"]["dia_chi"], "Phường Pleiku, Gia Lai")
+        self.assertEqual(context.user_data["sobo"]["suggested_email"], "Sobo.taynguyen@gmail.com")
 
     async def test_selected_email_is_saved_before_requesting_location(self) -> None:
         update = Mock()

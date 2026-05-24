@@ -98,6 +98,34 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
             ["admin@example.com", "manager@example.com", "control@example.com"],
         )
 
+    async def test_send_appraisal_email_removes_linebreaks_from_headers(self) -> None:
+        env = {
+            "SMTP_USERNAME": "sender@gmail.com",
+            "SMTP_PASSWORD": "app-password",
+            "MAIL_FROM": "Sender Name",
+            "ADMIN_EMAIL": "admin@example.com",
+            "MANAGEMENT_CC": "manager@example.com\n",
+            "CONTROL_BOARD_CC": "",
+        }
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch("src.mail_service._send_sync") as send_sync_mock,
+        ):
+            result = await send_appraisal_email(
+                {
+                    "contract_number": "HD-002",
+                    "customer_info": "Khach A",
+                    "source": "VP Bank\nGia Lai",
+                    "asset_description": "Thua dat so 1",
+                }
+            )
+
+        message, recipients, _ = send_sync_mock.call_args.args
+        self.assertNotIn("\n", result.subject)
+        self.assertEqual(message["Subject"], result.subject)
+        self.assertEqual(message["Cc"], "manager@example.com")
+        self.assertEqual(recipients, ["admin@example.com", "manager@example.com"])
+
     def test_load_settings_builds_monitor_cc_from_management_and_control(self) -> None:
         with patch.dict(
             "os.environ",
