@@ -269,6 +269,13 @@ def _send_phathanh_mail(export_case: dict[str, object], recipient: str) -> None:
     st.success(f"Đã gửi mail phát hành chứng thư thành công tới {to_email}.")
 
 
+def _mark_phathanh_case_completed(db_path: Path | None, selected_id: int) -> bool:
+    if db_path is None:
+        return False
+    update_case(db_path, selected_id, {"case_status": "Hoàn thành", "cancel_reason": ""})
+    return True
+
+
 def _render_phathanh_delivery_form(
     *,
     export_case: dict[str, object],
@@ -372,6 +379,12 @@ def _render_phathanh_delivery_form(
     except Exception as exc:
         st.error(f"Gửi mail phát hành thất bại: {exc}")
         return None
+
+    try:
+        if _mark_phathanh_case_completed(db_path, selected_id):
+            st.info("Đã chuyển trạng thái hồ sơ sang Hoàn thành.")
+    except Exception as exc:
+        st.warning(f"Mail đã gửi thành công nhưng không thể chuyển trạng thái hồ sơ sang Hoàn thành: {exc}")
 
     if source == "Nhập thủ công" and save_to_contacts:
         try:

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from src.email_reply_service import DEFAULT_PHATHANH_RECIPIENT, format_phathanh_recipient_html
-from views.case_documents import _manual_delivery_contact_error
+from views.case_documents import _manual_delivery_contact_error, _mark_phathanh_case_completed
 
 
 class PhathanhDeliveryTests(unittest.TestCase):
@@ -53,6 +55,24 @@ class PhathanhDeliveryTests(unittest.TestCase):
 
         self.assertIn("tên gợi nhớ", missing_name_error.lower())
         self.assertIn("đã có trong danh bạ", duplicate_error.lower())
+
+    def test_successful_phathanh_marks_case_completed(self) -> None:
+        with patch("views.case_documents.update_case") as update_case:
+            updated = _mark_phathanh_case_completed(Path("cases.db"), 17)
+
+        self.assertTrue(updated)
+        update_case.assert_called_once_with(
+            Path("cases.db"),
+            17,
+            {"case_status": "Hoàn thành", "cancel_reason": ""},
+        )
+
+    def test_phathanh_without_cases_database_skips_completion_update(self) -> None:
+        with patch("views.case_documents.update_case") as update_case:
+            updated = _mark_phathanh_case_completed(None, 17)
+
+        self.assertFalse(updated)
+        update_case.assert_not_called()
 
 
 if __name__ == "__main__":
