@@ -94,22 +94,19 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             safe_asset_to = html.escape(asset.get("so_to", ""))
             safe_asset_dia_chi = html.escape(asset.get("dia_chi", ""))
             table_rows_html += f"""
-              <tr>
-                <td align="center" style="padding:12px 16px;border-top:1px solid #edf2f8;border-right:1px solid #cae4e5;font-weight:bold;color:#64748b;vertical-align:top;background:#fcfdfd;">Tài sản {idx}</td>
-                <td style="padding:12px 16px;border-top:1px solid #edf2f8;line-height:1.6;">
-                  Số thửa đất: <strong>{safe_asset_thua}</strong><br/>
-                  Số tờ bản đồ: <strong>{safe_asset_to}</strong><br/>
-                  Địa chỉ tài sản: {safe_asset_dia_chi}
-                </td>
-              </tr>
+              <tr><td colspan="2" style="padding:10px 16px;border-top:1px solid #cae4e5;background:#f5fbfb;color:#006a70;font-weight:bold;">Tài sản {idx}</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_asset_thua}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_asset_to}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_dia_chi}</td></tr>
             """
             
         detail_table_html = f"""
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;border-collapse:collapse;">
-              <tr style="background:#eff9f9;color:#006a70;font-weight:bold;">
-                <td style="padding:12px 16px;border-bottom:1px solid #cae4e5;width:90px;text-align:center;border-right:1px solid #cae4e5;">Tài sản</td>
-                <td style="padding:12px 16px;border-bottom:1px solid #cae4e5;">Thông tin chi tiết thửa đất</td>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #cae4e5;border-radius:7px;overflow:hidden;font-size:14px;">
+              <tr>
+                <td colspan="2" style="padding:12px 16px;background:#eff9f9;color:#006a70;font-size:13px;font-weight:bold;">THÔNG TIN TÀI SẢN THẨM ĐỊNH</td>
               </tr>
+              <tr><td width="180" style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Nguồn khách hàng</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_source}</strong></td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#64748b;font-weight:bold;">Loại tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_type}</td></tr>
               {table_rows_html}
             </table>
         """

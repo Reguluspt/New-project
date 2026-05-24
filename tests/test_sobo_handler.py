@@ -410,7 +410,7 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Tài sản 2:", body)
         self.assertIn("Số thửa đất: 235", body)
 
-        self.assertIn("Thông tin chi tiết thửa đất", body_html)
+        self.assertIn("THÔNG TIN TÀI SẢN THẨM ĐỊNH", body_html)
         self.assertIn("Tài sản 1", body_html)
         self.assertIn("Tài sản 2", body_html)
         self.assertIn("Pleiku, Gia Lai", body_html)
