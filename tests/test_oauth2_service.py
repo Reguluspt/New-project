@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from src.oauth2_service import _build_mime_message, get_enabled_oauth_provider, send_email_via_oauth2
+from src.oauth2_service import _build_mime_message, _graph_error_detail, get_enabled_oauth_provider, send_email_via_oauth2
 
 
 class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
@@ -49,6 +49,39 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(logo["contentId"], "logo_cenvalue")
         self.assertTrue(logo["isInline"])
         self.assertEqual(logo["contentType"], "image/jpeg")
+
+    def test_graph_error_detail_exposes_status_error_and_request_id(self) -> None:
+        response = Mock(
+            status_code=403,
+            headers={"request-id": "req-123"},
+            json=Mock(return_value={"error": {"code": "ErrorAccessDenied", "message": "Access is denied."}}),
+            text="",
+        )
+
+        detail = _graph_error_detail(response)
+
+        self.assertEqual(detail, "HTTP 403; ErrorAccessDenied - Access is denied.; request-id=req-123")
+
+    async def test_outlook_send_error_includes_http_status_when_body_is_blank(self) -> None:
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        response = Mock(status_code=403, headers={}, text="")
+        response.json.side_effect = ValueError("no json")
+        client.post = AsyncMock(return_value=response)
+
+        with (
+            patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
+            patch("src.oauth2_service.httpx.AsyncClient", return_value=client),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
+                await send_email_via_oauth2(
+                    "outlook",
+                    "sender@example.com",
+                    "to@example.com",
+                    "Subject",
+                    "<p>Body</p>",
+                )
 
 
 if __name__ == "__main__":

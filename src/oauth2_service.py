@@ -91,6 +91,24 @@ def get_enabled_oauth_provider() -> str | None:
     return None
 
 
+def _graph_error_detail(response: httpx.Response) -> str:
+    request_id = response.headers.get("request-id") or response.headers.get("client-request-id") or ""
+    try:
+        body = response.json()
+        error = body.get("error", {}) if isinstance(body, dict) else {}
+        error_code = str(error.get("code") or "").strip()
+        error_message = str(error.get("message") or "").strip()
+        detail = " - ".join(part for part in (error_code, error_message) if part)
+    except (ValueError, TypeError):
+        detail = response.text.strip()
+    parts = [f"HTTP {response.status_code}"]
+    if detail:
+        parts.append(detail)
+    if request_id:
+        parts.append(f"request-id={request_id}")
+    return "; ".join(parts)
+
+
 def get_auth_url(provider: str, redirect_uri: str, state: str | None = None) -> str:
     """Tạo đường dẫn Authorization URL cho Google hoặc Outlook."""
     config = load_oauth_config()
@@ -441,7 +459,7 @@ async def send_email_via_oauth2(
             send_url = "https://graph.microsoft.com/v1.0/me/sendMail"
             response = await client.post(send_url, headers=headers, json=email_payload)
             if response.status_code not in [200, 202]:
-                raise RuntimeError(f"Gửi mail qua Microsoft Graph API thất bại: {response.text}")
+                raise RuntimeError(f"Gửi mail qua Microsoft Graph API thất bại: {_graph_error_detail(response)}")
             
             # Outlook 202 Accepted returns empty body, generate a random message id
             return response.headers.get("client-request-id", "outlook-msg-sent")
