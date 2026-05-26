@@ -60,6 +60,31 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(logo["isInline"])
         self.assertEqual(logo["contentType"], "image/jpeg")
 
+    async def test_outlook_payload_uses_configured_sender_alias(self) -> None:
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.post = AsyncMock(return_value=Mock(status_code=202, headers={}))
+
+        with (
+            patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
+            patch("src.oauth2_service.get_outlook_sender_email", return_value="truongpnt2@outlook.com.vn"),
+            patch("src.oauth2_service.httpx.AsyncClient", return_value=client),
+        ):
+            await send_email_via_oauth2(
+                "outlook",
+                "legacy@gmail.com",
+                "to@example.com",
+                "Subject",
+                "<p>Body</p>",
+            )
+
+        payload = client.post.await_args.kwargs["json"]
+        self.assertEqual(
+            payload["message"]["from"],
+            {"emailAddress": {"address": "truongpnt2@outlook.com.vn"}},
+        )
+
     def test_graph_error_detail_exposes_status_error_and_request_id(self) -> None:
         response = Mock(
             status_code=403,

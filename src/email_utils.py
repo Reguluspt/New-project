@@ -67,7 +67,7 @@ async def send_sobo_email_with_result(
             attachment_paths = [attachment_path]
     
     # --- TÍCH HỢP OAUTH2 ---
-    from .oauth2_service import get_enabled_oauth_provider, get_valid_access_token_async
+    from .oauth2_service import get_enabled_oauth_provider, get_outlook_sender_email, get_valid_access_token_async
 
     provider = get_enabled_oauth_provider()
         
@@ -130,6 +130,7 @@ async def send_sobo_email_with_result(
             elif provider == "outlook":
                 import base64
                 import httpx
+                outlook_sender_email = get_outlook_sender_email()
                 to_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in to_email.split(",") if addr.strip()]
                 cc_recipients = []
                 if cc_emails:
@@ -172,6 +173,10 @@ async def send_sobo_email_with_result(
                         "attachments": attachments_payload
                     }
                 }
+                if outlook_sender_email:
+                    email_payload["message"]["from"] = {
+                        "emailAddress": {"address": outlook_sender_email}
+                    }
                 
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     headers = {

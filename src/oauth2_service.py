@@ -30,6 +30,7 @@ DEFAULT_OAUTH_CONFIG = {
         "client_id": "",
         "client_secret": "",
         "tenant": "common",
+        "sender_email": "",
         "access_token": "",
         "refresh_token": "",
         "expires_at": 0.0,
@@ -90,6 +91,12 @@ def get_enabled_oauth_provider() -> str | None:
     if is_oauth_enabled("google"):
         return "google"
     return None
+
+
+def get_outlook_sender_email() -> str:
+    """Return the Outlook alias to expose as the sender when one is configured."""
+    config = load_oauth_config()
+    return str(config.get("outlook", {}).get("sender_email") or "").strip()
 
 
 def _graph_error_detail(response: httpx.Response) -> str:
@@ -430,6 +437,7 @@ async def send_email_via_oauth2(
             return res_data.get("id", "")
 
     elif provider == "outlook":
+        outlook_sender_email = get_outlook_sender_email()
         # Build recipient JSON payload
         to_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in to_email.split(",") if addr.strip()]
         cc_recipients = []
@@ -460,6 +468,10 @@ async def send_email_via_oauth2(
                 "attachments": attachments_payload,
             }
         }
+        if outlook_sender_email:
+            email_payload["message"]["from"] = {
+                "emailAddress": {"address": outlook_sender_email}
+            }
 
         # Threading for Outlook Graph API
         if reply_to_msg_id:

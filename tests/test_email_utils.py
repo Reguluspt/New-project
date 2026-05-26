@@ -100,6 +100,7 @@ class SoboEmailUtilsTests(unittest.IsolatedAsyncioTestCase):
             patch.dict("os.environ", {"MAIL_USERNAME": "sender@example.com"}, clear=True),
             patch("src.email_utils.load_dotenv"),
             patch("src.oauth2_service.is_oauth_enabled", side_effect=lambda provider: provider == "outlook"),
+            patch("src.oauth2_service.get_outlook_sender_email", return_value="truongpnt2@outlook.com.vn"),
             patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
             patch("httpx.AsyncClient", return_value=client),
         ):
@@ -116,6 +117,10 @@ class SoboEmailUtilsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(logo["contentId"], "cenvalue_logo")
         self.assertTrue(logo["isInline"])
         self.assertEqual(logo["name"], "logo.jpg")
+        self.assertEqual(
+            payload["message"]["from"],
+            {"emailAddress": {"address": "truongpnt2@outlook.com.vn"}},
+        )
 
     async def test_outlook_error_does_not_fall_back_to_smtp_gmail(self) -> None:
         smtp = Mock()

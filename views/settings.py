@@ -279,6 +279,12 @@ def render_oauth2_integration() -> None:
             o_client_id = st.text_input("Client ID", value=o_config.get("client_id", ""), type="password", key="o_cid")
             o_client_secret = st.text_input("Client Secret", value=o_config.get("client_secret", ""), type="password", key="o_secret")
             o_tenant = st.text_input("Tenant ID (Mặc định 'common' cho tài khoản cá nhân)", value=o_config.get("tenant", "common"), key="o_tenant")
+            o_sender_email = st.text_input(
+                "Địa chỉ gửi Outlook (alias)",
+                value=o_config.get("sender_email", ""),
+                placeholder="truongpnt2@outlook.com.vn",
+                key="o_sender_email",
+            )
             o_enabled_checkbox = st.checkbox("Kích hoạt sử dụng Outlook Graph API (OAuth2)", value=o_enabled, key="o_enable")
             
             o_save = st.form_submit_button("Lưu Cấu Hình Outlook", type="secondary")
@@ -286,6 +292,7 @@ def render_oauth2_integration() -> None:
                 o_config["client_id"] = o_client_id.strip()
                 o_config["client_secret"] = o_client_secret.strip()
                 o_config["tenant"] = o_tenant.strip() or "common"
+                o_config["sender_email"] = o_sender_email.strip()
                 o_config["enabled"] = o_enabled_checkbox
                 oauth_config["outlook"] = o_config
                 oauth_config["redirect_uri"] = current_redirect_uri.strip()
