@@ -222,13 +222,9 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
     mail_from = _clean_header(settings.mail_from or settings.username)
 
     # --- BẮT ĐẦU TÍCH HỢP OAUTH2 ---
-    from .oauth2_service import is_oauth_enabled, send_email_via_oauth2
-    
-    provider = None
-    if is_oauth_enabled("google"):
-        provider = "google"
-    elif is_oauth_enabled("outlook"):
-        provider = "outlook"
+    from .oauth2_service import get_enabled_oauth_provider, send_email_via_oauth2
+
+    provider = get_enabled_oauth_provider()
         
     if provider:
         html = render_appraisal_email(mail_data)
@@ -249,7 +245,7 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
                 await save_outbound_message(db_path, record_id, message_id=oauth_msg_id, subject=subject)
             return MailSendResult(to_email=to_email, subject=subject, cc_emails=cc_emails, message_id=oauth_msg_id)
         except Exception as exc:
-            print(f"OAuth2 sending failed: {exc}, falling back to SMTP.")
+            raise RuntimeError(f"Gửi mail qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
     # --- KẾT THÚC TÍCH HỢP OAUTH2 ---
 
     message_id = make_msgid(domain="gmail.com")

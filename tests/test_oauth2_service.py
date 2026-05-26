@@ -3,10 +3,16 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from src.oauth2_service import _build_mime_message, send_email_via_oauth2
+from src.oauth2_service import _build_mime_message, get_enabled_oauth_provider, send_email_via_oauth2
 
 
 class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
+    def test_enabled_provider_prefers_outlook_when_google_is_also_configured(self) -> None:
+        with patch("src.oauth2_service.is_oauth_enabled", return_value=True):
+            provider = get_enabled_oauth_provider()
+
+        self.assertEqual(provider, "outlook")
+
     def test_google_mime_message_embeds_logo_for_shared_template_cid(self) -> None:
         message = _build_mime_message(
             "sender@example.com",

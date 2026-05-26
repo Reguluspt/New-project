@@ -117,6 +117,32 @@ class SoboEmailUtilsTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(logo["isInline"])
         self.assertEqual(logo["name"], "logo.jpg")
 
+    async def test_outlook_error_does_not_fall_back_to_smtp_gmail(self) -> None:
+        smtp = Mock()
+        smtp.__enter__ = Mock(return_value=smtp)
+        smtp.__exit__ = Mock(return_value=False)
+
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "MAIL_USERNAME": "sender@gmail.com",
+                    "MAIL_PASSWORD": "gmail-password",
+                    "MAIL_SERVER": "smtp.gmail.com",
+                },
+                clear=True,
+            ),
+            patch("src.email_utils.load_dotenv"),
+            patch("src.oauth2_service.get_enabled_oauth_provider", return_value="outlook"),
+            patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(side_effect=RuntimeError("bad token"))),
+            patch("src.email_utils.smtplib.SMTP", return_value=smtp),
+        ):
+            result = await send_sobo_email_with_result("to@example.com", "Subject", "Body")
+
+        self.assertFalse(result.success)
+        self.assertIn("OUTLOOK OAuth2", result.user_message)
+        smtp.send_message.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

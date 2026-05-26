@@ -210,14 +210,10 @@ def _send_phathanh_reply_sync(original_mail, html_body, settings):
         return False
 
 async def send_phathanh_reply(original_mail, html_body, settings):
-    from src.oauth2_service import is_oauth_enabled, send_email_via_oauth2
+    from src.oauth2_service import get_enabled_oauth_provider, send_email_via_oauth2
     from email.utils import parseaddr
     
-    provider = None
-    if is_oauth_enabled("google"):
-        provider = "google"
-    elif is_oauth_enabled("outlook"):
-        provider = "outlook"
+    provider = get_enabled_oauth_provider()
         
     if provider:
         try:
@@ -266,7 +262,7 @@ async def send_phathanh_reply(original_mail, html_body, settings):
             )
             return True
         except Exception as exc:
-            print(f"OAuth2 send reply failed: {exc}, falling back to SMTP.")
+            raise RuntimeError(f"Gửi mail phát hành qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
             
     return await asyncio.to_thread(_send_phathanh_reply_sync, original_mail, html_body, settings)
 
@@ -279,13 +275,9 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
     if not contract_number:
         raise ValueError("Hồ sơ không có số hợp đồng.")
 
-    from src.oauth2_service import is_oauth_enabled, fetch_emails_via_oauth2, send_email_via_oauth2
-    
-    provider = None
-    if is_oauth_enabled("google"):
-        provider = "google"
-    elif is_oauth_enabled("outlook"):
-        provider = "outlook"
+    from src.oauth2_service import get_enabled_oauth_provider, fetch_emails_via_oauth2, send_email_via_oauth2
+
+    provider = get_enabled_oauth_provider()
 
     original_mail = None
     if provider:
@@ -311,10 +303,11 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
                 }
                 print(f"Found original email: subject='{original_mail['subject']}', thread_id='{original_mail.get('thread_id', '')}', msg_id='{original_mail['msg_id']}'")
         except Exception as exc:
-            print(f"OAuth2 email lookup failed: {exc}, falling back to IMAP.")
-            provider = None
+            raise RuntimeError(f"Đọc mail gốc qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
 
-    if not provider or not original_mail:
+    if provider and not original_mail:
+        raise RuntimeError(f"Không tìm thấy email nào trên {provider.upper()} có tiêu đề chứa số hợp đồng: {contract_number}.")
+    if not provider:
         # 1. Tìm mail cũ bằng IMAP (truyền thống)
         original_mail = await find_latest_email_by_subject(contract_number)
         if not original_mail:
@@ -413,8 +406,7 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
             )
             success = True
         except Exception as exc:
-            print(f"OAuth2 send reply failed: {exc}, falling back to SMTP.")
-            success = False
+            raise RuntimeError(f"Gửi mail phát hành qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
 
     if not success:
         success = await send_phathanh_reply(original_mail, html_body, settings)

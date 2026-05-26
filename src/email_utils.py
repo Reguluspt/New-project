@@ -67,13 +67,9 @@ async def send_sobo_email_with_result(
             attachment_paths = [attachment_path]
     
     # --- TÍCH HỢP OAUTH2 ---
-    from .oauth2_service import is_oauth_enabled, get_valid_access_token_async
-    
-    provider = None
-    if is_oauth_enabled("google"):
-        provider = "google"
-    elif is_oauth_enabled("outlook"):
-        provider = "outlook"
+    from .oauth2_service import get_enabled_oauth_provider, get_valid_access_token_async
+
+    provider = get_enabled_oauth_provider()
         
     user = os.getenv("SMTP_USERNAME", os.getenv("MAIL_USERNAME", os.getenv("EMAIL_USER", ""))).strip()
     mail_from_name = os.getenv("MAIL_FROM", "").strip()
@@ -189,7 +185,9 @@ async def send_sobo_email_with_result(
                 return SoboEmailResult(True)
                 
         except Exception as exc:
-            logger.error(f"OAuth2 sending failed for Sobo: {exc}, falling back to SMTP.")
+            message = f"Gửi mail qua {provider.upper()} OAuth2 thất bại: {exc}"
+            logger.error(message)
+            return SoboEmailResult(False, message, str(exc))
             
     # --- PHẦN SMTP GỐC ---
     host = os.getenv("SMTP_HOST", os.getenv("MAIL_SERVER", os.getenv("EMAIL_HOST", "smtp.gmail.com"))).strip()

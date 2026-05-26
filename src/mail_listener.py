@@ -678,13 +678,9 @@ async def send_thread_reply(
     smtp_settings: GmailSmtpSettings,
     cc_list: list[str],
 ) -> None:
-    from .oauth2_service import is_oauth_enabled, send_email_via_oauth2
-    
-    provider = None
-    if is_oauth_enabled("google"):
-        provider = "google"
-    elif is_oauth_enabled("outlook"):
-        provider = "outlook"
+    from .oauth2_service import get_enabled_oauth_provider, send_email_via_oauth2
+
+    provider = get_enabled_oauth_provider()
 
     if provider:
         to_email, cc = _reply_recipients(incoming, cc_list)
@@ -706,7 +702,7 @@ async def send_thread_reply(
             )
             return
         except Exception as exc:
-            print(f"OAuth2 thread reply failed: {exc}, falling back to SMTP.")
+            raise RuntimeError(f"Gửi phản hồi qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
 
     message = build_reply_message(
         incoming=incoming,
@@ -782,13 +778,9 @@ async def send_professional_forward(
     smtp_settings: GmailSmtpSettings,
     settings: MailListenerSettings,
 ) -> None:
-    from .oauth2_service import is_oauth_enabled, send_email_via_oauth2
-    
-    provider = None
-    if is_oauth_enabled("google"):
-        provider = "google"
-    elif is_oauth_enabled("outlook"):
-        provider = "outlook"
+    from .oauth2_service import get_enabled_oauth_provider, send_email_via_oauth2
+
+    provider = get_enabled_oauth_provider()
 
     if provider:
         if not settings.professional_dept_email:
@@ -865,7 +857,7 @@ async def send_professional_forward(
                 thread_id=incoming.thread_id or None,
                 message_id=incoming.message_id,
             )
-            print(f"OAuth2 professional reply-all failed: {exc}, falling back to SMTP.")
+            raise RuntimeError(f"Gửi chuyển tiếp qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
 
     message = build_professional_forward_message(
         incoming=incoming,
@@ -1142,13 +1134,9 @@ def _extract_imap_ids(data: list[object]) -> list[str]:
 
 
 async def poll_unseen_once(settings: MailListenerSettings) -> int:
-    from .oauth2_service import is_oauth_enabled, fetch_emails_via_oauth2
-    
-    provider = None
-    if is_oauth_enabled("google"):
-        provider = "google"
-    elif is_oauth_enabled("outlook"):
-        provider = "outlook"
+    from .oauth2_service import get_enabled_oauth_provider, fetch_emails_via_oauth2
+
+    provider = get_enabled_oauth_provider()
 
     if provider:
         try:
@@ -1179,7 +1167,7 @@ async def poll_unseen_once(settings: MailListenerSettings) -> int:
                 processed += 1
             return processed
         except Exception as exc:
-            print(f"OAuth2 poll failed: {exc}, falling back to IMAP.")
+            raise RuntimeError(f"Đọc hộp thư qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
 
     client = aioimaplib.IMAP4_SSL(settings.imap_host, settings.imap_port)
     await client.wait_hello_from_server()

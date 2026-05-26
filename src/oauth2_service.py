@@ -82,6 +82,15 @@ def is_oauth_enabled(provider: str) -> bool:
     return bool(p_config.get("enabled", False) and p_config.get("client_id") and p_config.get("refresh_token"))
 
 
+def get_enabled_oauth_provider() -> str | None:
+    """Return the active mailbox provider, preferring Outlook during migration from Gmail."""
+    if is_oauth_enabled("outlook"):
+        return "outlook"
+    if is_oauth_enabled("google"):
+        return "google"
+    return None
+
+
 def get_auth_url(provider: str, redirect_uri: str, state: str | None = None) -> str:
     """Tạo đường dẫn Authorization URL cho Google hoặc Outlook."""
     config = load_oauth_config()

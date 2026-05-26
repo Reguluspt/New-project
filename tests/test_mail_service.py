@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.mail_service import _remove_phone_numbers, _subject_asset_text, load_gmail_smtp_settings, render_mail_html, send_appraisal_email
 
@@ -125,6 +125,26 @@ class MailServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message["Subject"], result.subject)
         self.assertEqual(message["Cc"], "manager@example.com")
         self.assertEqual(recipients, ["admin@example.com", "manager@example.com"])
+
+    async def test_outlook_oauth_failure_does_not_fall_back_to_smtp(self) -> None:
+        env = {
+            "SMTP_USERNAME": "sender@gmail.com",
+            "SMTP_PASSWORD": "app-password",
+            "MAIL_FROM": "Sender Name",
+            "ADMIN_EMAIL": "admin@example.com",
+        }
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch("src.oauth2_service.get_enabled_oauth_provider", return_value="outlook"),
+            patch("src.oauth2_service.send_email_via_oauth2", AsyncMock(side_effect=RuntimeError("Graph rejected"))),
+            patch("src.mail_service._send_sync") as send_sync_mock,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "OUTLOOK OAuth2"):
+                await send_appraisal_email(
+                    {"contract_number": "HD-003", "customer_info": "Khach A"}
+                )
+
+        send_sync_mock.assert_not_called()
 
     def test_load_settings_builds_monitor_cc_from_management_and_control(self) -> None:
         with patch.dict(
