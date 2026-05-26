@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OAUTH_CONFIG_PATH = PROJECT_ROOT / "data" / "oauth_config.json"
 
 logger = logging.getLogger(__name__)
+OUTLOOK_GRAPH_SCOPES = "https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite offline_access"
 
 # Default config structure
 DEFAULT_OAUTH_CONFIG = {
@@ -133,13 +134,12 @@ def get_auth_url(provider: str, redirect_uri: str, state: str | None = None) -> 
         )
     elif provider == "outlook":
         tenant = p_config.get("tenant", "common").strip() or "common"
-        scope = "https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite offline_access"
         return (
             f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
             f"?client_id={client_id}"
             f"&redirect_uri={redirect_uri}"
             "&response_type=code"
-            f"&scope={scope}"
+            f"&scope={OUTLOOK_GRAPH_SCOPES}"
             "&response_mode=query"
             f"{state_str}"
         )
@@ -175,6 +175,7 @@ def exchange_code_for_tokens(provider: str, code: str, redirect_uri: str) -> dic
             "client_secret": client_secret,
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
+            "scope": OUTLOOK_GRAPH_SCOPES,
         }
     else:
         raise ValueError("Provider không hợp lệ.")
@@ -227,7 +228,7 @@ def refresh_access_token(provider: str) -> str:
             "client_secret": client_secret,
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
-            "scope": "https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite offline_access",
+            "scope": OUTLOOK_GRAPH_SCOPES,
         }
     else:
         raise ValueError("Provider không hợp lệ.")
@@ -279,7 +280,7 @@ async def refresh_access_token_async(provider: str) -> str:
             "client_secret": client_secret,
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
-            "scope": "https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite offline_access",
+            "scope": OUTLOOK_GRAPH_SCOPES,
         }
     else:
         raise ValueError("Provider không hợp lệ.")

@@ -3,7 +3,14 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from src.oauth2_service import _build_mime_message, _graph_error_detail, get_enabled_oauth_provider, send_email_via_oauth2
+from src.oauth2_service import (
+    OUTLOOK_GRAPH_SCOPES,
+    _build_mime_message,
+    _graph_error_detail,
+    exchange_code_for_tokens,
+    get_enabled_oauth_provider,
+    send_email_via_oauth2,
+)
 
 
 class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
@@ -61,6 +68,36 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
         detail = _graph_error_detail(response)
 
         self.assertEqual(detail, "HTTP 403; ErrorAccessDenied - Access is denied.; request-id=req-123")
+
+    def test_outlook_token_exchange_requests_graph_scopes(self) -> None:
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "access_token": "access",
+            "refresh_token": "refresh",
+            "expires_in": 3600,
+        }
+        client = Mock()
+        client.__enter__ = Mock(return_value=client)
+        client.__exit__ = Mock(return_value=False)
+        client.post.return_value = response
+        config = {
+            "outlook": {
+                "client_id": "client",
+                "client_secret": "secret",
+                "tenant": "tenant-id",
+            }
+        }
+
+        with (
+            patch("src.oauth2_service.load_oauth_config", return_value=config),
+            patch("src.oauth2_service.save_oauth_config") as save_config,
+            patch("src.oauth2_service.httpx.Client", return_value=client),
+        ):
+            exchange_code_for_tokens("outlook", "auth-code", "https://example.test/")
+
+        token_payload = client.post.call_args.kwargs["data"]
+        self.assertEqual(token_payload["scope"], OUTLOOK_GRAPH_SCOPES)
+        save_config.assert_called_once()
 
     async def test_outlook_send_error_includes_http_status_when_body_is_blank(self) -> None:
         client = Mock()
