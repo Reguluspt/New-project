@@ -67,7 +67,13 @@ async def send_sobo_email_with_result(
             attachment_paths = [attachment_path]
     
     # --- TÍCH HỢP OAUTH2 ---
-    from .oauth2_service import get_enabled_oauth_provider, get_outlook_sender_email, get_valid_access_token_async
+    from .oauth2_service import (
+        get_enabled_oauth_provider,
+        get_outlook_sender_email,
+        get_valid_access_token_async,
+        is_outlook_smtp_enabled,
+        send_outlook_message_via_smtp_oauth2,
+    )
 
     provider = get_enabled_oauth_provider()
         
@@ -108,6 +114,15 @@ async def send_sobo_email_with_result(
                         subtype = "jpeg" if filename.lower().endswith(".jpg") else filename.lower().split(".")[-1]
                     msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
                 
+            if provider == "outlook" and is_outlook_smtp_enabled():
+                outlook_sender_email = get_outlook_sender_email()
+                if msg.get("From"):
+                    msg.replace_header("From", outlook_sender_email)
+                else:
+                    msg["From"] = outlook_sender_email
+                await send_outlook_message_via_smtp_oauth2(msg)
+                return SoboEmailResult(True)
+
             access_token = await get_valid_access_token_async(provider)
             
             if provider == "google":

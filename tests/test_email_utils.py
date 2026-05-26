@@ -101,6 +101,7 @@ class SoboEmailUtilsTests(unittest.IsolatedAsyncioTestCase):
             patch("src.email_utils.load_dotenv"),
             patch("src.oauth2_service.is_oauth_enabled", side_effect=lambda provider: provider == "outlook"),
             patch("src.oauth2_service.get_outlook_sender_email", return_value="truongpnt2@outlook.com.vn"),
+            patch("src.oauth2_service.is_outlook_smtp_enabled", return_value=False),
             patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
             patch("httpx.AsyncClient", return_value=client),
         ):
@@ -121,6 +122,20 @@ class SoboEmailUtilsTests(unittest.IsolatedAsyncioTestCase):
             payload["message"]["from"],
             {"emailAddress": {"address": "truongpnt2@outlook.com.vn"}},
         )
+
+    async def test_outlook_sobo_uses_smtp_oauth_for_configured_alias(self) -> None:
+        with (
+            patch.dict("os.environ", {"MAIL_USERNAME": "legacy@gmail.com"}, clear=True),
+            patch("src.email_utils.load_dotenv"),
+            patch("src.oauth2_service.get_enabled_oauth_provider", return_value="outlook"),
+            patch("src.oauth2_service.is_outlook_smtp_enabled", return_value=True),
+            patch("src.oauth2_service.get_outlook_sender_email", return_value="truongpnt2@outlook.com.vn"),
+            patch("src.oauth2_service.send_outlook_message_via_smtp_oauth2", AsyncMock(return_value="smtp-id")) as send,
+        ):
+            result = await send_sobo_email_with_result("to@example.com", "Subject", "Body")
+
+        self.assertTrue(result.success)
+        self.assertEqual(send.await_args.args[0]["From"], "truongpnt2@outlook.com.vn")
 
     async def test_outlook_error_does_not_fall_back_to_smtp_gmail(self) -> None:
         smtp = Mock()

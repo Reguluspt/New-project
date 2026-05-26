@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import json
 import logging
+import smtplib
 import time
 from email.message import EmailMessage
+from email.utils import getaddresses
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -15,6 +18,7 @@ OAUTH_CONFIG_PATH = PROJECT_ROOT / "data" / "oauth_config.json"
 
 logger = logging.getLogger(__name__)
 OUTLOOK_GRAPH_SCOPES = "https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite offline_access"
+OUTLOOK_SMTP_SCOPES = "https://outlook.office.com/SMTP.Send offline_access"
 
 # Default config structure
 DEFAULT_OAUTH_CONFIG = {
@@ -36,6 +40,15 @@ DEFAULT_OAUTH_CONFIG = {
         "expires_at": 0.0,
         "enabled": False,
     },
+    "outlook_smtp": {
+        "client_id": "",
+        "client_secret": "",
+        "tenant": "common",
+        "access_token": "",
+        "refresh_token": "",
+        "expires_at": 0.0,
+        "enabled": False,
+    },
     "redirect_uri": "http://localhost:8501/"
 }
 
@@ -49,7 +62,7 @@ def load_oauth_config() -> dict[str, Any]:
     try:
         data = json.loads(OAUTH_CONFIG_PATH.read_text(encoding="utf-8"))
         # Ensure deep merge with default keys to avoid KeyError
-        for provider in ["google", "outlook"]:
+        for provider in ["google", "outlook", "outlook_smtp"]:
             if provider not in data:
                 data[provider] = dict(DEFAULT_OAUTH_CONFIG[provider])
             else:
@@ -97,6 +110,11 @@ def get_outlook_sender_email() -> str:
     """Return the Outlook alias to expose as the sender when one is configured."""
     config = load_oauth_config()
     return str(config.get("outlook", {}).get("sender_email") or "").strip()
+
+
+def is_outlook_smtp_enabled() -> bool:
+    """Return whether SMTP OAuth sending is ready for an Outlook alias."""
+    return bool(get_outlook_sender_email() and is_oauth_enabled("outlook_smtp"))
 
 
 def _graph_error_detail(response: httpx.Response) -> str:
@@ -158,14 +176,15 @@ def get_auth_url(provider: str, redirect_uri: str, state: str | None = None) -> 
             "&prompt=consent"
             f"{state_str}"
         )
-    elif provider == "outlook":
+    elif provider in {"outlook", "outlook_smtp"}:
         tenant = p_config.get("tenant", "common").strip() or "common"
+        scopes = OUTLOOK_SMTP_SCOPES if provider == "outlook_smtp" else OUTLOOK_GRAPH_SCOPES
         return (
             f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
             f"?client_id={client_id}"
             f"&redirect_uri={redirect_uri}"
             "&response_type=code"
-            f"&scope={OUTLOOK_GRAPH_SCOPES}"
+            f"&scope={scopes}"
             "&response_mode=query"
             f"{state_str}"
         )
@@ -192,8 +211,9 @@ def exchange_code_for_tokens(provider: str, code: str, redirect_uri: str) -> dic
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
         }
-    elif provider == "outlook":
+    elif provider in {"outlook", "outlook_smtp"}:
         tenant = p_config.get("tenant", "common").strip() or "common"
+        scopes = OUTLOOK_SMTP_SCOPES if provider == "outlook_smtp" else OUTLOOK_GRAPH_SCOPES
         token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
         payload = {
             "code": code,
@@ -201,7 +221,7 @@ def exchange_code_for_tokens(provider: str, code: str, redirect_uri: str) -> dic
             "client_secret": client_secret,
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
-            "scope": OUTLOOK_GRAPH_SCOPES,
+            "scope": scopes,
         }
     else:
         raise ValueError("Provider không hợp lệ.")
@@ -246,15 +266,16 @@ def refresh_access_token(provider: str) -> str:
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
         }
-    elif provider == "outlook":
+    elif provider in {"outlook", "outlook_smtp"}:
         tenant = p_config.get("tenant", "common").strip() or "common"
+        scopes = OUTLOOK_SMTP_SCOPES if provider == "outlook_smtp" else OUTLOOK_GRAPH_SCOPES
         token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
         payload = {
             "client_id": client_id,
             "client_secret": client_secret,
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
-            "scope": OUTLOOK_GRAPH_SCOPES,
+            "scope": scopes,
         }
     else:
         raise ValueError("Provider không hợp lệ.")
@@ -298,15 +319,16 @@ async def refresh_access_token_async(provider: str) -> str:
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
         }
-    elif provider == "outlook":
+    elif provider in {"outlook", "outlook_smtp"}:
         tenant = p_config.get("tenant", "common").strip() or "common"
+        scopes = OUTLOOK_SMTP_SCOPES if provider == "outlook_smtp" else OUTLOOK_GRAPH_SCOPES
         token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
         payload = {
             "client_id": client_id,
             "client_secret": client_secret,
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
-            "scope": OUTLOOK_GRAPH_SCOPES,
+            "scope": scopes,
         }
     else:
         raise ValueError("Provider không hợp lệ.")
@@ -402,6 +424,37 @@ def _build_mime_message(
     return msg
 
 
+def _send_outlook_smtp_sync(message: EmailMessage, sender_email: str, access_token: str) -> None:
+    """Submit a MIME message through Outlook.com SMTP using OAuth2."""
+    recipients = [
+        address
+        for _name, address in getaddresses([str(message.get("To") or ""), str(message.get("Cc") or "")])
+        if address
+    ]
+    auth = base64.b64encode(
+        f"user={sender_email}\x01auth=Bearer {access_token}\x01\x01".encode("utf-8")
+    ).decode("ascii")
+    with smtplib.SMTP("smtp-mail.outlook.com", 587, timeout=30) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        code, response = smtp.docmd("AUTH", f"XOAUTH2 {auth}")
+        if code != 235:
+            detail = response.decode("utf-8", errors="replace") if isinstance(response, bytes) else str(response)
+            raise RuntimeError(f"Xac thuc Outlook SMTP OAuth2 that bai: SMTP {code}; {detail}")
+        smtp.send_message(message, from_addr=sender_email, to_addrs=recipients)
+
+
+async def send_outlook_message_via_smtp_oauth2(message: EmailMessage) -> str:
+    """Send using Outlook SMTP OAuth when a personal Outlook alias is required."""
+    sender_email = get_outlook_sender_email()
+    if not sender_email:
+        raise ValueError("Chua cau hinh dia chi gui Outlook (alias).")
+    access_token = await get_valid_access_token_async("outlook_smtp")
+    await asyncio.to_thread(_send_outlook_smtp_sync, message, sender_email, access_token)
+    return "outlook-smtp-sent"
+
+
 async def send_email_via_oauth2(
     provider: str,
     from_email: str,
@@ -414,6 +467,18 @@ async def send_email_via_oauth2(
     thread_id: str | None = None,
 ) -> str:
     """Gửi email thông qua API REST của Google Workspace hoặc Outlook sử dụng OAuth2."""
+    if provider == "outlook" and is_outlook_smtp_enabled():
+        message = _build_mime_message(
+            get_outlook_sender_email(),
+            to_email,
+            subject,
+            html_body,
+            cc_emails,
+            reply_to_msg_id,
+            references,
+        )
+        return await send_outlook_message_via_smtp_oauth2(message)
+
     access_token = await get_valid_access_token_async(provider)
 
     if provider == "google":

@@ -267,6 +267,7 @@ def render_oauth2_integration() -> None:
         )
         
         o_config = oauth_config.get("outlook", {})
+        o_smtp_config = oauth_config.get("outlook_smtp", {})
         o_enabled = o_config.get("enabled", False)
  
         # Show connection status badge
@@ -295,6 +296,10 @@ def render_oauth2_integration() -> None:
                 o_config["sender_email"] = o_sender_email.strip()
                 o_config["enabled"] = o_enabled_checkbox
                 oauth_config["outlook"] = o_config
+                o_smtp_config["client_id"] = o_client_id.strip()
+                o_smtp_config["client_secret"] = o_client_secret.strip()
+                o_smtp_config["tenant"] = o_tenant.strip() or "common"
+                oauth_config["outlook_smtp"] = o_smtp_config
                 oauth_config["redirect_uri"] = current_redirect_uri.strip()
                 save_oauth_config(oauth_config)
                 st.success("Đã lưu cấu hình Microsoft Outlook.")
@@ -309,6 +314,17 @@ def render_oauth2_integration() -> None:
                 st.error(f"Lỗi tạo link liên kết: {e}")
         else:
             st.caption("⚠️ Nhập Client ID & Secret để tạo nút liên kết.")
+
+        if o_config.get("sender_email"):
+            if o_smtp_config.get("refresh_token"):
+                st.markdown("🟢 **Gửi bằng alias:** ĐÃ KẾT NỐI OUTLOOK SMTP OAUTH2")
+            else:
+                st.caption("Để gửi đúng alias Outlook.com cá nhân, kết nối thêm quyền SMTP OAuth2 bên dưới.")
+            try:
+                smtp_auth_url = get_auth_url("outlook_smtp", current_redirect_uri, state="outlook_smtp")
+                st.link_button("📤 Kết nối gửi mail bằng alias Outlook", smtp_auth_url, type="secondary", width="stretch")
+            except Exception as e:
+                st.error(f"Lỗi tạo link gửi alias: {e}")
 
 
 def render(

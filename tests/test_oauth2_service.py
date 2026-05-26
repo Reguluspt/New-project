@@ -3,13 +3,16 @@ from __future__ import annotations
 import base64
 import json
 import unittest
+from email.message import EmailMessage
 from unittest.mock import AsyncMock, Mock, patch
 
 from src.oauth2_service import (
     OUTLOOK_GRAPH_SCOPES,
+    OUTLOOK_SMTP_SCOPES,
     _access_token_claim_summary,
     _build_mime_message,
     _graph_error_detail,
+    _send_outlook_smtp_sync,
     exchange_code_for_tokens,
     get_enabled_oauth_provider,
     send_email_via_oauth2,
@@ -69,6 +72,7 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
             patch("src.oauth2_service.get_outlook_sender_email", return_value="truongpnt2@outlook.com.vn"),
+            patch("src.oauth2_service.is_outlook_smtp_enabled", return_value=False),
             patch("src.oauth2_service.httpx.AsyncClient", return_value=client),
         ):
             await send_email_via_oauth2(
@@ -83,6 +87,46 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             payload["message"]["from"],
             {"emailAddress": {"address": "truongpnt2@outlook.com.vn"}},
+        )
+
+    async def test_outlook_uses_smtp_oauth_when_alias_transport_is_connected(self) -> None:
+        with (
+            patch("src.oauth2_service.is_outlook_smtp_enabled", return_value=True),
+            patch("src.oauth2_service.get_outlook_sender_email", return_value="truongpnt2@outlook.com.vn"),
+            patch("src.oauth2_service.send_outlook_message_via_smtp_oauth2", AsyncMock(return_value="smtp-id")) as send,
+        ):
+            result = await send_email_via_oauth2(
+                "outlook",
+                "legacy@gmail.com",
+                "to@example.com",
+                "Subject",
+                "<p>Body</p>",
+            )
+
+        message = send.await_args.args[0]
+        self.assertEqual(result, "smtp-id")
+        self.assertEqual(message["From"], "truongpnt2@outlook.com.vn")
+
+    def test_outlook_smtp_submission_authenticates_using_alias_and_oauth_token(self) -> None:
+        smtp = Mock()
+        smtp.__enter__ = Mock(return_value=smtp)
+        smtp.__exit__ = Mock(return_value=False)
+        smtp.docmd.return_value = (235, b"accepted")
+        message = EmailMessage()
+        message["From"] = "truongpnt2@outlook.com.vn"
+        message["To"] = "to@example.com"
+        message.set_content("Body")
+
+        with patch("src.oauth2_service.smtplib.SMTP", return_value=smtp):
+            _send_outlook_smtp_sync(message, "truongpnt2@outlook.com.vn", "oauth-token")
+
+        smtp.starttls.assert_called_once()
+        self.assertEqual(smtp.docmd.call_args.args[0], "AUTH")
+        self.assertIn("XOAUTH2 ", smtp.docmd.call_args.args[1])
+        smtp.send_message.assert_called_once_with(
+            message,
+            from_addr="truongpnt2@outlook.com.vn",
+            to_addrs=["to@example.com"],
         )
 
     def test_graph_error_detail_exposes_status_error_and_request_id(self) -> None:
@@ -142,6 +186,34 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
         token_payload = client.post.call_args.kwargs["data"]
         self.assertEqual(token_payload["scope"], OUTLOOK_GRAPH_SCOPES)
         save_config.assert_called_once()
+
+    def test_outlook_smtp_token_exchange_requests_smtp_scope(self) -> None:
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "access_token": "access",
+            "refresh_token": "refresh",
+            "expires_in": 3600,
+        }
+        client = Mock()
+        client.__enter__ = Mock(return_value=client)
+        client.__exit__ = Mock(return_value=False)
+        client.post.return_value = response
+        config = {
+            "outlook_smtp": {
+                "client_id": "client",
+                "client_secret": "secret",
+                "tenant": "common",
+            }
+        }
+
+        with (
+            patch("src.oauth2_service.load_oauth_config", return_value=config),
+            patch("src.oauth2_service.save_oauth_config"),
+            patch("src.oauth2_service.httpx.Client", return_value=client),
+        ):
+            exchange_code_for_tokens("outlook_smtp", "auth-code", "https://example.test/")
+
+        self.assertEqual(client.post.call_args.kwargs["data"]["scope"], OUTLOOK_SMTP_SCOPES)
 
     async def test_outlook_send_error_includes_http_status_when_body_is_blank(self) -> None:
         client = Mock()
