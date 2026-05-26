@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
+import json
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from src.oauth2_service import (
     OUTLOOK_GRAPH_SCOPES,
+    _access_token_claim_summary,
     _build_mime_message,
     _graph_error_detail,
     exchange_code_for_tokens,
@@ -69,6 +72,22 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(detail, "HTTP 403; ErrorAccessDenied - Access is denied.; request-id=req-123")
 
+    def test_access_token_claim_summary_does_not_expose_identity_claims(self) -> None:
+        payload = {
+            "aud": "https://graph.microsoft.com",
+            "scp": "Mail.Send Mail.ReadWrite",
+            "tid": "tenant-id",
+            "preferred_username": "person@example.com",
+        }
+        encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii").rstrip("=")
+        access_token = f"header.{encoded}.signature"
+
+        detail = _access_token_claim_summary(access_token)
+
+        self.assertEqual(detail, "aud=https://graph.microsoft.com; scp=Mail.Send Mail.ReadWrite; tid=tenant-id")
+        self.assertNotIn("person@example.com", detail)
+        self.assertNotIn(access_token, detail)
+
     def test_outlook_token_exchange_requests_graph_scopes(self) -> None:
         response = Mock(status_code=200)
         response.json.return_value = {
@@ -119,6 +138,42 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
                     "Subject",
                     "<p>Body</p>",
                 )
+
+    async def test_outlook_401_error_includes_safe_token_claims(self) -> None:
+        payload = {
+            "aud": "https://graph.microsoft.com",
+            "scp": "Mail.Send",
+            "tid": "tenant-id",
+            "preferred_username": "person@example.com",
+        }
+        encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii").rstrip("=")
+        access_token = f"header.{encoded}.signature"
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        response = Mock(status_code=401, headers={"request-id": "req-401"}, text="")
+        response.json.side_effect = ValueError("no json")
+        client.post = AsyncMock(return_value=response)
+
+        with (
+            patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value=access_token)),
+            patch("src.oauth2_service.httpx.AsyncClient", return_value=client),
+        ):
+            with self.assertRaises(RuntimeError) as raised:
+                await send_email_via_oauth2(
+                    "outlook",
+                    "sender@example.com",
+                    "to@example.com",
+                    "Subject",
+                    "<p>Body</p>",
+                )
+
+        message = str(raised.exception)
+        self.assertIn("HTTP 401", message)
+        self.assertIn("aud=https://graph.microsoft.com", message)
+        self.assertIn("scp=Mail.Send", message)
+        self.assertNotIn("person@example.com", message)
+        self.assertNotIn(access_token, message)
 
 
 if __name__ == "__main__":

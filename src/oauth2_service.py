@@ -110,6 +110,25 @@ def _graph_error_detail(response: httpx.Response) -> str:
     return "; ".join(parts)
 
 
+def _access_token_claim_summary(access_token: str) -> str:
+    """Expose only Graph routing claims needed to diagnose a rejected token."""
+    try:
+        segments = str(access_token or "").split(".")
+        if len(segments) < 2:
+            return "token-claims=unavailable"
+        encoded_payload = segments[1] + "=" * (-len(segments[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(encoded_payload).decode("utf-8"))
+        if not isinstance(payload, dict):
+            return "token-claims=unavailable"
+        audience = str(payload.get("aud") or "<missing>")
+        scopes = str(payload.get("scp") or "<missing>")
+        tenant = str(payload.get("tid") or "<missing>")
+        return f"aud={audience}; scp={scopes}; tid={tenant}"
+    except Exception:
+        # Diagnostics must never hide the original Graph response.
+        return "token-claims=unavailable"
+
+
 def get_auth_url(provider: str, redirect_uri: str, state: str | None = None) -> str:
     """Tạo đường dẫn Authorization URL cho Google hoặc Outlook."""
     config = load_oauth_config()
@@ -460,7 +479,10 @@ async def send_email_via_oauth2(
             send_url = "https://graph.microsoft.com/v1.0/me/sendMail"
             response = await client.post(send_url, headers=headers, json=email_payload)
             if response.status_code not in [200, 202]:
-                raise RuntimeError(f"Gửi mail qua Microsoft Graph API thất bại: {_graph_error_detail(response)}")
+                detail = _graph_error_detail(response)
+                if response.status_code == 401:
+                    detail = f"{detail}; {_access_token_claim_summary(access_token)}"
+                raise RuntimeError(f"Gửi mail qua Microsoft Graph API thất bại: {detail}")
             
             # Outlook 202 Accepted returns empty body, generate a random message id
             return response.headers.get("client-request-id", "outlook-msg-sent")
