@@ -188,11 +188,6 @@ async def send_sobo_email_with_result(
                         "attachments": attachments_payload
                     }
                 }
-                if outlook_sender_email:
-                    email_payload["message"]["from"] = {
-                        "emailAddress": {"address": outlook_sender_email}
-                    }
-                
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     headers = {
                         "Authorization": f"Bearer {access_token}",

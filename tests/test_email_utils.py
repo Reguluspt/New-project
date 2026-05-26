@@ -118,10 +118,7 @@ class SoboEmailUtilsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(logo["contentId"], "cenvalue_logo")
         self.assertTrue(logo["isInline"])
         self.assertEqual(logo["name"], "logo.jpg")
-        self.assertEqual(
-            payload["message"]["from"],
-            {"emailAddress": {"address": "truongpnt2@outlook.com.vn"}},
-        )
+        self.assertNotIn("from", payload["message"])
 
     async def test_outlook_sobo_uses_smtp_oauth_for_configured_alias(self) -> None:
         with (

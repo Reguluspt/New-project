@@ -533,11 +533,6 @@ async def send_email_via_oauth2(
                 "attachments": attachments_payload,
             }
         }
-        if outlook_sender_email:
-            email_payload["message"]["from"] = {
-                "emailAddress": {"address": outlook_sender_email}
-            }
-
         # Threading for Outlook Graph API
         if reply_to_msg_id:
             email_payload["message"]["internetMessageHeaders"] = [

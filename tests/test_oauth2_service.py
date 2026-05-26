@@ -63,7 +63,7 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(logo["isInline"])
         self.assertEqual(logo["contentType"], "image/jpeg")
 
-    async def test_outlook_payload_uses_configured_sender_alias(self) -> None:
+    async def test_outlook_graph_does_not_submit_alias_as_separate_mailbox(self) -> None:
         client = Mock()
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=False)
@@ -84,10 +84,7 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
             )
 
         payload = client.post.await_args.kwargs["json"]
-        self.assertEqual(
-            payload["message"]["from"],
-            {"emailAddress": {"address": "truongpnt2@outlook.com.vn"}},
-        )
+        self.assertNotIn("from", payload["message"])
 
     async def test_outlook_uses_smtp_oauth_when_alias_transport_is_connected(self) -> None:
         with (
