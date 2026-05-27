@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 # Timeout mặc định cho các thao tác Playwright (ms)
 DEFAULT_NAVIGATION_TIMEOUT = 30_000
 DEFAULT_ACTION_TIMEOUT = 10_000
+WEB_SUBMIT_TIMEOUT = 120_000
+WEB_STATUS_TABLE_TIMEOUT = 120_000
+WEB_STATUS_TABLE_POLL_INTERVAL = 500
+WEB_SUBMIT_API_PATH = "/submit-yeu-cau-tham-dinh"
 
 
 WEB_ENTRY_REQUIRED_FIELDS = [
@@ -123,6 +127,10 @@ def _bank_web_value(raw_source: str) -> str:
         if needle in source:
             return web_value
     return "KHN"
+
+
+def _is_submit_response(response) -> bool:
+    return WEB_SUBMIT_API_PATH in response.url
 
 
 # ---------------------------------------------------------------------------
@@ -935,29 +943,53 @@ async def fill_credit_and_submit(page, data: Mapping[str, str]) -> str:
     await submit_btn.scroll_into_view_if_needed()
     await page.wait_for_timeout(500)
 
-    # Lắng nghe phản hồi từ server song song với việc nhấn nút
-    async with page.expect_response(
-        lambda resp: resp.status in range(200, 400),
-        timeout=DEFAULT_NAVIGATION_TIMEOUT,
-    ) as response_info:
-        try:
-            # Thử click bình thường trước
-            await submit_btn.click(timeout=5000)
-        except Exception:
-            logger.info("Click thường bị chặn bởi overlay, thử force click...")
-            try:
-                await submit_btn.click(force=True, timeout=5000)
-            except Exception:
-                # Fallback cuối: dùng JavaScript click để bỏ qua mọi overlay
-                logger.info("Force click cũng thất bại, dùng JavaScript click...")
-                await submit_btn.evaluate("el => el.click()")
+    submit_failures: list[str] = []
 
-    response = await response_info.value
+    def _capture_submit_failure(request) -> None:
+        if WEB_SUBMIT_API_PATH in request.url:
+            submit_failures.append(str(request.failure or "không nhận được phản hồi"))
+
+    page.on("requestfailed", _capture_submit_failure)
+    try:
+        # Lắng nghe đúng phản hồi API submit, kể cả khi API trả về lỗi HTTP.
+        try:
+            async with page.expect_response(
+                _is_submit_response,
+                timeout=WEB_SUBMIT_TIMEOUT,
+            ) as response_info:
+                try:
+                    # Thử click bình thường trước
+                    await submit_btn.click(timeout=5000)
+                except Exception:
+                    logger.info("Click thường bị chặn bởi overlay, thử force click...")
+                    try:
+                        await submit_btn.click(force=True, timeout=5000)
+                    except Exception:
+                        # Fallback cuối: dùng JavaScript click để bỏ qua mọi overlay
+                        logger.info("Force click cũng thất bại, dùng JavaScript click...")
+                        await submit_btn.evaluate("el => el.click()")
+
+            response = await response_info.value
+        except Exception as exc:
+            if submit_failures:
+                raise RuntimeError(f"API gửi yêu cầu không nhận được phản hồi: {submit_failures[-1]}") from exc
+            raise RuntimeError("Không nhận được phản hồi từ API gửi yêu cầu trong 120 giây.") from exc
+    finally:
+        page.remove_listener("requestfailed", _capture_submit_failure)
+
     logger.info(
         "Server phản hồi: %s %s",
         response.status,
         response.url,
     )
+
+    if response.status >= 400:
+        try:
+            error_text = (await response.text()).strip()
+        except Exception:
+            error_text = ""
+        detail = f": {error_text[:500]}" if error_text else ""
+        raise RuntimeError(f"API gửi yêu cầu trả lỗi HTTP {response.status}{detail}")
 
     # Chờ trang xử lý xong
     await page.wait_for_load_state("networkidle")
@@ -1012,7 +1044,8 @@ async def find_created_web_case_id(page, data: Mapping[str, str]) -> str:
 
     await _click_status_tab()
 
-    for _attempt in range(20):
+    attempts = WEB_STATUS_TABLE_TIMEOUT // WEB_STATUS_TABLE_POLL_INTERVAL
+    for _attempt in range(attempts):
         web_id = await page.evaluate(
             """() => {
                 const isVisible = (el) => {
@@ -1051,8 +1084,8 @@ async def find_created_web_case_id(page, data: Mapping[str, str]) -> str:
         web_id = str(web_id or "").strip()
         if web_id:
             return web_id
-        await page.wait_for_timeout(500)
-    raise RuntimeError("Đã gửi yêu cầu nhưng không đọc được ID hồ sơ ở dòng đầu tiên trên tab Trạng thái.")
+        await page.wait_for_timeout(WEB_STATUS_TABLE_POLL_INTERVAL)
+    raise RuntimeError("Đã gửi yêu cầu nhưng không đọc được ID hồ sơ ở dòng đầu tiên trên tab Trạng thái sau 120 giây.")
 
 
 def _cases_db_path() -> Path:
