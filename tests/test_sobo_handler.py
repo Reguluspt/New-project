@@ -576,6 +576,59 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state_done, SOBO_DOC)
         self.assertEqual(context.user_data["sobo"]["suggested_email"], "Sobo.taynguyen@gmail.com")
 
+    async def test_multi_asset_pdf_keeps_every_extracted_asset(self) -> None:
+        extraction = LandCertificateMultiExtraction(
+            assets=[
+                LandCertificateExtraction(
+                    so_thua_dat=_value("264"),
+                    so_to_ban_do=_value("68"),
+                    dia_chi_thua_dat=_value("Plei Dur, Gia Lai"),
+                    ten_chu_so_huu_cuoi_cung=_value("Dang Thi Kieu Mi"),
+                    dia_chi_chu_so_huu_cuoi_cung=_value("Gia Lai"),
+                    so_cccd_chu_so_huu_cuoi_cung=_value(""),
+                    notes=[],
+                ),
+                LandCertificateExtraction(
+                    so_thua_dat=_value("38"),
+                    so_to_ban_do=_value("74"),
+                    dia_chi_thua_dat=_value("Plei Wet, Gia Lai"),
+                    ten_chu_so_huu_cuoi_cung=_value("Dang Thi Kieu Mi"),
+                    dia_chi_chu_so_huu_cuoi_cung=_value("Gia Lai"),
+                    so_cccd_chu_so_huu_cuoi_cung=_value(""),
+                    notes=[],
+                ),
+            ]
+        )
+        update = Mock()
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {
+            "sobo": {
+                "asset_type": "real_estate",
+                "asset_sub_type": "multi",
+                "assets_list": [],
+                "file_paths": [],
+                "attachment_names": [],
+            }
+        }
+
+        with patch("asyncio.to_thread", AsyncMock(return_value=extraction)):
+            state = await _process_sobo_extracted_file_multi(update, context, str(Path("two_assets.pdf")))
+
+        self.assertEqual(state, SOBO_DOC_MULTI_CHOICE)
+        self.assertEqual(
+            context.user_data["sobo"]["assets_list"],
+            [
+                {"so_thua": "264", "so_to": "68", "dia_chi": "Plei Dur, Gia Lai"},
+                {"so_thua": "38", "so_to": "74", "dia_chi": "Plei Wet, Gia Lai"},
+            ],
+        )
+        self.assertEqual(context.user_data["sobo"]["file_paths"], ["two_assets.pdf"])
+        message = update.message.reply_text.await_args.args[0]
+        self.assertIn("2 tài sản", message)
+        self.assertIn("Thửa: 264", message)
+        self.assertIn("Thửa: 38", message)
+
     def test_build_email_content_multi(self) -> None:
         sobo = {
             "source": "KH Hợp Khối",

@@ -522,35 +522,44 @@ async def _process_sobo_extracted_file_multi(update: Update, context: ContextTyp
         from asyncio import to_thread
         extraction = await to_thread(extract_land_certificate_with_gemini, file_path, api_key=api_key, model=model_id)
         
-        if hasattr(extraction, "assets") and extraction.assets:
-            asset = extraction.assets[0]
-        else:
-            asset = extraction
-            
-        so_thua = asset.so_thua_dat.value.strip() if hasattr(asset, "so_thua_dat") and asset.so_thua_dat else ""
-        so_to = asset.so_to_ban_do.value.strip() if hasattr(asset, "so_to_ban_do") and asset.so_to_ban_do else ""
-        dia_chi = asset.dia_chi_thua_dat.value.strip() if hasattr(asset, "dia_chi_thua_dat") and asset.dia_chi_thua_dat else ""
-        
         sobo = context.user_data.setdefault('sobo', {})
         assets_list = sobo.setdefault('assets_list', [])
-        
-        current_asset = {
-            'so_thua': so_thua,
-            'so_to': so_to,
-            'dia_chi': dia_chi
-        }
-        assets_list.append(current_asset)
+        extracted_assets = extraction.assets if hasattr(extraction, "assets") and extraction.assets else [extraction]
+        start_idx = len(assets_list) + 1
+        new_assets = []
+        for asset in extracted_assets:
+            current_asset = {
+                'so_thua': asset.so_thua_dat.value.strip() if hasattr(asset, "so_thua_dat") and asset.so_thua_dat else "",
+                'so_to': asset.so_to_ban_do.value.strip() if hasattr(asset, "so_to_ban_do") and asset.so_to_ban_do else "",
+                'dia_chi': asset.dia_chi_thua_dat.value.strip() if hasattr(asset, "dia_chi_thua_dat") and asset.dia_chi_thua_dat else "",
+            }
+            assets_list.append(current_asset)
+            new_assets.append(current_asset)
         
         sobo.setdefault('file_paths', []).append(file_path)
         filename = os.path.basename(file_path)
         sobo.setdefault('attachment_names', []).append(filename)
-        
-        current_idx = len(assets_list)
+
+        if len(new_assets) == 1:
+            asset = new_assets[0]
+            scanned_label = f"Tài sản {start_idx}"
+            asset_details = (
+                f"- Thửa: {asset['so_thua']}\n"
+                f"- Tờ: {asset['so_to']}\n"
+                f"- Địa chỉ: {asset['dia_chi']}"
+            )
+        else:
+            scanned_label = f"{len(new_assets)} tài sản"
+            asset_details = "\n\n".join(
+                f"**Tài sản {idx}:**\n"
+                f"- Thửa: {asset['so_thua']}\n"
+                f"- Tờ: {asset['so_to']}\n"
+                f"- Địa chỉ: {asset['dia_chi']}"
+                for idx, asset in enumerate(new_assets, start_idx)
+            )
         await update.message.reply_text(
-            f"✅ **Đã quét thành công Tài sản {current_idx}:**\n"
-            f"- Thửa: {so_thua}\n"
-            f"- Tờ: {so_to}\n"
-            f"- Địa chỉ: {dia_chi}\n\n"
+            f"✅ **Đã quét thành công {scanned_label}:**\n\n"
+            f"{asset_details}\n\n"
             f"Bạn muốn quét tiếp hay kết thúc quét?",
             reply_markup=build_multi_doc_choice_keyboard(),
             parse_mode="Markdown"
