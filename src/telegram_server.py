@@ -811,9 +811,6 @@ def build_form_field_queue(values: dict[str, str]) -> list[tuple[str, str]]:
         
     queue = []
     for field, label, _default in base_fields:
-        if is_org and field in {"tax_code", "representative_name", "representative_position", "handover_contact_name", "handover_contact_position", "handover_contact_phone", "authorization_note"}:
-            queue.append((field, label))
-            continue
         if field in TELEGRAM_SKIPPED_FORM_FIELDS:
             continue
         queue.append((field, label))

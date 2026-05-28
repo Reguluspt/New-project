@@ -361,8 +361,13 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("survey_cost", individual_fields)
         self.assertIn("valuation_staff", individual_fields)
         self.assertNotIn("tax_code", individual_fields)
-        self.assertIn("tax_code", organization_fields)
-        self.assertIn("authorization_note", organization_fields)
+        self.assertNotIn("tax_code", organization_fields)
+        self.assertNotIn("representative_name", organization_fields)
+        self.assertNotIn("representative_position", organization_fields)
+        self.assertNotIn("handover_contact_name", organization_fields)
+        self.assertNotIn("handover_contact_position", organization_fields)
+        self.assertNotIn("handover_contact_phone", organization_fields)
+        self.assertNotIn("authorization_note", organization_fields)
 
     def test_search_dropdown_options_matches_keywords_without_case_or_accents(self) -> None:
         matches = search_dropdown_options(
@@ -599,7 +604,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row, ("VP Bank - Gia Lai - Chi Ngoc",))
         self.assertNotIn("pending_dropdown", context.user_data["pending_record"])
 
-    async def test_customer_type_organization_adds_organization_questions(self) -> None:
+    async def test_customer_type_organization_skips_defaulted_organization_questions(self) -> None:
         extraction = _sample_extraction()
         with TemporaryDirectory() as tmpdir:
             db_path = str(Path(tmpdir) / "records.db")
@@ -630,7 +635,14 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
 
         remaining = [field for field, _label in context.user_data["pending_record"]["form_fields"]]
         self.assertEqual(context.user_data["pending_record"]["values"]["customer_type"], "organization")
-        self.assertIn("tax_code", remaining)
+        self.assertIn("customer_info", remaining)
+        self.assertNotIn("tax_code", remaining)
+        self.assertNotIn("representative_name", remaining)
+        self.assertNotIn("representative_position", remaining)
+        self.assertNotIn("handover_contact_name", remaining)
+        self.assertNotIn("handover_contact_position", remaining)
+        self.assertNotIn("handover_contact_phone", remaining)
+        self.assertNotIn("authorization_note", remaining)
 
     async def test_confirmation_callback_updates_status_to_confirmed(self) -> None:
         extraction = _sample_extraction()
