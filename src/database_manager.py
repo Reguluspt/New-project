@@ -9,9 +9,11 @@ from typing import Any, Mapping
 import aiosqlite
 
 from .contracts import short_contract_number
+from .professional_forwarding import DEFAULT_PROFESSIONAL_RECIPIENT
 
 
 SENT_TO_PROFESSIONAL_STATUS = "SENT_TO_PROFESSIONAL"
+CERTIFICATE_RECEIVED_STATUS = "CERTIFICATE_RECEIVED"
 READY_FOR_WEB_STATUS = "S\u1eb5n s\u00e0ng nh\u1eadp web"
 DELETED_RECORD_STATUSES = {"CANCELLED", "DELETED"}
 
@@ -66,6 +68,8 @@ TRACKING_RECORD_TEXT_COLUMNS = {
     "handover_contact_name",
     "handover_contact_position",
     "handover_contact_phone",
+    "professional_forward_enabled",
+    "professional_recipient_email",
 }
 
 
@@ -125,6 +129,8 @@ async def ensure_mail_workflow_schema(db_path: str | Path) -> None:
             "outbound_subject": "TEXT NOT NULL DEFAULT ''",
             "outbound_sent_at": "TEXT NOT NULL DEFAULT ''",
             "professional_sent_at": "TEXT NOT NULL DEFAULT ''",
+            "professional_forward_enabled": "TEXT NOT NULL DEFAULT '1'",
+            "professional_recipient_email": f"TEXT NOT NULL DEFAULT '{DEFAULT_PROFESSIONAL_RECIPIENT}'",
         }
         for column, definition in additions.items():
             if column not in columns:
@@ -258,7 +264,13 @@ def _tracking_value(values: Mapping[str, Any], field: str) -> str:
         value = values.get(key)
         if value is not None and str(value).strip():
             return str(value).strip()
-    return "individual" if field == "customer_type" else ""
+    if field == "customer_type":
+        return "individual"
+    if field == "professional_forward_enabled":
+        return str(values.get(field) if values.get(field) is not None else "1")
+    if field == "professional_recipient_email":
+        return str(values.get(field) or DEFAULT_PROFESSIONAL_RECIPIENT)
+    return ""
 
 
 async def create_outbound_tracking_record(
@@ -707,6 +719,28 @@ async def update_certificate_forwarded(
             WHERE id = ?
             """,
             (certificate_number, certificate_number, SENT_TO_PROFESSIONAL_STATUS, _now_iso(), int(record_id)),
+        )
+        await db.commit()
+
+
+async def update_certificate_received(
+    db_path: str | Path,
+    record_id: int | str,
+    *,
+    certificate_number: str,
+) -> None:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_mail_workflow_schema(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute(
+            """
+            UPDATE records
+            SET certificate_number = ?,
+                contract_number = ?,
+                status = ?
+            WHERE id = ?
+            """,
+            (certificate_number, certificate_number, CERTIFICATE_RECEIVED_STATUS, int(record_id)),
         )
         await db.commit()
 

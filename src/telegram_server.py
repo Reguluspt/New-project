@@ -38,6 +38,11 @@ from .contracts import short_contract_number, expand_contract_number
 from .excel_writer import load_dropdown_options
 from .mail_renderer import mail_data_from_record, render_appraisal_email, send_appraisal_email_preview
 from .mail_service import send_appraisal_email as send_appraisal_email_service
+from .professional_forwarding import (
+    DEFAULT_PROFESSIONAL_RECIPIENT,
+    PROFESSIONAL_RECIPIENT_OPTIONS,
+    professional_choice_values,
+)
 from .record_case_sync import sync_record_to_case
 from .database_manager import (
     create_outbound_tracking_record,
@@ -78,6 +83,7 @@ CONFIRM_CALLBACK = "confirm_save"
 CANCEL_CALLBACK = "cancel_save"
 EDIT_CALLBACK = "edit_info"
 SEND_MAIL_CALLBACK_PREFIX = "send_mail"
+MAIL_FORWARD_CHOICE_CALLBACK_PREFIX = "mail_forward"
 WEB_AUTOMATION_CALLBACK_PREFIX = "web_entry"
 BOTH_AUTOMATION_CALLBACK_PREFIX = "both_entry"
 DONE_AUTOMATION_CALLBACK_PREFIX = "done_entry"
@@ -472,6 +478,75 @@ def automation_keyboard(record_id: int, mail_done: bool = False, web_done: bool 
         buttons.append([InlineKeyboardButton("✅ Đã hoàn tất", callback_data=f"{DONE_AUTOMATION_CALLBACK_PREFIX}:{record_id}")])
         
     return InlineKeyboardMarkup(buttons)
+
+
+def professional_forward_keyboard(record_id: int, action: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    f"Có, gửi {DEFAULT_PROFESSIONAL_RECIPIENT}",
+                    callback_data=f"{MAIL_FORWARD_CHOICE_CALLBACK_PREFIX}:{action}:{record_id}:kiet",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"Có, gửi {PROFESSIONAL_RECIPIENT_OPTIONS['anhvu']}",
+                    callback_data=f"{MAIL_FORWARD_CHOICE_CALLBACK_PREFIX}:{action}:{record_id}:anhvu",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Không chuyển tiếp Nghiệp vụ",
+                    callback_data=f"{MAIL_FORWARD_CHOICE_CALLBACK_PREFIX}:{action}:{record_id}:none",
+                )
+            ],
+            [InlineKeyboardButton("Hủy", callback_data=f"{MAIL_FORWARD_CHOICE_CALLBACK_PREFIX}:{action}:{record_id}:cancel")],
+        ]
+    )
+
+
+async def _ask_professional_forward_choice(
+    update_or_query: Update | object,
+    *,
+    record_id: int,
+    action: str,
+    text: str | None = None,
+) -> None:
+    prompt = text or (
+        f"Hồ sơ #{record_id}: có chuyển tiếp cho Nghiệp vụ khi Hành chính trả lời không?"
+    )
+    markup = professional_forward_keyboard(record_id, action)
+    message = getattr(update_or_query, "effective_message", None)
+    is_callback_query = "data" in getattr(update_or_query, "__dict__", {})
+    if not is_callback_query and message is not None:
+        await message.reply_text(prompt, reply_markup=markup)
+        return
+    if hasattr(update_or_query, "edit_message_text"):
+        await update_or_query.edit_message_text(prompt, reply_markup=markup)
+
+
+async def _send_appraisal_mail_for_record_choice(
+    *,
+    context: ContextTypes.DEFAULT_TYPE,
+    settings: "TelegramSettings",
+    record_id: int,
+    choice: str,
+) -> None:
+    choice_values = professional_choice_values(choice)
+    await db_update_record_fields(settings.records_db_path, record_id, choice_values)
+    pending_key = f"pending_mail_payload_{record_id}"
+    pending_payload = context.user_data.pop(pending_key, None)
+    if isinstance(pending_payload, dict):
+        mail_payload = dict(pending_payload)
+    else:
+        record = await get_record(settings.records_db_path, record_id)
+        mail_payload = dict(record)
+    mail_payload.update(choice_values)
+    mail_payload["to_email"] = settings.mail_to
+    mail_payload["record_id"] = record_id
+    mail_payload["records_db_path"] = settings.records_db_path
+    await send_appraisal_email_service(mail_payload)
 
 
 def _send_email_sync(settings: TelegramSettings, draft: EmailDraft) -> None:
@@ -1192,8 +1267,10 @@ async def send_mail_by_contract_command(update: Update, context: ContextTypes.DE
         return
 
     settings = _settings_from_context(context)
+    if not hasattr(context, "user_data") or context.user_data is None:
+        context.user_data = {}
     short_query = short_contract_number(contract_query)
-    await update.effective_message.reply_text(f"Đang tìm hồ sơ {short_query} và gửi mail yêu cầu định giá...")
+    await update.effective_message.reply_text(f"Đang tìm hồ sơ {short_query}...")
     try:
         record, record_source = await find_record_for_contract(settings, contract_query)
         if record is None:
@@ -1205,10 +1282,24 @@ async def send_mail_by_contract_command(update: Update, context: ContextTypes.DE
             mail_payload.pop("id", None)
             mail_payload["record_id"] = tracking_id
             mail_payload["records_db_path"] = settings.records_db_path
-        await send_appraisal_email_service(mail_payload)
+            record_id = tracking_id
+        else:
+            record_id = int(record.get("id", 0))
+            mail_payload["record_id"] = record_id
+            mail_payload["records_db_path"] = settings.records_db_path
+        context.user_data[f"pending_mail_payload_{record_id}"] = mail_payload
         contract_label = short_contract_number(record.get("contract_number"), fallback=short_query)
         source_label = "quản lý hồ sơ" if record_source == "cases" else "Telegram"
-        await update.effective_message.reply_text(f"Đã gửi mail thành công cho hồ sơ {contract_label} từ {source_label}.")
+        await _ask_professional_forward_choice(
+            update,
+            record_id=record_id,
+            action=SEND_MAIL_CALLBACK_PREFIX,
+            text=(
+                f"Tìm thấy hồ sơ {contract_label} từ {source_label}.\n"
+                "Có chuyển tiếp cho Nghiệp vụ khi Hành chính trả lời không?"
+            ),
+        )
+        return
     except Exception as exc:
         await update.effective_message.reply_text(f"Gửi mail thất bại cho hồ sơ {short_query}: {exc}")
 
@@ -1791,6 +1882,62 @@ async def handle_post_confirm_action(update: Update, context: ContextTypes.DEFAU
         await query.answer()
     except Exception:
         pass
+    settings = _settings_from_context(context)
+    if not hasattr(context, "user_data") or context.user_data is None:
+        context.user_data = {}
+    if query.data.startswith(f"{MAIL_FORWARD_CHOICE_CALLBACK_PREFIX}:"):
+        parts = query.data.split(":", 3)
+        if len(parts) != 4:
+            await query.edit_message_text("Du lieu thao tac khong hop le.")
+            return
+        _prefix, next_action, raw_record_id, choice = parts
+        try:
+            record_id = int(raw_record_id)
+        except ValueError:
+            await query.edit_message_text("Du lieu thao tac khong hop le.")
+            return
+        if choice == "cancel":
+            await query.edit_message_text("Đã hủy gửi mail.")
+            return
+        try:
+            await _send_appraisal_mail_for_record_choice(
+                context=context,
+                settings=settings,
+                record_id=record_id,
+                choice=choice,
+            )
+            state = context.user_data.get(f"auto_state_{record_id}", {"mail": False, "web": False})
+            state["mail"] = True
+            context.user_data[f"auto_state_{record_id}"] = state
+            if next_action == BOTH_AUTOMATION_CALLBACK_PREFIX:
+                chat_id = query.message.chat_id if query.message is not None else None
+                if chat_id is not None:
+                    state["web"] = True
+                    context.user_data[f"auto_state_{record_id}"] = state
+                    create_task(
+                        _run_web_automation_task(
+                            application=context.application,
+                            chat_id=chat_id,
+                            record_id=record_id,
+                            settings=settings,
+                        )
+                    )
+                await query.edit_message_text(
+                    f"Đã gửi mail Hành chính và bắt đầu nhập Web cho bản ghi #{record_id}.",
+                    reply_markup=automation_keyboard(record_id, mail_done=state["mail"], web_done=state["web"]),
+                )
+            else:
+                await query.edit_message_text(
+                    "Đã gửi mail thành công.",
+                    reply_markup=automation_keyboard(record_id, mail_done=state["mail"], web_done=state["web"]),
+                )
+        except Exception as exc:
+            state = context.user_data.get(f"auto_state_{record_id}", {"mail": False, "web": False})
+            await query.edit_message_text(
+                f"Gửi mail thất bại cho bản ghi #{record_id}: {exc}",
+                reply_markup=automation_keyboard(record_id, mail_done=state["mail"], web_done=state["web"]),
+            )
+        return
     try:
         action, raw_record_id = query.data.split(":", 1)
         record_id = int(raw_record_id)
@@ -1798,23 +1945,8 @@ async def handle_post_confirm_action(update: Update, context: ContextTypes.DEFAU
         await query.edit_message_text("Du lieu thao tac khong hop le.")
         return
 
-    settings = _settings_from_context(context)
     if action == SEND_MAIL_CALLBACK_PREFIX:
-        try:
-            record = await get_record(settings.records_db_path, record_id)
-            await send_appraisal_email_service({**record, "to_email": settings.mail_to})
-            
-            state = context.user_data.get(f"auto_state_{record_id}", {"mail": False, "web": False})
-            state["mail"] = True
-            context.user_data[f"auto_state_{record_id}"] = state
-            
-            await query.edit_message_text(
-                "\u0110\u00e3 g\u1eedi mail th\u00e0nh c\u00f4ng.",
-                reply_markup=automation_keyboard(record_id, mail_done=state["mail"], web_done=state["web"])
-            )
-        except Exception as exc:
-            state = context.user_data.get(f"auto_state_{record_id}", {"mail": False, "web": False})
-            await query.edit_message_text(f"G\u1eedi mail th\u1ea5t b\u1ea1i cho b\u1ea3n ghi #{record_id}: {exc}", reply_markup=automation_keyboard(record_id, mail_done=state["mail"], web_done=state["web"]))
+        await _ask_professional_forward_choice(query, record_id=record_id, action=SEND_MAIL_CALLBACK_PREFIX)
         return
 
     if action == WEB_AUTOMATION_CALLBACK_PREFIX:
@@ -1839,39 +1971,8 @@ async def handle_post_confirm_action(update: Update, context: ContextTypes.DEFAU
         return
 
     if action == BOTH_AUTOMATION_CALLBACK_PREFIX:
-        chat_id = query.message.chat_id if query.message is not None else None
-        if chat_id is None:
-            await query.edit_message_text("Kh\u00f4ng x\u00e1c \u0111\u1ecbnh \u0111\u01b0\u1ee3c chat \u0111\u1ec3 g\u1eedi k\u1ebft qu\u1ea3 nh\u1eadp web.")
-            return
-            
-        record = await get_record(settings.records_db_path, record_id)
-        
-        state = context.user_data.get(f"auto_state_{record_id}", {"mail": False, "web": False})
-        state["mail"] = True
-        state["web"] = True
-        context.user_data[f"auto_state_{record_id}"] = state
-        
-        await query.edit_message_text(f"Đang thực hiện CẢ HAI (Mail + Web) cho bản ghi #{record_id}...", reply_markup=automation_keyboard(record_id, mail_done=True, web_done=True))
-        
-        async def _run_mail():
-            try:
-                await send_appraisal_email_service({**record, "to_email": settings.mail_to})
-                await context.application.bot.send_message(chat_id=chat_id, text=f"📧 Gửi Mail Hành chính cho bản ghi #{record_id} thành công.")
-            except Exception as e:
-                await context.application.bot.send_message(chat_id=chat_id, text=f"📧 Gửi Mail Hành chính cho bản ghi #{record_id} thất bại: {e}")
-                
-        async def _run_all():
-            await asyncio.gather(
-                _run_mail(),
-                _run_web_automation_task(
-                    application=context.application,
-                    chat_id=chat_id,
-                    record_id=record_id,
-                    settings=settings,
-                )
-            )
-        
-        create_task(_run_all())
+        await _ask_professional_forward_choice(query, record_id=record_id, action=BOTH_AUTOMATION_CALLBACK_PREFIX)
+        return
         return
         
     if action == DONE_AUTOMATION_CALLBACK_PREFIX:
@@ -1937,7 +2038,11 @@ def build_telegram_application(token: str) -> Application:
     telegram_app.add_handler(
         CallbackQueryHandler(
             handle_post_confirm_action,
-            pattern=f"^({SEND_MAIL_CALLBACK_PREFIX}|{WEB_AUTOMATION_CALLBACK_PREFIX}|{BOTH_AUTOMATION_CALLBACK_PREFIX}|{DONE_AUTOMATION_CALLBACK_PREFIX}):\\d+$",
+            pattern=(
+                f"^({SEND_MAIL_CALLBACK_PREFIX}|{WEB_AUTOMATION_CALLBACK_PREFIX}|{BOTH_AUTOMATION_CALLBACK_PREFIX}|"
+                f"{DONE_AUTOMATION_CALLBACK_PREFIX}):\\d+$|"
+                f"^{MAIL_FORWARD_CHOICE_CALLBACK_PREFIX}:({SEND_MAIL_CALLBACK_PREFIX}|{BOTH_AUTOMATION_CALLBACK_PREFIX}):\\d+:(kiet|anhvu|none|cancel)$"
+            ),
         )
     )
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))

@@ -19,6 +19,7 @@ from src.database_store import format_money, parse_money
 from src.database_manager import create_outbound_tracking_record, resolve_records_db_path
 from src.excel_writer import fill_template
 from src.mail_service import send_appraisal_email
+from src.professional_forwarding import DEFAULT_PROFESSIONAL_RECIPIENT, PROFESSIONAL_RECIPIENT_OPTIONS
 from src.models import blank_extraction
 from src.sqlite_store import DEFAULT_CASE_STATUS, create_case, display_cases, get_case, recent_cases, update_case
 from src.web_automation import missing_web_entry_fields, run_company_web_entry
@@ -50,6 +51,25 @@ def _send_entry_mail(output_values: dict[str, object]) -> None:
     st.success(f"Đã gửi mail yêu cầu định giá tới {result.to_email}.")
     if result.cc_emails:
         st.caption(f"CC: {', '.join(result.cc_emails)}")
+
+
+def _professional_forward_options(key_prefix: str) -> dict[str, str]:
+    enabled = st.checkbox(
+        "Chuyển tiếp cho Nghiệp vụ khi Hành chính trả lời",
+        value=True,
+        key=f"{key_prefix}_professional_forward_enabled",
+    )
+    recipient = st.selectbox(
+        "Người nhận Nghiệp vụ",
+        [DEFAULT_PROFESSIONAL_RECIPIENT, PROFESSIONAL_RECIPIENT_OPTIONS["anhvu"]],
+        index=0,
+        disabled=not enabled,
+        key=f"{key_prefix}_professional_recipient_email",
+    )
+    return {
+        "professional_forward_enabled": "1" if enabled else "0",
+        "professional_recipient_email": recipient if enabled else "",
+    }
 
 
 def _entry_has_meaningful_data(values: dict[str, object]) -> bool:
@@ -255,6 +275,8 @@ def render(
         "handover_contact_phone": handover_contact_phone,
     }
 
+    professional_options = _professional_forward_options("entry_mail")
+
     save_col, export_col, mail_col, web_col = st.columns(4)
     with save_col:
         if st.button("Lưu hồ sơ vào SQLite", width="stretch"):
@@ -331,6 +353,7 @@ def render(
 
     if mail_clicked:
         mail_payload, _saved_case_id, used_saved_case = _entry_action_payload(sqlite_db_path, output_values)
+        mail_payload.update(professional_options)
         if used_saved_case:
             st.info("Form đang trống nên app dùng hồ sơ vừa lưu để gửi mail, không gửi dữ liệu trắng.")
         try:

@@ -739,7 +739,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.user_data["pending_record"]["form_fields"], [("contract_number", "Số hợp đồng")])
         message.reply_text.assert_awaited_once()
 
-    async def test_post_confirm_send_mail_callback_sends_email(self) -> None:
+    async def test_post_confirm_send_mail_callback_asks_professional_choice(self) -> None:
         context = Mock()
         context.user_data = {}
         context.application.bot_data = {
@@ -760,15 +760,44 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
         update = Mock()
         update.callback_query = query
 
+        with patch("src.telegram_server.send_appraisal_email_service", AsyncMock()) as send_mail_mock:
+            await handle_post_confirm_action(update, context)
+
+        send_mail_mock.assert_not_awaited()
+        self.assertIn("chuyển tiếp cho Nghiệp vụ", query.edit_message_text.await_args.args[0])
+
+    async def test_professional_choice_callback_sends_email(self) -> None:
+        context = Mock()
+        context.user_data = {}
+        context.application.bot_data = {
+            "settings": TelegramSettings(
+                bot_token="token",
+                webhook_url="https://example.com",
+                gemini_api_key="gemini-secret",
+                gemini_model="gemini-test",
+                upload_dir="tmp/uploads",
+                records_db_path="tmp/records.db",
+                mail_to="ops@example.com",
+            )
+        }
+        query = Mock()
+        query.data = "mail_forward:send_mail:9:kiet"
+        query.answer = AsyncMock()
+        query.edit_message_text = AsyncMock()
+        update = Mock()
+        update.callback_query = query
+
         with (
-            patch("src.telegram_server.get_record", AsyncMock(return_value={"id": "9", "contract_number": "HD-009"})) as get_record_mock,
+            patch("src.telegram_server.db_update_record_fields", AsyncMock()) as update_fields_mock,
+            patch("src.telegram_server.get_record", AsyncMock(return_value={"id": "9", "contract_number": "HD-009"})),
             patch("src.telegram_server.send_appraisal_email_service", AsyncMock()) as send_mail_mock,
         ):
             await handle_post_confirm_action(update, context)
 
-        get_record_mock.assert_awaited_once_with("tmp/records.db", 9)
+        update_fields_mock.assert_awaited_once()
         send_mail_mock.assert_awaited_once()
         self.assertEqual(send_mail_mock.await_args.args[0]["to_email"], "ops@example.com")
+        self.assertEqual(send_mail_mock.await_args.args[0]["professional_recipient_email"], "Kietna@cenvalue.vn")
         self.assertIn("Đã gửi mail thành công", query.edit_message_text.await_args.args[0])
 
     async def test_send_mail_by_contract_command_sends_matching_record(self) -> None:
@@ -780,6 +809,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
             await update_record_fields(db_path, record_id, {"contract_number": "010/2026/N04-1051/DN"})
             context = Mock()
             context.args = ["N04-1051"]
+            context.user_data = {}
             context.application.bot_data = {
                 "settings": TelegramSettings(
                     bot_token="token",
@@ -800,10 +830,9 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
             with patch("src.telegram_server.send_appraisal_email_service", AsyncMock()) as send_mail_mock:
                 await send_mail_by_contract_command(update, context)
 
-        send_mail_mock.assert_awaited_once()
-        self.assertEqual(send_mail_mock.await_args.args[0]["contract_number"], "010/2026/N04-1051/DN")
-        self.assertEqual(send_mail_mock.await_args.args[0]["to_email"], "ops@example.com")
-        self.assertIn("Đã gửi mail thành công cho hồ sơ N04-1051 từ Telegram", message.reply_text.await_args_list[-1].args[0])
+        send_mail_mock.assert_not_awaited()
+        self.assertIn("chuyển tiếp cho Nghiệp vụ", message.reply_text.await_args_list[-1].args[0])
+        self.assertIn(f"pending_mail_payload_{record_id}", context.user_data)
 
     async def test_send_mail_by_contract_command_falls_back_to_main_cases_database(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -830,6 +859,7 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
                 await db.commit()
             context = Mock()
             context.args = ["N04-1051"]
+            context.user_data = {}
             context.application.bot_data = {
                 "settings": TelegramSettings(
                     bot_token="token",
@@ -850,10 +880,8 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
             with patch("src.telegram_server.send_appraisal_email_service", AsyncMock()) as send_mail_mock:
                 await send_mail_by_contract_command(update, context)
 
-        send_mail_mock.assert_awaited_once()
-        self.assertEqual(send_mail_mock.await_args.args[0]["contract_number"], "010/2026/N04-1051/DN")
-        self.assertEqual(send_mail_mock.await_args.args[0]["customer_info"], "Khách A")
-        self.assertIn("từ quản lý hồ sơ", message.reply_text.await_args_list[-1].args[0])
+        send_mail_mock.assert_not_awaited()
+        self.assertIn("chuyển tiếp cho Nghiệp vụ", message.reply_text.await_args_list[-1].args[0])
 
     async def test_send_mail_by_contract_command_requires_contract_argument(self) -> None:
         context = Mock()

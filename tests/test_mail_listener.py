@@ -231,8 +231,8 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
             settings=settings,
         )
 
-        self.assertEqual(message["To"], "admin@example.com")
-        self.assertEqual(message["Cc"], "manager@example.com, pro@example.com, control@example.com")
+        self.assertEqual(message["To"], "pro@example.com")
+        self.assertEqual(message["Cc"], "admin@example.com, manager@example.com, control@example.com")
         self.assertEqual(message["In-Reply-To"], "<reply-1@example.com>")
         self.assertIn("<reply-1@example.com>", message["References"])
         html = _html_part(message)

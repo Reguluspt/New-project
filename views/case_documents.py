@@ -28,6 +28,7 @@ from src.database_manager import (
     resolve_records_db_path,
 )
 from src.mail_service import send_appraisal_email
+from src.professional_forwarding import DEFAULT_PROFESSIONAL_RECIPIENT, PROFESSIONAL_RECIPIENT_OPTIONS
 from src.pdf_exporter import find_soffice_path
 from src.sqlite_store import update_case
 from src.web_automation import missing_web_entry_fields, run_company_web_entry
@@ -155,6 +156,25 @@ def _send_case_mail(case: dict[str, object]) -> None:
     st.success(f"Đã gửi mail yêu cầu định giá tới {result.to_email}.")
     if result.cc_emails:
         st.caption(f"CC: {', '.join(result.cc_emails)}")
+
+
+def _professional_forward_options(key_prefix: str) -> dict[str, str]:
+    enabled = st.checkbox(
+        "Chuyển tiếp cho Nghiệp vụ khi Hành chính trả lời",
+        value=True,
+        key=f"{key_prefix}_professional_forward_enabled",
+    )
+    recipient = st.selectbox(
+        "Người nhận Nghiệp vụ",
+        [DEFAULT_PROFESSIONAL_RECIPIENT, PROFESSIONAL_RECIPIENT_OPTIONS["anhvu"]],
+        index=0,
+        disabled=not enabled,
+        key=f"{key_prefix}_professional_recipient_email",
+    )
+    return {
+        "professional_forward_enabled": "1" if enabled else "0",
+        "professional_recipient_email": recipient if enabled else "",
+    }
 
 
 def _render_output_dir_controls(
@@ -628,6 +648,7 @@ def render(
             "Duyệt và xuất PDF tổ chức",
             width="stretch",
         )
+    professional_options = _professional_forward_options(f"case_documents_mail_{selected_id}")
     mail_clicked = st.button("Gửi mail yêu cầu định giá", width="stretch", icon=":material/mail:")
     mail_phathanh_clicked = st.button("Gửi mail phát hành chứng thư", width="stretch", icon=":material/forward_to_inbox:")
     web_clicked = st.button("Gửi yêu cầu định giá lên Web", width="stretch", icon=":material/language:")
@@ -644,7 +665,7 @@ def render(
             export_case=export_case,
         ):
             try:
-                _send_case_mail(export_case)
+                _send_case_mail({**export_case, **professional_options})
             except Exception as exc:
                 st.error(f"Gửi mail thất bại: {exc}")
 

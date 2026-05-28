@@ -25,6 +25,7 @@ from telegram import Bot
 
 from .contracts import short_contract_number
 from .database_manager import (
+    CERTIFICATE_RECEIVED_STATUS,
     READY_FOR_WEB_STATUS,
     SENT_TO_PROFESSIONAL_STATUS,
     find_record_by_thread_reference,
@@ -33,11 +34,13 @@ from .database_manager import (
     load_record_candidates as db_load_record_candidates,
     owner_name_from_record,
     resolve_records_db_path,
+    update_certificate_received,
     update_certificate_forwarded,
     update_matched_record_contract,
 )
 from .mail_renderer import mail_data_from_record, render_appraisal_email
 from .mail_service import GmailSmtpSettings, _dedupe_emails, _parse_email_list, attach_inline_logo, load_gmail_smtp_settings
+from .professional_forwarding import professional_forward_enabled, professional_recipient_from_record
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -608,6 +611,12 @@ def _reply_recipients(incoming: IncomingEmail, extra_cc: list[str]) -> tuple[str
 
 def _mailbox_addresses(smtp_settings: GmailSmtpSettings) -> set[str]:
     values = [smtp_settings.username, smtp_settings.mail_from]
+    try:
+        from .oauth2_service import get_outlook_sender_email
+
+        values.append(get_outlook_sender_email())
+    except Exception:
+        pass
     return {
         parsed.lower()
         for value in values
@@ -636,13 +645,14 @@ def _reply_all_with_professional_recipients(
 
     to_values: list[str] = []
     cc_values: list[str] = []
-    add_unique(to_values, incoming.reply_to or incoming.from_email)
+    add_unique(to_values, professional_email)
+    add_unique(cc_values, incoming.reply_to or incoming.from_email)
     for _name, email_address in getaddresses([incoming.to_header, incoming.cc_header]):
         add_unique(cc_values, email_address)
-    for value in [professional_email, *monitor_cc]:
+    for value in monitor_cc:
         add_unique(cc_values, value)
     if not to_values:
-        add_unique(to_values, incoming.from_email)
+        add_unique(to_values, professional_email)
     return ", ".join(to_values), cc_values
 
 
@@ -736,7 +746,8 @@ def build_professional_forward_message(
     smtp_settings: GmailSmtpSettings,
     settings: MailListenerSettings,
 ) -> EmailMessage:
-    if not settings.professional_dept_email:
+    professional_email = professional_recipient_from_record(record, settings.professional_dept_email)
+    if not professional_email:
         raise RuntimeError("Thiếu PROFESSIONAL_DEPT_EMAIL để chuyển tiếp cho bộ phận nghiệp vụ.")
     record_with_certificate = dict(record)
     record_with_certificate["contract_number"] = certificate_number
@@ -751,7 +762,7 @@ def build_professional_forward_message(
     to_email, cc_list = _reply_all_with_professional_recipients(
         incoming,
         smtp_settings=smtp_settings,
-        professional_email=settings.professional_dept_email,
+        professional_email=professional_email,
         monitor_cc=settings.monitor_cc_list or [],
     )
 
@@ -783,7 +794,8 @@ async def send_professional_forward(
     provider = get_enabled_oauth_provider()
 
     if provider:
-        if not settings.professional_dept_email:
+        professional_email = professional_recipient_from_record(record, settings.professional_dept_email)
+        if not professional_email:
             raise RuntimeError("Thiếu PROFESSIONAL_DEPT_EMAIL để chuyển tiếp cho bộ phận nghiệp vụ.")
         record_with_certificate = dict(record)
         record_with_certificate["contract_number"] = certificate_number
@@ -798,7 +810,7 @@ async def send_professional_forward(
         to_email, cc_list = _reply_all_with_professional_recipients(
             incoming,
             smtp_settings=smtp_settings,
-            professional_email=settings.professional_dept_email,
+            professional_email=professional_email,
             monitor_cc=settings.monitor_cc_list or [],
         )
         subject = _reply_subject(incoming.subject)
@@ -1007,6 +1019,29 @@ async def process_certificate_reply(incoming: IncomingEmail, *, settings: MailLi
         )
 
     smtp_settings = load_gmail_smtp_settings()
+    if not professional_forward_enabled(record):
+        await update_certificate_received(
+            settings.records_db_path,
+            int(record["id"]),
+            certificate_number=certificate_number,
+        )
+        from .record_case_sync import sync_record_to_case
+        await sync_record_to_case(settings.records_db_path, settings.cases_db_path, int(record["id"]))
+        append_listener_log(
+            "professional_forward_skipped",
+            uid=incoming.uid,
+            subject=incoming.subject,
+            from_email=incoming.from_email,
+            record_id=record.get("id"),
+            certificate_number=certificate_number,
+            status=CERTIFICATE_RECEIVED_STATUS,
+        )
+        await notify_telegram(
+            settings,
+            f"Đã nhận số CT hồ sơ {owner_name_from_record(record)}; không chuyển tiếp Nghiệp vụ theo lựa chọn khi gửi mail.",
+        )
+        return RecordMatch(record=dict(record), score=float(extraction.confidence or 0), reason="certificate_reply")
+
     await send_professional_forward(
         incoming=incoming,
         record=record,
