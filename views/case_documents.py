@@ -30,7 +30,7 @@ from src.database_manager import (
 from src.mail_service import send_appraisal_email
 from src.professional_forwarding import DEFAULT_PROFESSIONAL_RECIPIENT, PROFESSIONAL_RECIPIENT_OPTIONS
 from src.pdf_exporter import find_soffice_path
-from src.sqlite_store import update_case
+from src.sqlite_store import find_organization_by_query, update_case
 from src.web_automation import missing_web_entry_fields, run_company_web_entry
 from views.case_dialogs import open_case_edit_dialog
 
@@ -281,11 +281,40 @@ def _manual_delivery_contact_error(
     return None
 
 
-def _send_phathanh_mail(export_case: dict[str, object], recipient: str) -> None:
+def _case_with_organization_contact_address(
+    export_case: dict[str, object],
+    db_path: Path | None,
+) -> dict[str, object]:
+    if str(export_case.get("customer_type") or "").strip() != "organization" or db_path is None:
+        return export_case
+
+    query = str(export_case.get("tax_code") or export_case.get("customer_info") or "").strip()
+    if not query:
+        return export_case
+
+    try:
+        organizations = find_organization_by_query(db_path, query)
+    except Exception:
+        return export_case
+
+    if not organizations:
+        return export_case
+
+    organization_address = str(organizations[0].get("address") or "").strip()
+    if not organization_address:
+        return export_case
+
+    enriched_case = dict(export_case)
+    enriched_case["customer_address"] = organization_address
+    return enriched_case
+
+
+def _send_phathanh_mail(export_case: dict[str, object], recipient: str, db_path: Path | None = None) -> None:
     from src.email_reply_service import send_phathanh_email_for_case
 
     with st.spinner("Đang gửi mail phát hành chứng thư..."):
-        to_email = asyncio.run(send_phathanh_email_for_case(export_case, recipient=recipient))
+        mail_case = _case_with_organization_contact_address(export_case, db_path)
+        to_email = asyncio.run(send_phathanh_email_for_case(mail_case, recipient=recipient))
     st.success(f"Đã gửi mail phát hành chứng thư thành công tới {to_email}.")
 
 
@@ -395,7 +424,7 @@ def _render_phathanh_delivery_form(
         return None
 
     try:
-        _send_phathanh_mail(export_case, recipient_details.strip())
+        _send_phathanh_mail(export_case, recipient_details.strip(), db_path=db_path)
     except Exception as exc:
         st.error(f"Gửi mail phát hành thất bại: {exc}")
         return None
