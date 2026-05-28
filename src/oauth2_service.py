@@ -7,7 +7,7 @@ import logging
 import smtplib
 import time
 from email.message import EmailMessage
-from email.utils import getaddresses
+from email.utils import getaddresses, make_msgid, parseaddr
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -386,13 +386,17 @@ def _build_mime_message(
     html_body: str,
     cc_emails: list[str] | None = None,
     reply_to_msg_id: str | None = None,
-    references: str | None = None
+    references: str | None = None,
+    thread_topic: str | None = None,
+    thread_index: str | None = None,
 ) -> EmailMessage:
     """Xây dựng đối tượng EmailMessage chuẩn RFC822."""
     msg = EmailMessage()
     msg["From"] = from_email
     msg["To"] = to_email
     msg["Subject"] = subject
+    domain = (parseaddr(from_email)[1].split("@", 1)[1] if "@" in parseaddr(from_email)[1] else "outlook.com")
+    msg["Message-ID"] = make_msgid(domain=domain)
     if cc_emails:
         msg["Cc"] = ", ".join(cc_emails)
     if reply_to_msg_id:
@@ -401,6 +405,10 @@ def _build_mime_message(
             msg["References"] = f"{references} {reply_to_msg_id}".strip()
         else:
             msg["References"] = reply_to_msg_id
+    if thread_topic:
+        msg["Thread-Topic"] = thread_topic
+    if thread_index:
+        msg["Thread-Index"] = thread_index
 
     msg.set_content("Vui lòng sử dụng trình đọc HTML để xem email này.")
     msg.add_alternative(html_body, subtype="html")
@@ -452,7 +460,7 @@ async def send_outlook_message_via_smtp_oauth2(message: EmailMessage) -> str:
         raise ValueError("Chua cau hinh dia chi gui Outlook (alias).")
     access_token = await get_valid_access_token_async("outlook_smtp")
     await asyncio.to_thread(_send_outlook_smtp_sync, message, sender_email, access_token)
-    return "outlook-smtp-sent"
+    return str(message.get("Message-ID") or "outlook-smtp-sent")
 
 
 async def send_email_via_oauth2(
@@ -465,6 +473,8 @@ async def send_email_via_oauth2(
     reply_to_msg_id: str | None = None,
     references: str | None = None,
     thread_id: str | None = None,
+    thread_topic: str | None = None,
+    thread_index: str | None = None,
 ) -> str:
     """Gửi email thông qua API REST của Google Workspace hoặc Outlook sử dụng OAuth2."""
     if provider == "outlook" and is_outlook_smtp_enabled():
@@ -476,13 +486,25 @@ async def send_email_via_oauth2(
             cc_emails,
             reply_to_msg_id,
             references,
+            thread_topic,
+            thread_index,
         )
         return await send_outlook_message_via_smtp_oauth2(message)
 
     access_token = await get_valid_access_token_async(provider)
 
     if provider == "google":
-        msg = _build_mime_message(from_email, to_email, subject, html_body, cc_emails, reply_to_msg_id, references)
+        msg = _build_mime_message(
+            from_email,
+            to_email,
+            subject,
+            html_body,
+            cc_emails,
+            reply_to_msg_id,
+            references,
+            thread_topic,
+            thread_index,
+        )
         raw_bytes = msg.as_bytes()
         raw_b64 = base64.urlsafe_b64encode(raw_bytes).decode("utf-8")
 
@@ -541,6 +563,14 @@ async def send_email_via_oauth2(
             if references:
                 email_payload["message"]["internetMessageHeaders"].append(
                     {"name": "References", "value": f"{references} {reply_to_msg_id}".strip()}
+                )
+            if thread_topic:
+                email_payload["message"]["internetMessageHeaders"].append(
+                    {"name": "Thread-Topic", "value": thread_topic}
+                )
+            if thread_index:
+                email_payload["message"]["internetMessageHeaders"].append(
+                    {"name": "Thread-Index", "value": thread_index}
                 )
 
         async with httpx.AsyncClient(timeout=30.0) as client:

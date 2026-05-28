@@ -77,6 +77,8 @@ class IncomingEmail:
     message_id: str
     in_reply_to: str
     references: str
+    thread_topic: str
+    thread_index: str
     text: str
     raw: bytes
 
@@ -456,6 +458,8 @@ def parse_incoming_email(raw: bytes, *, uid: str = "", thread_id: str = "") -> I
         message_id=_decode_header_value(message.get("Message-ID")),
         in_reply_to=_decode_header_value(message.get("In-Reply-To")),
         references=_decode_header_value(message.get("References")),
+        thread_topic=_decode_header_value(message.get("Thread-Topic")),
+        thread_index=_decode_header_value(message.get("Thread-Index")),
         text=text,
         raw=raw,
     )
@@ -675,6 +679,10 @@ def build_reply_message(
     if incoming.message_id:
         message["In-Reply-To"] = incoming.message_id
         message["References"] = f"{incoming.references} {incoming.message_id}".strip()
+    if incoming.thread_topic:
+        message["Thread-Topic"] = incoming.thread_topic
+    if incoming.thread_index:
+        message["Thread-Index"] = incoming.thread_index
     message.set_content("Email n\u00e0y c\u1ea7n tr\u00ecnh \u0111\u1ecdc HTML \u0111\u1ec3 xem b\u1ea3ng th\u00f4ng tin h\u1ed3 s\u01a1.")
     message.add_alternative(html, subtype="html")
     attach_inline_logo(message)
@@ -708,7 +716,9 @@ async def send_thread_reply(
                 html_body=html,
                 cc_emails=cc,
                 reply_to_msg_id=incoming.message_id,
-                references=incoming.references
+                references=incoming.references,
+                thread_topic=incoming.thread_topic,
+                thread_index=incoming.thread_index,
             )
             return
         except Exception as exc:
@@ -775,6 +785,10 @@ def build_professional_forward_message(
     if incoming.message_id:
         message["In-Reply-To"] = incoming.message_id
         message["References"] = f"{incoming.references} {incoming.message_id}".strip()
+    if incoming.thread_topic:
+        message["Thread-Topic"] = incoming.thread_topic
+    if incoming.thread_index:
+        message["Thread-Index"] = incoming.thread_index
     message.set_content("Email này cần trình đọc HTML để xem bảng thông tin hồ sơ.")
     message.add_alternative(html, subtype="html")
     attach_inline_logo(message)
@@ -829,6 +843,8 @@ async def send_professional_forward(
                 message_id=incoming.message_id,
                 in_reply_to=incoming.in_reply_to,
                 references=incoming.references,
+                thread_topic=incoming.thread_topic,
+                thread_index=incoming.thread_index,
                 has_thread_id=bool(gmail_thread_id),
             )
             print(
@@ -846,6 +862,8 @@ async def send_professional_forward(
                 reply_to_msg_id=incoming.message_id,
                 references=incoming.references,
                 thread_id=gmail_thread_id,
+                thread_topic=incoming.thread_topic,
+                thread_index=incoming.thread_index,
             )
             append_listener_log(
                 "professional_reply_all_sent",

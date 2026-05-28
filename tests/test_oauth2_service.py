@@ -98,11 +98,21 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
                 "to@example.com",
                 "Subject",
                 "<p>Body</p>",
+                reply_to_msg_id="<reply@example.com>",
+                references="<root@example.com>",
+                thread_topic="Subject",
+                thread_index="AdzExampleThreadIndex",
             )
 
         message = send.await_args.args[0]
         self.assertEqual(result, "smtp-id")
         self.assertEqual(message["From"], "truongpnt2@outlook.com.vn")
+        self.assertTrue(message["Message-ID"])
+        self.assertIn("@outlook.com.vn>", message["Message-ID"])
+        self.assertEqual(message["In-Reply-To"], "<reply@example.com>")
+        self.assertIn("<root@example.com>", message["References"])
+        self.assertEqual(message["Thread-Topic"], "Subject")
+        self.assertEqual(message["Thread-Index"], "AdzExampleThreadIndex")
 
     def test_outlook_smtp_submission_authenticates_using_alias_and_oauth_token(self) -> None:
         smtp = Mock()

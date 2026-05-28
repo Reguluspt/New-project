@@ -64,6 +64,8 @@ def _raw_admin_reply() -> bytes:
     message["Message-ID"] = "<reply-1@example.com>"
     message["In-Reply-To"] = "<outbound-1@example.com>"
     message["References"] = "<outbound-1@example.com>"
+    message["Thread-Topic"] = "[XIN SỐ] - VCB Gia Lai"
+    message["Thread-Index"] = "AdzExampleThreadIndex"
     message.set_content("Số chứng thư: CT-2026-0007")
     return message.as_bytes()
 
@@ -235,6 +237,8 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message["Cc"], "admin@example.com, manager@example.com, control@example.com")
         self.assertEqual(message["In-Reply-To"], "<reply-1@example.com>")
         self.assertIn("<reply-1@example.com>", message["References"])
+        self.assertEqual(message["Thread-Topic"], "[XIN SỐ] - VCB Gia Lai")
+        self.assertEqual(message["Thread-Index"], "AdzExampleThreadIndex")
         html = _html_part(message)
         self.assertIn("CT-2026-0007", html)
         self.assertNotIn("N04-0007", html)
