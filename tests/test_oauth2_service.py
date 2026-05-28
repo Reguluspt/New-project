@@ -14,6 +14,7 @@ from src.oauth2_service import (
     _graph_error_detail,
     _send_outlook_smtp_sync,
     exchange_code_for_tokens,
+    fetch_emails_via_oauth2,
     get_enabled_oauth_provider,
     send_email_via_oauth2,
 )
@@ -278,6 +279,43 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("scp=Mail.Send", message)
         self.assertNotIn("person@example.com", message)
         self.assertNotIn(access_token, message)
+
+    async def test_outlook_fetch_filters_contract_subject_locally(self) -> None:
+        matching_message = EmailMessage()
+        matching_message["Subject"] = "[010/2026/N05-0875/DN] - MB AMC"
+        matching_message["Message-ID"] = "<match@example.com>"
+        matching_message.set_content("Body")
+
+        list_response = Mock(status_code=200)
+        list_response.json.return_value = {
+            "value": [
+                {"id": "skip", "subject": "Other subject"},
+                {"id": "match", "subject": "[010/2026/N05-0875/DN] - MB AMC"},
+            ]
+        }
+        mime_response = Mock(status_code=200, content=matching_message.as_bytes())
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.get = AsyncMock(side_effect=[list_response, mime_response])
+
+        with (
+            patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
+            patch("src.oauth2_service.httpx.AsyncClient", return_value=client),
+        ):
+            emails = await fetch_emails_via_oauth2(
+                "outlook",
+                query_contract="010/2026/N05-0875/DN",
+                limit=5,
+                unread_only=False,
+            )
+
+        params = client.get.await_args_list[0].kwargs["params"]
+        self.assertEqual(params["$top"], 50)
+        self.assertNotIn("$filter", params)
+        self.assertEqual(len(emails), 1)
+        self.assertEqual(emails[0]["uid"], "match")
+        self.assertEqual(emails[0]["raw_bytes"], matching_message.as_bytes())
 
 
 if __name__ == "__main__":

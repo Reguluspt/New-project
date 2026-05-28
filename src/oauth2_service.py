@@ -640,26 +640,29 @@ async def fetch_emails_via_oauth2(
         async with httpx.AsyncClient(timeout=30.0) as client:
             headers = {"Authorization": f"Bearer {access_token}"}
             search_url = "https://graph.microsoft.com/v1.0/me/messages"
+            fetch_limit = max(limit, 50) if query_contract else limit
             params = {
-                "$top": limit,
+                "$top": fetch_limit,
                 "$select": "id,subject",
                 "$orderby": "receivedDateTime desc"
             }
             filter_parts: list[str] = []
             if unread_only:
                 filter_parts.append("isRead eq false")
-            if query_contract:
-                filter_parts.append(f"contains(subject, '{query_contract}')")
             if filter_parts:
                 params["$filter"] = " and ".join(filter_parts)
 
             response = await client.get(search_url, headers=headers, params=params)
             if response.status_code != 200:
                 logger.error(f"Microsoft Graph API Search thất bại: {response.text}")
+                if query_contract:
+                    raise RuntimeError(f"Microsoft Graph API Search thất bại: {_graph_error_detail(response)}")
                 return []
 
             messages = response.json().get("value", [])
             for msg in messages:
+                if query_contract and query_contract.lower() not in str(msg.get("subject") or "").lower():
+                    continue
                 msg_id = msg["id"]
                 # Fetch raw MIME
                 mime_url = f"https://graph.microsoft.com/v1.0/me/messages/{msg_id}/$value"
@@ -670,5 +673,7 @@ async def fetch_emails_via_oauth2(
                         "thread_id": msg_id,
                         "raw_bytes": mime_response.content
                     })
+                    if query_contract and len(emails_list) >= limit:
+                        break
 
     return emails_list
