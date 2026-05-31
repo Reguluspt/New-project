@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import re
 import html
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -112,6 +113,17 @@ ORGANIZATION_TEMPLATES = {
     "thu_chao_phi": ("thu_chao_phi.docx", "Thu chao phi", "{contract}_thu_chao_phi.docx"),
 }
 
+ORGANIZATION_CONTRACT_WITH_ADVANCE = (
+    "hop_dong_vcb_tam_ung.docx",
+    "Hop dong to chuc co tam ung",
+    "{contract}_hop_dong_to_chuc.docx",
+)
+
+VCB_GIA_LAI_TEMPLATE_DIR = "vcb_gia_lai"
+VCB_GIA_LAI_CUSTOMER_KEY = (
+    "ngan hang thuong mai co phan ngoai thuong viet nam chi nhanh gia lai"
+)
+
 
 def clean_customer_name(customer_info: str) -> str:
     text = customer_info or ""
@@ -120,6 +132,23 @@ def clean_customer_name(customer_info: str) -> str:
     text = re.sub(r"\s*[-–]\s*$", "", text)
     text = re.sub(r"\s+", " ", text).strip(" -–")
     return text
+
+
+def _customer_match_key(value: Any) -> str:
+    text = clean_customer_name(str(value or "")).replace("Đ", "D").replace("đ", "d")
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = re.sub(r"[^a-zA-Z0-9]+", " ", text).casefold()
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _organization_templates_dir_for_case(templates_dir: str | Path, case: dict[str, Any]) -> Path:
+    base_dir = Path(templates_dir)
+    if _customer_match_key(case.get("customer_info")) == VCB_GIA_LAI_CUSTOMER_KEY:
+        special_dir = base_dir / VCB_GIA_LAI_TEMPLATE_DIR
+        if special_dir.exists():
+            return special_dir
+    return base_dir
 
 
 def extract_phone(customer_info: str) -> str:
@@ -278,6 +307,29 @@ def _fee_words(case: dict[str, Any]) -> str:
     return money_to_vietnamese_words(fee).rstrip(".")
 
 
+def _money_words(value: Any) -> str:
+    return money_to_vietnamese_words(value).rstrip(".")
+
+
+def _payment_method_text(case: dict[str, Any]) -> str:
+    if str(case.get("organization_contract_payment_method") or "").strip() == "advance":
+        return (
+            "Bên A thanh toán cho Bên B làm 02 đợt: "
+            f"Đợt 1: Bên A tạm ứng cho Bên B số tiền: {format_money(case.get('advance_payment'))} đồng "
+            f"(Bằng chữ: {_money_words(case.get('advance_payment'))}) ngay sau khi hai bên ký hợp đồng dịch vụ "
+            "thẩm định giá và trước khi đi khảo sát để đảm bảo triển khai dịch vụ. "
+            "Đợt 2: Bên A thanh toán cho Bên B phần giá trị dịch vụ thẩm định giá còn lại tương đương "
+            f"{_compute_remaining_amount(case)} đồng (Bằng chữ: {_money_words(_compute_remaining_amount(case))}) "
+            "sau khi phát hành chứng thư, xuất hóa đơn GTGT tổng giá trị hợp đồng (hoặc phụ lục hợp đồng) "
+            "và các tài liệu liên quan khác (nếu có) cho Bên A."
+        )
+    return (
+        "Bên A sẽ thanh toán phí dịch vụ thẩm định cho Bên B với số tiền là "
+        f"{format_money(case.get('valuation_fee_number'))} đồng (Bằng chữ: {_fee_words(case)}) "
+        "Sau khi Bên B cung cấp đầy đủ hồ sơ bao gồm:"
+    )
+
+
 def build_placeholder_context(case: dict[str, Any], *, organization: bool = False) -> dict[str, str]:
     customer_info = str(case.get("customer_info") or "").strip()
     customer_name = clean_customer_name(customer_info)
@@ -320,6 +372,11 @@ def build_placeholder_context(case: dict[str, Any], *, organization: bool = Fals
         "NGAY_HOP_DONG_NGAY": contract_date["day"],
         "NGAY_HOP_DONG_THANG": contract_date["month"],
         "NGAY_HOP_DONG_NAM": contract_date["year"],
+        "THANG_NAM_HOP_DONG": (
+            f"Th\u00e1ng {contract_date['month']} n\u0103m {contract_date['year']}"
+            if contract_date["month"] and contract_date["year"]
+            else ""
+        ),
         "NGAY_CHUNG_THU": certificate_date["full"],
         "NGAY_CHUNG_THU_NGAY": certificate_date["day"],
         "NGAY_CHUNG_THU_THANG": certificate_date["month"],
@@ -329,7 +386,10 @@ def build_placeholder_context(case: dict[str, Any], *, organization: bool = Fals
         "PHI_THAM_DINH": format_money(case.get("valuation_fee_number")),
         "PHI_THAM_DINH_BANG_CHU": _fee_words(case),
         "TAM_UNG": format_money(case.get("advance_payment")),
+        "TAM_UNG_BANG_CHU": _money_words(case.get("advance_payment")),
         "CON_LAI_THANH_TOAN": _compute_remaining_amount(case),
+        "CON_LAI_THANH_TOAN_BANG_CHU": _money_words(_compute_remaining_amount(case)),
+        "PHUONG_THUC_THANH_TOAN": _payment_method_text(case),
     }
     context.update(_date_context())
 
@@ -613,10 +673,18 @@ def describe_organization_documents(
     templates_dir: str | Path,
     case_files_dir: str | Path,
 ) -> list[dict[str, Any]]:
+    effective_templates_dir = _organization_templates_dir_for_case(templates_dir, case)
+    templates = dict(ORGANIZATION_TEMPLATES)
+    advance_template = effective_templates_dir / ORGANIZATION_CONTRACT_WITH_ADVANCE[0]
+    if (
+        str(case.get("organization_contract_payment_method") or "").strip() == "advance"
+        and advance_template.exists()
+    ):
+        templates["hop_dong"] = ORGANIZATION_CONTRACT_WITH_ADVANCE
     return _describe_documents(
-        ORGANIZATION_TEMPLATES,
+        templates,
         case=case,
-        templates_dir=templates_dir,
+        templates_dir=effective_templates_dir,
         case_files_dir=case_files_dir,
     )
 

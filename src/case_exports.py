@@ -8,11 +8,13 @@ import streamlit.components.v1 as components
 from src.app_config import CASE_FILES_DIR
 from src.case_packager import build_case_zip
 from src.document_exporter import (
+    VCB_GIA_LAI_CUSTOMER_KEY,
     compare_preview_with_export,
     export_individual_document_set,
     export_organization_document_set,
     preview_individual_document_set,
     preview_organization_document_set,
+    _customer_match_key,
 )
 from src.pdf_exporter import export_docx_set_to_pdf
 from src.template_manager import TEMPLATE_REQUIREMENTS, list_docx_templates, validate_template_placeholders
@@ -93,7 +95,11 @@ def missing_mandatory_data_fields(case: dict[str, object], customer_type: str) -
         "valuation_purpose": "Mục đích thẩm định",
         "valuation_fee_number": "Phí thẩm định",
     }
-    if customer_type == "organization":
+    uses_fixed_vcb_gia_lai_template = (
+        customer_type == "organization"
+        and _customer_match_key(case.get("customer_info")) == VCB_GIA_LAI_CUSTOMER_KEY
+    )
+    if customer_type == "organization" and not uses_fixed_vcb_gia_lai_template:
         mandatory.update(
             {
                 "tax_code": "Mã số thuế",

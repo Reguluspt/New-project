@@ -265,6 +265,7 @@ def init_db(db_path: str | Path) -> None:
 
 
 def get_all_organizations(db_path: str | Path) -> list[dict[str, Any]]:
+    init_db(db_path)
     with connect(db_path) as conn:
         cursor = conn.execute("SELECT * FROM organizations ORDER BY name ASC")
         return [dict(row) for row in cursor.fetchall()]
@@ -543,7 +544,15 @@ def recent_cases(db_path: str | Path, *, limit: int = 8) -> list[dict[str, Any]]
 
 
 def distinct_case_values(db_path: str | Path, field: str) -> list[str]:
-    allowed = {"execution_month", "payment_status", "customer_type", "case_status", "source", "business_staff"}
+    allowed = {
+        "execution_month",
+        "payment_status",
+        "customer_type",
+        "case_status",
+        "source",
+        "business_staff",
+        "asset_type",
+    }
     if field not in allowed:
         raise ValueError(f"Unsupported distinct field: {field}")
     init_db(db_path)

@@ -601,6 +601,27 @@ def handle_quick_action(
         customer_type = (refreshed_case.get("customer_type") or "individual") if refreshed_case else "individual"
         templates_dir = individual_templates_dir if customer_type == "individual" else organization_templates_dir
         template_errors = collect_template_errors(templates_dir, customer_type)
+        if customer_type == "organization":
+            st.session_state["quick_action"] = dict(action)
+            organization_contract_payment = st.radio(
+                "Mẫu hợp đồng tổ chức cho xuất nhanh Word",
+                ("Không tạm ứng", "Có tạm ứng"),
+                horizontal=True,
+                key=f"quick_organization_contract_payment_{selected_id}",
+            )
+            if not st.button(
+                "Xuất nhanh bộ hồ sơ Word",
+                type="primary",
+                width="stretch",
+                key=f"confirm_quick_export_word_{selected_id}",
+            ):
+                st.info("Anh chọn mẫu hợp đồng tổ chức rồi bấm Xuất nhanh bộ hồ sơ Word.")
+                return
+            st.session_state.pop("quick_action", None)
+            export_case = dict(export_case)
+            export_case["organization_contract_payment_method"] = (
+                "advance" if organization_contract_payment == "Có tạm ứng" else "standard"
+            )
 
         error = document_action_error(
             case=export_case,
@@ -676,6 +697,17 @@ def render(
         approve_organization_pdf_clicked = st.button(
             "Duyệt và xuất PDF tổ chức",
             width="stretch",
+        )
+    organization_contract_payment = st.radio(
+        "Mẫu hợp đồng tổ chức",
+        ("Không tạm ứng", "Có tạm ứng"),
+        horizontal=True,
+        key=f"organization_contract_payment_{selected_id}",
+    )
+    if export_case and customer_type_value == "organization":
+        export_case = dict(export_case)
+        export_case["organization_contract_payment_method"] = (
+            "advance" if organization_contract_payment == "Có tạm ứng" else "standard"
         )
     professional_options = _professional_forward_options(f"case_documents_mail_{selected_id}")
     mail_clicked = st.button("Gửi mail yêu cầu định giá", width="stretch", icon=":material/mail:")

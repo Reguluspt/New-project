@@ -15,6 +15,7 @@ from src.case_exports import (
     compare_case_documents,
     document_action_error,
     export_case_documents,
+    missing_mandatory_data_fields,
     package_case_documents,
 )
 from src.case_output_preferences import load_case_output_dir, save_case_output_dir
@@ -58,10 +59,37 @@ def _write_individual_templates(directory: Path) -> None:
 
 def _write_organization_templates(directory: Path) -> None:
     templates = {
-        "hop_dong_vcb.docx": "Hop dong to chuc {{SO_HOP_DONG}} - {{TEN_KHACH_HANG}} - {{MA_SO_THUE}}",
-        "bbtl_cong_ty.docx": "Bien ban to chuc {{NGUOI_DAI_DIEN}} - {{CHUC_VU_NGUOI_DAI_DIEN}}",
-        "de_nghi_thanh_toan.docx": "De nghi thanh toan {{SO_DE_NGHI_THANH_TOAN}} - {{CON_LAI_THANH_TOAN}}",
-        "thu_chao_phi.docx": "Thu chao phi {{PHI_THAM_DINH}} - {{MUC_DICH_THAM_DINH_DAY_DU}}",
+        "hop_dong_vcb.docx": (
+            "Hop dong to chuc {{SO_HOP_DONG}} - {{TEN_KHACH_HANG}} - {{MA_SO_THUE}} "
+            "{{DIA_CHI_KHACH_HANG}} {{DIEN_THOAI_KHACH_HANG}} {{NGUOI_DAI_DIEN}} "
+            "{{CHUC_VU_NGUOI_DAI_DIEN}} {{TAI_SAN_THAM_DINH}} {{MUC_DICH_THAM_DINH_DAY_DU}} "
+            "{{SO_HOP_DONG_VAN_BAN}} {{PHI_THAM_DINH}} {{NGAY_HOP_DONG_NGAY}} "
+            "{{NGAY_HOP_DONG_THANG}} {{NGAY_HOP_DONG_NAM}}"
+        ),
+        "hop_dong_vcb_tam_ung.docx": (
+            "Hop dong tam ung {{TEN_KHACH_HANG}} {{DIA_CHI_KHACH_HANG}} {{DIEN_THOAI_KHACH_HANG}} "
+            "{{MA_SO_THUE}} {{NGUOI_DAI_DIEN}} {{CHUC_VU_NGUOI_DAI_DIEN}} {{TAI_SAN_THAM_DINH}} "
+            "{{MUC_DICH_THAM_DINH_DAY_DU}} {{SO_HOP_DONG_VAN_BAN}} {{PHI_THAM_DINH}} "
+            "{{PHI_THAM_DINH_BANG_CHU}} {{TAM_UNG}} - {{TAM_UNG_BANG_CHU}} - "
+            "{{CON_LAI_THANH_TOAN}} - {{CON_LAI_THANH_TOAN_BANG_CHU}} "
+            "{{NGAY_HOP_DONG_NGAY}} {{NGAY_HOP_DONG_THANG}} {{NGAY_HOP_DONG_NAM}}"
+        ),
+        "bbtl_cong_ty.docx": (
+            "Bien ban to chuc {{TEN_KHACH_HANG}} {{DIA_CHI_KHACH_HANG}} {{MA_SO_THUE}} "
+            "{{NGUOI_DAI_DIEN}} - {{CHUC_VU_NGUOI_DAI_DIEN}} {{SO_BIEN_BAN_NGHIEM_THU}} "
+            "{{SO_HOP_DONG_VAN_BAN}} {{NGAY_HOP_DONG}} {{PHI_THAM_DINH}} {{TAM_UNG}} "
+            "{{CON_LAI_THANH_TOAN}} {{CON_LAI_THANH_TOAN_BANG_CHU}} {{NGAY}} {{THANG}} {{NAM}}"
+        ),
+        "de_nghi_thanh_toan.docx": (
+            "De nghi thanh toan {{TEN_KHACH_HANG}} {{DIA_CHI_KHACH_HANG}} "
+            "{{SO_DE_NGHI_THANH_TOAN}} {{SO_HOP_DONG_VAN_BAN}} {{PHI_THAM_DINH}} "
+            "{{TAM_UNG}} {{CON_LAI_THANH_TOAN}} {{NGAY}} {{THANG}} {{NAM}}"
+        ),
+        "thu_chao_phi.docx": (
+            "Thu chao phi {{TEN_KHACH_HANG}} {{TAI_SAN_THAM_DINH}} {{PHI_THAM_DINH}} "
+            "{{PHI_THAM_DINH_BANG_CHU}} {{MUC_DICH_THAM_DINH_DAY_DU}} {{PHUONG_THUC_THANH_TOAN}} "
+            "{{NGAY_HOP_DONG_NGAY}} {{NGAY_HOP_DONG_THANG}} {{NGAY_HOP_DONG_NAM}}"
+        ),
     }
     for name, text in templates.items():
         _write_docx_template(directory / name, text)
@@ -701,6 +729,13 @@ class CaseExportsTests(unittest.TestCase):
         self.assertIn("{{NGAY_HOP_DONG_PLEIKU}}", text)
         self.assertNotIn("{{NGAY_LAP_PLEIKU}}", text)
 
+    def test_sample_organization_acceptance_uses_contract_date_placeholder(self) -> None:
+        text = read_docx_text(Path("samples/templates/organization/bbtl_cong_ty.docx"))
+
+        self.assertIn("{{NGAY_HOP_DONG}}", text)
+        self.assertNotIn("06/10/2025", text)
+        self.assertIn("NGAY_HOP_DONG", TEMPLATE_REQUIREMENTS["organization"]["bbtl_cong_ty.docx"])
+
     def test_render_docx_template_preserves_run_formatting_when_replacing_placeholders(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -858,6 +893,113 @@ class CaseExportsTests(unittest.TestCase):
         self.assertEqual(len([name for name in names if "/" not in name and name.endswith(".docx")]), 4)
         self.assertEqual(len([name for name in names if "/" not in name and name.endswith(".pdf")]), 4)
         self.assertFalse(any(name.startswith("documents/") for name in names))
+
+    def test_export_organization_contract_with_advance_template(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            templates_dir = root / "organization_templates"
+            files_dir = root / "case_files"
+            _write_organization_templates(templates_dir)
+            case = {
+                "id": 9,
+                "customer_type": "organization",
+                "organization_contract_payment_method": "advance",
+                "contract_number": "HD-ADV-001",
+                "contract_date": "25/05/2026",
+                "customer_info": "Cong ty TNHH ABC",
+                "customer_address": "99 Nguyen Tat Thanh",
+                "asset_description": "Nha xuong.",
+                "valuation_purpose": "Vay von",
+                "source": "VCB",
+                "valuation_fee_number": "2500000",
+                "advance_payment": "500000",
+                "tax_code": "6001234567",
+                "representative_name": "Tran Van B",
+                "representative_position": "Giam doc",
+            }
+
+            word_paths = export_case_documents(
+                case,
+                customer_type="organization",
+                templates_dir=templates_dir,
+                case_files_dir=files_dir,
+            )
+            hop_dong_path = next(path for path in word_paths if path.name.endswith("_hop_dong_to_chuc.docx"))
+            content = read_docx_text(hop_dong_path)
+            thu_chao_phi_path = next(path for path in word_paths if path.name.endswith("_thu_chao_phi.docx"))
+            thu_chao_phi = read_docx_text(thu_chao_phi_path)
+
+        self.assertIn("Hop dong tam ung Cong ty TNHH ABC", content)
+        self.assertIn("500.000", content)
+        self.assertIn("Năm trăm ngàn đồng chẵn", content)
+        self.assertIn("2.000.000", content)
+        self.assertIn("Hai triệu đồng chẵn", content)
+        self.assertNotIn("{{", content)
+        self.assertIn("Bên A thanh toán cho Bên B làm 02 đợt", thu_chao_phi)
+        self.assertIn("25 05 2026", thu_chao_phi)
+        self.assertIn("500.000", thu_chao_phi)
+        self.assertIn("2.000.000", thu_chao_phi)
+        self.assertNotIn("{{", thu_chao_phi)
+
+    def test_export_vcb_gia_lai_customer_uses_dedicated_templates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            templates_dir = root / "organization_templates"
+            files_dir = root / "case_files"
+            _write_organization_templates(templates_dir)
+            special_dir = templates_dir / "vcb_gia_lai"
+            special_templates = {
+                "hop_dong_vcb.docx": "VCB Gia Lai contract {{SO_HOP_DONG}} {{TEN_KHACH_HANG}}",
+                "bbtl_cong_ty.docx": "VCB Gia Lai acceptance {{SO_HOP_DONG}}",
+                "de_nghi_thanh_toan.docx": "VCB Gia Lai payment {{CON_LAI_THANH_TOAN}}",
+                "thu_chao_phi.docx": "VCB Gia Lai quote {{THANG_NAM_HOP_DONG}}",
+            }
+            for name, text in special_templates.items():
+                _write_docx_template(special_dir / name, text)
+            case = {
+                "id": 10,
+                "customer_type": "organization",
+                "contract_number": "010/2026/N02-0522/DN",
+                "contract_date": "25/02/2026",
+                "customer_info": (
+                    "NGÂN HÀNG THƯƠNG MẠI CỔ PHẦN NGOẠI THƯƠNG VIỆT NAM - "
+                    "CHI NHÁNH GIA LAI"
+                ),
+                "valuation_fee_number": "25000000",
+                "advance_payment": "0",
+            }
+
+            word_paths = export_case_documents(
+                case,
+                customer_type="organization",
+                templates_dir=templates_dir,
+                case_files_dir=files_dir,
+            )
+            contract_path = next(path for path in word_paths if path.name.endswith("_hop_dong_to_chuc.docx"))
+            quote_path = next(path for path in word_paths if path.name.endswith("_thu_chao_phi.docx"))
+            contract_text = read_docx_text(contract_path)
+            quote_text = read_docx_text(quote_path)
+
+        self.assertIn("VCB Gia Lai contract", contract_text)
+        self.assertIn("Tháng 02 năm 2026", quote_text)
+
+    def test_vcb_gia_lai_fixed_template_does_not_require_organization_contact_fields(self) -> None:
+        case = {
+            "customer_type": "organization",
+            "customer_info": (
+                "NGÂN HÀNG THƯƠNG MẠI CỔ PHẦN NGOẠI THƯƠNG VIỆT NAM – "
+                "CHI NHÁNH GIA LAI (Thu tiền)"
+            ),
+            "customer_address": "5.02 Lô G KDC Miếu Nổi",
+            "asset_description": "Tài sản thẩm định.",
+            "valuation_purpose": "Làm cơ sở tham khảo",
+            "valuation_fee_number": "3300000",
+            "tax_code": "",
+            "representative_name": "",
+            "representative_position": "",
+        }
+
+        self.assertEqual(missing_mandatory_data_fields(case, "organization"), [])
 
     def test_collect_template_errors_reports_missing_required_individual_templates(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
