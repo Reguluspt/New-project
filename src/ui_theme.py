@@ -657,15 +657,16 @@ def render_app_header(current_user: str, active_view: str, *, on_logout: Callabl
                 st.session_state["active_view"] = view_key
                 st.rerun()
         st.markdown(f'<span class="app-avatar">{html.escape(initials[:2])}</span>', unsafe_allow_html=True)
-        if st.button(
-            "Đăng xuất",
-            icon=":material/logout:",
-            type="secondary",
-            width="content",
-            key="header_logout",
-        ):
-            on_logout()
-            st.rerun()
+        if st.session_state.get("app_login_username") != "guest_link":
+            if st.button(
+                "Đăng xuất",
+                icon=":material/logout:",
+                type="secondary",
+                width="content",
+                key="header_logout",
+            ):
+                on_logout()
+                st.rerun()
     return active_view
 
 

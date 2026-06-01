@@ -16,6 +16,7 @@ from src.database_manager import (
     find_sobo_record_by_thread,
     update_sobo_record_status,
     update_sobo_record_note,
+    sync_telegram_records_to_sobo,
 )
 from src.mail_listener import (
     MailListenerSettings,
@@ -186,6 +187,89 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
             logged_events = [call.args[0] for call in log_mock.call_args_list]
             self.assertIn("sobo_responded", logged_events)
             self.assertIsNone(match) # process_incoming_email returns None on preliminary match
+
+    async def test_sync_telegram_records_to_sobo(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            db_path = str(Path(tmpdir) / "records.db")
+            
+            # Initialize both tables by connecting/calling helper
+            await ensure_tracking_schema(db_path)
+            
+            async with aiosqlite.connect(db_path) as db:
+                # Create records table manually or let database_manager do it.
+                # Since records schema is created dynamically, we can just insert a sample row
+                await db.execute(
+                    "CREATE TABLE IF NOT EXISTS records ("
+                    "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    "  asset_type TEXT,"
+                    "  so_thua TEXT,"
+                    "  so_to TEXT,"
+                    "  dia_chi TEXT,"
+                    "  source TEXT,"
+                    "  preliminary_status TEXT,"
+                    "  outbound_message_id TEXT,"
+                    "  outbound_subject TEXT,"
+                    "  outbound_sent_at TEXT,"
+                    "  status TEXT,"
+                    "  personal_note TEXT,"
+                    "  created_at TEXT"
+                    ")"
+                )
+                await db.execute(
+                    "INSERT INTO records ("
+                    "  asset_type, so_thua, so_to, dia_chi, source, preliminary_status,"
+                    "  outbound_message_id, outbound_subject, status, personal_note, created_at"
+                    ") VALUES ("
+                    "  'real_estate', '101', '50', 'Hanoi', 'BIDV', 'Sơ bộ',"
+                    "  '<msg-sync-1@example.com>', '[SƠ BỘ] - BIDV - Thửa 101', 'PENDING', 'Gấp lắm', '2026-06-01 10:00:00'"
+                    ")"
+                )
+                await db.commit()
+            
+            # 1. First sync should sync 1 record
+            synced = await sync_telegram_records_to_sobo(db_path)
+            self.assertEqual(synced, 1)
+            
+            # 2. Second sync should sync 0 (already exists)
+            synced_again = await sync_telegram_records_to_sobo(db_path)
+            self.assertEqual(synced_again, 0)
+            
+            # 3. Verify values inside sobo_records
+            sobo_recs = await get_all_sobo_records(db_path)
+            self.assertEqual(len(sobo_recs), 1)
+            rec = sobo_recs[0]
+            self.assertEqual(rec["outbound_message_id"], "<msg-sync-1@example.com>")
+            self.assertEqual(rec["so_thua"], "101")
+            self.assertEqual(rec["dia_chi"], "Hanoi")
+            self.assertEqual(rec["status"], "PENDING")
+            self.assertEqual(rec["note"], "Gấp lắm")
+
+
+# Helper helper mock to ensure tracking schema runs correctly
+async def ensure_tracking_schema(db_path: str) -> None:
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS sobo_records ("
+            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+            "  asset_type TEXT NOT NULL,"
+            "  asset_sub_type TEXT,"
+            "  source TEXT,"
+            "  so_thua TEXT,"
+            "  so_to TEXT,"
+            "  dia_chi TEXT,"
+            "  link TEXT,"
+            "  email_recipient TEXT,"
+            "  outbound_subject TEXT,"
+            "  outbound_message_id TEXT,"
+            "  outbound_sent_at TEXT,"
+            "  responded_at TEXT,"
+            "  status TEXT NOT NULL DEFAULT 'PENDING',"
+            "  note TEXT,"
+            "  equipment_name TEXT"
+            ")"
+        )
+        await db.commit()
 
 
 if __name__ == "__main__":

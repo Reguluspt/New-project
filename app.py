@@ -52,6 +52,14 @@ def main() -> None:
         initial_sidebar_state="collapsed",
     )
     render_app_theme()
+
+    # Bypass login gate for users accessing via direct public view link
+    view_param = st.query_params.get("view")
+    if view_param == "sobo":
+        st.session_state["app_authenticated"] = True
+        st.session_state["app_login_username"] = "guest_link"
+        st.session_state["active_view"] = "sobo"
+
     if not render_login_gate():
         return
 

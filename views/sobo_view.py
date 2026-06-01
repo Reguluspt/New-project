@@ -127,7 +127,7 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         asyncio.set_event_loop(loop)
 
     # 2. Controls & Force Check
-    col_search, col_status, col_btn = st.columns([4, 2, 2])
+    col_search, col_status, col_btn_sync, col_btn_mail = st.columns([3, 2, 1.5, 1.5])
     
     with col_search:
         search_query = st.text_input("🔍 Tìm kiếm nhanh", placeholder="Tìm theo địa chỉ, thửa, tờ, nguồn...", key="sobo_search")
@@ -135,7 +135,25 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
     with col_status:
         status_filter = st.selectbox("Lọc theo trạng thái", ["Tất cả", "Chờ phản hồi", "Đã phản hồi"], key="sobo_status_filter")
         
-    with col_btn:
+    with col_btn_sync:
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        if is_guest:
+            st.button("🔄 Đồng bộ Telegram", use_container_width=True, disabled=True, help="Tài khoản khách không thể đồng bộ hồ sơ Telegram.")
+        else:
+            if st.button("🔄 Đồng bộ Telegram", use_container_width=True, key="sobo_sync_telegram_btn"):
+                with st.spinner("Đang đồng bộ hồ sơ sơ bộ từ Telegram..."):
+                    try:
+                        from src.database_manager import sync_telegram_records_to_sobo
+                        synced = loop.run_until_complete(sync_telegram_records_to_sobo(records_db_path))
+                        if synced > 0:
+                            st.success(f"Đồng bộ thành công! Đã thêm {synced} hồ sơ mới từ Telegram.")
+                        else:
+                            st.info("Không phát hiện hồ sơ sơ bộ mới trên Telegram.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Lỗi đồng bộ Telegram: {exc}")
+
+    with col_btn_mail:
         st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
         if is_guest:
             st.button("🔄 Kiểm tra Mail ngay", use_container_width=True, disabled=True, help="Tài khoản khách không thể đồng bộ email thủ công.")

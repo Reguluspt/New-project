@@ -898,3 +898,86 @@ async def find_sobo_record_by_thread(db_path: str | Path, ref_blob: str, subject
                     
     return None
 
+
+async def sync_telegram_records_to_sobo(db_path: str | Path) -> int:
+    import sqlite3
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    synced_count = 0
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        
+        query = """
+            SELECT * FROM records 
+            WHERE (preliminary_status = 'Sơ bộ' OR preliminary_status = 'Có sơ bộ' OR outbound_subject LIKE '%[SƠ BỘ]%')
+              AND status <> 'CANCELLED' AND status <> 'DELETED'
+        """
+        try:
+            cursor = await db.execute(query)
+            records = await cursor.fetchall()
+        except sqlite3.OperationalError:
+            # Table 'records' or column 'preliminary_status' may not exist yet
+            return 0
+            
+        for row in records:
+            r = dict(row)
+            outbound_msg_id = r.get("outbound_message_id") or ""
+            created_at = r.get("created_at") or ""
+            dia_chi = r.get("dia_chi") or ""
+            
+            # Check if it already exists in sobo_records
+            if outbound_msg_id:
+                check_query = "SELECT id FROM sobo_records WHERE outbound_message_id = ?"
+                check_params = (outbound_msg_id,)
+            else:
+                check_query = "SELECT id FROM sobo_records WHERE created_at = ? AND dia_chi = ?"
+                check_params = (created_at, dia_chi)
+                
+            cursor_check = await db.execute(check_query, check_params)
+            existing = await cursor_check.fetchone()
+            if existing:
+                continue
+                
+            asset_type = r.get("asset_type") or "real_estate"
+            equipment_name = r.get("asset_description") or "" if asset_type == "machinery" else ""
+            status = "RESPONDED" if r.get("status") in ("CONFIRMED", "FINISHED") else "PENDING"
+            
+            insert_query = """
+                INSERT INTO sobo_records (
+                    created_at, asset_type, asset_sub_type, source, so_thua, so_to, dia_chi, link,
+                    email_recipient, outbound_subject, outbound_message_id, outbound_sent_at,
+                    responded_at, status, note, equipment_name
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?
+                )
+            """
+            await db.execute(
+                insert_query,
+                (
+                    created_at,
+                    asset_type,
+                    r.get("customer_type") or "", # fallback mapping
+                    r.get("source") or "",
+                    r.get("so_thua") or "",
+                    r.get("so_to") or "",
+                    dia_chi,
+                    "", # link
+                    r.get("professional_recipient_email") or "",
+                    r.get("outbound_subject") or "",
+                    outbound_msg_id,
+                    r.get("outbound_sent_at") or created_at,
+                    None, # responded_at (will be updated when reply email arrives)
+                    status,
+                    r.get("personal_note") or "",
+                    equipment_name
+                )
+            )
+            synced_count += 1
+            
+        await db.commit()
+        
+    return synced_count
+
+
