@@ -172,18 +172,20 @@ def _grid_template(widths: list[float]) -> str:
 
 def _render_column_width_controls() -> list[float]:
     _ensure_case_grid_width_state()
-    with st.expander("Điều chỉnh độ rộng cột", expanded=False):
-        st.caption("Kéo thanh trượt để đổi tỷ lệ chiều rộng cột trong bảng danh mục hồ sơ.")
-        control_cols = st.columns(4)
-        for index, (key, label, default) in enumerate(CASE_GRID_COLUMNS):
-            with control_cols[index % len(control_cols)]:
-                st.slider(
-                    label,
-                    min_value=0.15,
-                    max_value=2.5,
-                    step=0.05,
-                    key=f"case_col_width_{key}",
-                )
+    locked = st.toggle("Khóa cột", value=st.session_state.get("case_col_locked", True), key="case_col_locked")
+    if not locked:
+        with st.expander("Điều chỉnh độ rộng cột", expanded=False):
+            st.caption("Kéo thanh trượt để đổi tỷ lệ chiều rộng cột trong bảng danh mục hồ sơ.")
+            control_cols = st.columns(4)
+            for index, (key, label, default) in enumerate(CASE_GRID_COLUMNS):
+                with control_cols[index % len(control_cols)]:
+                    st.slider(
+                        label,
+                        min_value=0.15,
+                        max_value=2.5,
+                        step=0.05,
+                        key=f"case_col_width_{key}",
+                    )
     widths_by_key = {
         key: float(st.session_state.get(f"case_col_width_{key}", default))
         for key, _label, default in CASE_GRID_COLUMNS

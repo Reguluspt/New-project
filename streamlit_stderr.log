@@ -748,3 +748,555 @@ For `use_container_width=True`, use `width='stretch'`. For `use_container_width=
 `use_container_width` will be removed after 2025-12-31.
 
 For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+Lỗi khi đọc file cấu hình OAuth2: Extra data: line 20 column 2 (char 864)
+2026-05-23 08:42:46.485 304 GET /_stcore/health (127.0.0.1) 0.90ms
+2026-05-23 08:42:46.497 304 GET /_stcore/host-config (127.0.0.1) 12.87ms
+2026-05-23 08:42:47.731 101 GET /_stcore/stream (127.0.0.1) 0.63ms
+2026-05-31 11:56:25.553 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 11:56:32.273 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 11:56:33.176 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 11:57:15.889 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:09:50.660 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:09:59.493 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:10:04.538 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:10:05.450 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:10:09.284 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:10:10.269 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:16:06.431 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:16:07.395 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:17:45.392 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:17:46.335 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:18:16.361 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:19:28.493 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:19:29.369 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:25:45.869 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:25:48.098 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:25:48.960 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:26:56.722 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:27:10.032 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:27:10.960 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+Lỗi khi đọc file cấu hình OAuth2: Extra data: line 20 column 2 (char 864)
+2026-05-31 12:27:18.011 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+Lỗi khi đọc file cấu hình OAuth2: Extra data: line 20 column 2 (char 864)
+2026-05-31 12:28:27.964 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:28:28.065 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:28:29.168 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+Lỗi khi đọc file cấu hình OAuth2: Extra data: line 20 column 2 (char 864)
+2026-05-31 12:28:43.010 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:28:43.870 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:28:45.646 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:28:46.516 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:29:22.104 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:29:32.195 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:33:04.144 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:33:06.688 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:33:07.544 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:33:24.870 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:33:35.549 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:33:38.338 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 12:33:45.498 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:09:59.635 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:13:22.024 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:13:22.893 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:13:33.233 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:13:39.396 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:13:45.687 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:13:58.110 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:16:56.982 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:17:03.497 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:17:04.389 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:17:10.489 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:17:32.964 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:17:45.040 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-05-31 14:17:49.123 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 18:49:28.433 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 18:49:28.965 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 18:49:32.515 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 18:49:33.463 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 18:49:38.514 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+Không xác nhận được tiêu đề trang 'Gửi Yêu Cầu Thẩm Định'. URL hiện tại: https://dinhgiav2.cenvalue.vn/#/form-customer — vui lòng kiểm tra thủ công.
+Không tìm thấy ô Số hợp đồng trên form: Locator.fill: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator("//label[contains(text(), 'Số hợp đồng')]/following-sibling::*//input | //label[contains(text(), 'Số hợp đồng')]/..//input[not(@type='hidden')]").first
+    - locator resolved to <input type="text" _ngcontent-c9="" name="hopDongMobi" id="input-hopDongMobi" placeholder="Nhập vào số hợp đồng" class="ng-untouched ng-pristine ng-valid"/>
+    - fill("010/2026/N05-0853/DN")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms
+
+2026-06-01 18:51:07.224 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 18:51:23.304 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 18:51:24.206 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 20:52:03.277 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 20:52:04.231 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:00:27.347 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:00:28.336 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:07:21.415 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:07:22.301 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:07:35.790 Uncaught app execution
+Traceback (most recent call last):
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 236, in wrapped_fragment
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\dialog_decorator.py", line 95, in dialog_content
+    _ = non_optional_func(*args, **kwargs)
+  File "E:\New project\views\case_dialogs.py", line 149, in open_case_edit_dialog
+    contract_date = st.text_input(
+        "Ngày hợp đồng",
+    ...<4 lines>...
+        args=(f"edit_contract_date_{suffix}",)
+    )
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\metrics_util.py", line 563, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 322, in text_input
+    return self._text_input(
+           ~~~~~~~~~~~~~~~~^
+        label=label,
+        ^^^^^^^^^^^^
+    ...<15 lines>...
+        ctx=ctx,
+        ^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 365, in _text_input
+    check_widget_policies(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        self.dg,
+        ^^^^^^^^
+    ...<2 lines>...
+        default_value=None if value == "" else value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 177, in check_widget_policies
+    check_callback_rules(dg, on_change)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 54, in check_callback_rules
+    raise StreamlitInvalidFormCallbackError()
+streamlit.errors.StreamlitInvalidFormCallbackError: Within a form, callbacks can only be defined on `st.form_submit_button`. Defining callbacks on other widgets inside a form is not allowed.
+2026-06-01 21:07:35.855 Uncaught app execution
+Traceback (most recent call last):
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 236, in wrapped_fragment
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\dialog_decorator.py", line 95, in dialog_content
+    _ = non_optional_func(*args, **kwargs)
+  File "E:\New project\views\case_dialogs.py", line 149, in open_case_edit_dialog
+    contract_date = st.text_input(
+        "Ngày hợp đồng",
+    ...<4 lines>...
+        args=(f"edit_contract_date_{suffix}",)
+    )
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\metrics_util.py", line 563, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 322, in text_input
+    return self._text_input(
+           ~~~~~~~~~~~~~~~~^
+        label=label,
+        ^^^^^^^^^^^^
+    ...<15 lines>...
+        ctx=ctx,
+        ^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 365, in _text_input
+    check_widget_policies(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        self.dg,
+        ^^^^^^^^
+    ...<2 lines>...
+        default_value=None if value == "" else value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 177, in check_widget_policies
+    check_callback_rules(dg, on_change)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 54, in check_callback_rules
+    raise StreamlitInvalidFormCallbackError()
+streamlit.errors.StreamlitInvalidFormCallbackError: Within a form, callbacks can only be defined on `st.form_submit_button`. Defining callbacks on other widgets inside a form is not allowed.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 236, in wrapped_fragment
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\views\case_table.py", line 624, in _render_filtered_grid_fragment
+    _render_case_grid(
+    ~~~~~~~~~~~~~~~~~^
+        db_path=db_path,
+        ^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        organization_templates_dir=organization_templates_dir,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\views\case_table.py", line 569, in _render_case_grid
+    _render_case_row(
+    ~~~~~~~~~~~~~~~~^
+        db_path=db_path,
+        ^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        organization_templates_dir=organization_templates_dir,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\views\case_table.py", line 526, in _render_case_row
+    open_case_edit_dialog(db_path, row_id)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\dialog_decorator.py", line 107, in wrap
+    fragmented_dialog_content()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 268, in wrap
+    return wrapped_fragment()
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 253, in wrapped_fragment
+    raise FragmentHandledException(e)
+streamlit.errors.FragmentHandledException: Within a form, callbacks can only be defined on `st.form_submit_button`. Defining callbacks on other widgets inside a form is not allowed.
+2026-06-01 21:07:39.551 Uncaught app execution
+Traceback (most recent call last):
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 236, in wrapped_fragment
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\dialog_decorator.py", line 95, in dialog_content
+    _ = non_optional_func(*args, **kwargs)
+  File "E:\New project\views\case_dialogs.py", line 149, in open_case_edit_dialog
+    contract_date = st.text_input(
+        "Ngày hợp đồng",
+    ...<4 lines>...
+        args=(f"edit_contract_date_{suffix}",)
+    )
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\metrics_util.py", line 563, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 322, in text_input
+    return self._text_input(
+           ~~~~~~~~~~~~~~~~^
+        label=label,
+        ^^^^^^^^^^^^
+    ...<15 lines>...
+        ctx=ctx,
+        ^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 365, in _text_input
+    check_widget_policies(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        self.dg,
+        ^^^^^^^^
+    ...<2 lines>...
+        default_value=None if value == "" else value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 177, in check_widget_policies
+    check_callback_rules(dg, on_change)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 54, in check_callback_rules
+    raise StreamlitInvalidFormCallbackError()
+streamlit.errors.StreamlitInvalidFormCallbackError: Within a form, callbacks can only be defined on `st.form_submit_button`. Defining callbacks on other widgets inside a form is not allowed.
+2026-06-01 21:07:44.179 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:07:47.263 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:07:48.149 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:07:53.267 Uncaught app execution
+Traceback (most recent call last):
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 236, in wrapped_fragment
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\dialog_decorator.py", line 95, in dialog_content
+    _ = non_optional_func(*args, **kwargs)
+  File "E:\New project\views\case_dialogs.py", line 149, in open_case_edit_dialog
+    contract_date = st.text_input(
+        "Ngày hợp đồng",
+    ...<4 lines>...
+        args=(f"edit_contract_date_{suffix}",)
+    )
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\metrics_util.py", line 563, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 322, in text_input
+    return self._text_input(
+           ~~~~~~~~~~~~~~~~^
+        label=label,
+        ^^^^^^^^^^^^
+    ...<15 lines>...
+        ctx=ctx,
+        ^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 365, in _text_input
+    check_widget_policies(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        self.dg,
+        ^^^^^^^^
+    ...<2 lines>...
+        default_value=None if value == "" else value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 177, in check_widget_policies
+    check_callback_rules(dg, on_change)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 54, in check_callback_rules
+    raise StreamlitInvalidFormCallbackError()
+streamlit.errors.StreamlitInvalidFormCallbackError: Within a form, callbacks can only be defined on `st.form_submit_button`. Defining callbacks on other widgets inside a form is not allowed.
+2026-06-01 21:07:53.271 Uncaught app execution
+Traceback (most recent call last):
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 236, in wrapped_fragment
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\dialog_decorator.py", line 95, in dialog_content
+    _ = non_optional_func(*args, **kwargs)
+  File "E:\New project\views\case_dialogs.py", line 149, in open_case_edit_dialog
+    contract_date = st.text_input(
+        "Ngày hợp đồng",
+    ...<4 lines>...
+        args=(f"edit_contract_date_{suffix}",)
+    )
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\metrics_util.py", line 563, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 322, in text_input
+    return self._text_input(
+           ~~~~~~~~~~~~~~~~^
+        label=label,
+        ^^^^^^^^^^^^
+    ...<15 lines>...
+        ctx=ctx,
+        ^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\widgets\text_widgets.py", line 365, in _text_input
+    check_widget_policies(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        self.dg,
+        ^^^^^^^^
+    ...<2 lines>...
+        default_value=None if value == "" else value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 177, in check_widget_policies
+    check_callback_rules(dg, on_change)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\lib\policies.py", line 54, in check_callback_rules
+    raise StreamlitInvalidFormCallbackError()
+streamlit.errors.StreamlitInvalidFormCallbackError: Within a form, callbacks can only be defined on `st.form_submit_button`. Defining callbacks on other widgets inside a form is not allowed.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 236, in wrapped_fragment
+    result = non_optional_func(*args, **kwargs)
+  File "E:\New project\views\case_table.py", line 624, in _render_filtered_grid_fragment
+    _render_case_grid(
+    ~~~~~~~~~~~~~~~~~^
+        db_path=db_path,
+        ^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        organization_templates_dir=organization_templates_dir,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\views\case_table.py", line 569, in _render_case_grid
+    _render_case_row(
+    ~~~~~~~~~~~~~~~~^
+        db_path=db_path,
+        ^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        organization_templates_dir=organization_templates_dir,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "E:\New project\views\case_table.py", line 526, in _render_case_row
+    open_case_edit_dialog(db_path, row_id)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\elements\dialog_decorator.py", line 107, in wrap
+    fragmented_dialog_content()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 268, in wrap
+    return wrapped_fragment()
+  File "E:\New project\.venv\Lib\site-packages\streamlit\runtime\fragment.py", line 253, in wrapped_fragment
+    raise FragmentHandledException(e)
+streamlit.errors.FragmentHandledException: Within a form, callbacks can only be defined on `st.form_submit_button`. Defining callbacks on other widgets inside a form is not allowed.
+2026-06-01 21:10:29.239 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:10:32.384 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:10:33.253 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:17:39.924 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:17:44.096 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:17:44.965 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:18:48.011 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:53:15.502 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:53:19.944 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:53:20.848 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+2026-06-01 21:53:29.451 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+Lỗi khi đọc file cấu hình OAuth2: Extra data: line 20 column 2 (char 864)
+Lỗi khi đọc file cấu hình OAuth2: Extra data: line 20 column 2 (char 864)
+2026-06-01 21:53:32.690 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.

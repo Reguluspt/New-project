@@ -9,7 +9,6 @@ from pathlib import Path
 from src.database_manager import (
     get_all_sobo_records,
     update_sobo_record_status,
-    update_sobo_record_note,
     resolve_records_db_path,
 )
 
@@ -236,9 +235,8 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
             "Trạng thái": "🟢 Đã phản hồi" if status == "RESPONDED" else "🔴 Chờ phản hồi",
             "Thời gian": timer_str,
             "Bản đồ": r.get("link") or "",
-            "Ghi chú": r.get("note") or "",
+            "Tiêu đề mail": r.get("outbound_subject") or "",
             "_raw_status": status,
-            "_raw_note": r.get("note") or "",
         })
 
     # Calculate average duration
@@ -257,7 +255,7 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         df = df[
             df["Tài sản"].str.lower().str.contains(q, na=False) |
             df["Nguồn khách"].str.lower().str.contains(q, na=False) |
-            df["Ghi chú"].str.lower().str.contains(q, na=False) |
+            df["Tiêu đề mail"].str.lower().str.contains(q, na=False) |
             df["Người nhận"].str.lower().str.contains(q, na=False)
         ]
         
@@ -271,39 +269,50 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         return
 
     # 7. Render Grid (Editable for admins, read-only for guests)
-    st.markdown("**Danh sách chi tiết yêu cầu Sơ bộ**")
+    col_title, col_lock = st.columns([6, 1])
+    with col_title:
+        st.markdown("**Danh sách chi tiết yêu cầu Sơ bộ**")
+    with col_lock:
+        locked = st.toggle("Khóa cột", value=st.session_state.get("sobo_col_locked", True), key="sobo_col_locked")
+
+    # Build column_config based on lock state
+    _w = {
+        "id": 60, "date": 130, "source": 110, "asset": 250,
+        "recipient": 160, "status": 120, "time": 100, "map": 180, "subject": 250,
+    } if locked else {}
+
     if is_guest:
         st.caption("Chế độ xem (chỉ đọc) dành cho tài khoản Khách.")
         st.dataframe(
-            df[["ID", "Ngày gửi", "Nguồn khách", "Tài sản", "Người nhận", "Trạng thái", "Thời gian", "Bản đồ", "Ghi chú"]],
+            df[["ID", "Ngày gửi", "Nguồn khách", "Tài sản", "Người nhận", "Trạng thái", "Thời gian", "Bản đồ", "Tiêu đề mail"]],
             column_config={
-                "ID": st.column_config.NumberColumn("Mã", width="small"),
-                "Ngày gửi": st.column_config.TextColumn("Ngày gửi"),
-                "Nguồn khách": st.column_config.TextColumn("Nguồn khách"),
-                "Tài sản": st.column_config.TextColumn("Tài sản", width="medium"),
-                "Người nhận": st.column_config.TextColumn("Người nhận"),
-                "Trạng thái": st.column_config.TextColumn("Trạng thái"),
-                "Thời gian": st.column_config.TextColumn("Thời gian"),
-                "Bản đồ": st.column_config.LinkColumn("Bản đồ"),
-                "Ghi chú": st.column_config.TextColumn("Ghi chú"),
+                "ID": st.column_config.NumberColumn("Mã", **({"width": _w["id"]} if _w else {})),
+                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", **({"width": _w["date"]} if _w else {})),
+                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", **({"width": _w["source"]} if _w else {})),
+                "Tài sản": st.column_config.TextColumn("Tài sản", **({"width": _w["asset"]} if _w else {})),
+                "Người nhận": st.column_config.TextColumn("Người nhận", **({"width": _w["recipient"]} if _w else {})),
+                "Trạng thái": st.column_config.TextColumn("Trạng thái", **({"width": _w["status"]} if _w else {})),
+                "Thời gian": st.column_config.TextColumn("Thời gian", **({"width": _w["time"]} if _w else {})),
+                "Bản đồ": st.column_config.LinkColumn("Bản đồ", **({"width": _w["map"]} if _w else {})),
+                "Tiêu đề mail": st.column_config.TextColumn("Tiêu đề mail", **({"width": _w["subject"]} if _w else {})),
             },
             hide_index=True,
             use_container_width=True,
         )
     else:
-        st.caption("Mẹo: Nhấp đúp vào cột 'Trạng thái' hoặc 'Ghi chú' để thay đổi trực tiếp thông tin, sau đó bấm 'Lưu thay đổi'.")
+        st.caption("Mẹo: Nhấp đúp vào cột 'Trạng thái' để thay đổi trực tiếp, sau đó bấm 'Lưu thay đổi'.")
         edited_df = st.data_editor(
-            df[["ID", "Ngày gửi", "Nguồn khách", "Tài sản", "Người nhận", "Trạng thái", "Thời gian", "Bản đồ", "Ghi chú"]],
+            df[["ID", "Ngày gửi", "Nguồn khách", "Tài sản", "Người nhận", "Trạng thái", "Thời gian", "Bản đồ", "Tiêu đề mail"]],
             column_config={
-                "ID": st.column_config.NumberColumn("Mã", disabled=True, width="small"),
-                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", disabled=True),
-                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", disabled=True),
-                "Tài sản": st.column_config.TextColumn("Tài sản", disabled=True, width="medium"),
-                "Người nhận": st.column_config.TextColumn("Người nhận", disabled=True),
-                "Trạng thái": st.column_config.SelectboxColumn("Trạng thái", options=["🔴 Chờ phản hồi", "🟢 Đã phản hồi"]),
-                "Thời gian": st.column_config.TextColumn("Thời gian", disabled=True),
-                "Bản đồ": st.column_config.LinkColumn("Bản đồ", disabled=True),
-                "Ghi chú": st.column_config.TextColumn("Ghi chú"),
+                "ID": st.column_config.NumberColumn("Mã", disabled=True, **({"width": _w["id"]} if _w else {})),
+                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", disabled=True, **({"width": _w["date"]} if _w else {})),
+                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", disabled=True, **({"width": _w["source"]} if _w else {})),
+                "Tài sản": st.column_config.TextColumn("Tài sản", disabled=True, **({"width": _w["asset"]} if _w else {})),
+                "Người nhận": st.column_config.TextColumn("Người nhận", disabled=True, **({"width": _w["recipient"]} if _w else {})),
+                "Trạng thái": st.column_config.SelectboxColumn("Trạng thái", options=["🔴 Chờ phản hồi", "🟢 Đã phản hồi"], **({"width": _w["status"]} if _w else {})),
+                "Thời gian": st.column_config.TextColumn("Thời gian", disabled=True, **({"width": _w["time"]} if _w else {})),
+                "Bản đồ": st.column_config.LinkColumn("Bản đồ", disabled=True, **({"width": _w["map"]} if _w else {})),
+                "Tiêu đề mail": st.column_config.TextColumn("Tiêu đề mail", disabled=True, **({"width": _w["subject"]} if _w else {})),
             },
             hide_index=True,
             use_container_width=True,
@@ -318,19 +327,14 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
             orig_row = df.iloc[idx]
             new_status_str = row["Trạng thái"]
             new_status = "RESPONDED" if new_status_str == "🟢 Đã phản hồi" else "PENDING"
-            new_note = str(row["Ghi chú"]).strip()
             
             orig_status = orig_row["_raw_status"]
-            orig_note = orig_row["_raw_note"]
             
-            if new_status != orig_status or new_note != orig_note:
+            if new_status != orig_status:
                 changes_detected = True
                 updates_payload.append({
                     "id": orig_row["ID"],
                     "status": new_status,
-                    "note": new_note,
-                    "status_changed": new_status != orig_status,
-                    "note_changed": new_note != orig_note
                 })
 
         if changes_detected:
@@ -338,10 +342,7 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
                 with st.spinner("Đang lưu các thay đổi..."):
                     try:
                         for item in updates_payload:
-                            if item["status_changed"]:
-                                loop.run_until_complete(update_sobo_record_status(records_db_path, item["id"], item["status"]))
-                            if item["note_changed"]:
-                                loop.run_until_complete(update_sobo_record_note(records_db_path, item["id"], item["note"]))
+                            loop.run_until_complete(update_sobo_record_status(records_db_path, item["id"], item["status"]))
                         st.success("Đã lưu các thay đổi thành công!")
                         st.rerun()
                     except Exception as exc:

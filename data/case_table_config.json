@@ -1,14 +1,14 @@
 {
   "column_widths": {
-    "id": 0.3,
-    "contract": 0.85,
-    "customer": 1.45,
-    "note": 1.25,
-    "asset": 1.6,
-    "fee": 0.5,
-    "payment": 0.55,
-    "status": 0.5,
-    "citizen": 0.4,
-    "actions": 0.58
+    "id": 0.15,
+    "contract": 0.15,
+    "customer": 0.15,
+    "note": 0.15,
+    "asset": 0.15,
+    "fee": 0.15,
+    "payment": 0.15,
+    "status": 0.15,
+    "citizen": 0.15,
+    "actions": 0.15
   }
 }
