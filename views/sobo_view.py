@@ -269,7 +269,7 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         return
 
     # 7. Render Grid (Editable for admins, read-only for guests)
-    col_title, col_lock = st.columns([6, 1])
+    col_title, col_lock = st.columns([4, 1.5])
     with col_title:
         st.markdown("**Danh sách chi tiết yêu cầu Sơ bộ**")
     with col_lock:

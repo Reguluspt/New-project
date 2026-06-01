@@ -15,3 +15,5 @@ __pycache__/
 *.xlsx
 logs/
 *.jsonl
+data/case_table_config.json
+scratch_debug.py

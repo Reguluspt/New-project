@@ -1,7 +1,0 @@
-2026-05-23T15:09:06+07:00 [telegram_server] RECORDS_DB_PATH=E:\root\app\data\telegram_records.db
-INFO:     127.0.0.1:49938 - "GET /docs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49942 - "GET /docs HTTP/1.1" 200 OK
-2026-05-23T15:45:41+07:00 [telegram_server] RECORDS_DB_PATH=E:\root\app\data\telegram_records.db
-INFO:     127.0.0.1:55928 - "GET /health HTTP/1.1" 200 OK
-2026-05-31T11:56:17+07:00 [telegram_server] RECORDS_DB_PATH=E:\root\app\data\telegram_records.db
-2026-06-01T18:49:23+07:00 [telegram_server] RECORDS_DB_PATH=E:\root\app\data\telegram_records.db
