@@ -61,6 +61,7 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 "status": "PENDING",
                 "note": "Cần gấp trong chiều",
                 "equipment_name": "",
+                "attachment_paths": "/tmp/gcn.pdf",
             }
             
             record_id = await create_sobo_record(db_path, record_payload)
@@ -77,6 +78,7 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(rec["so_thua"], "123")
             self.assertEqual(rec["status"], "PENDING")
             self.assertEqual(rec["note"], "Cần gấp trong chiều")
+            self.assertEqual(rec["attachment_paths"], "/tmp/gcn.pdf")
             
             # 3. Update status
             await update_sobo_record_status(db_path, 1, "RESPONDED")

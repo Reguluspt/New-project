@@ -779,9 +779,14 @@ async def ensure_sobo_schema(db_path: str | Path) -> None:
             "  responded_at TEXT,"
             "  status TEXT NOT NULL DEFAULT 'PENDING',"
             "  note TEXT,"
-            "  equipment_name TEXT"
+            "  equipment_name TEXT,"
+            "  attachment_paths TEXT"
             ")"
         )
+        cursor = await db.execute("PRAGMA table_info(sobo_records)")
+        columns = {str(row[1]) for row in await cursor.fetchall()}
+        if "attachment_paths" not in columns:
+            await db.execute("ALTER TABLE sobo_records ADD COLUMN attachment_paths TEXT")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_sobo_outbound_msg_id ON sobo_records(outbound_message_id)")
         await db.commit()
 
@@ -792,7 +797,7 @@ async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int
     fields = [
         "created_at", "asset_type", "asset_sub_type", "source", "so_thua", "so_to", "dia_chi",
         "link", "email_recipient", "outbound_subject", "outbound_message_id",
-        "outbound_sent_at", "responded_at", "status", "note", "equipment_name"
+        "outbound_sent_at", "responded_at", "status", "note", "equipment_name", "attachment_paths"
     ]
     columns = ", ".join(fields)
     placeholders = ", ".join(f":{f}" for f in fields)

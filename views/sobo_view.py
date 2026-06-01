@@ -3,14 +3,15 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 import html
+import io
 import pandas as pd
 import streamlit as st
 from pathlib import Path
+import zipfile
 
 from src.database_manager import (
     delete_sobo_record,
     get_all_sobo_records,
-    update_sobo_record_status,
     resolve_records_db_path,
 )
 
@@ -36,6 +37,35 @@ def format_duration(seconds: float) -> str:
     if days > 0:
         return f"{days} ngày {hours}g"
     return f"{hours}g"
+
+def collect_existing_paths(value: object) -> list[Path]:
+    paths = []
+    for item in str(value or "").splitlines():
+        raw_path = item.strip()
+        if not raw_path:
+            continue
+        path = Path(raw_path)
+        if path.exists() and path.is_file():
+            paths.append(path)
+    return paths
+
+def build_gcn_download(paths: list[Path]) -> tuple[bytes, str, str] | None:
+    if not paths:
+        return None
+    if len(paths) == 1:
+        path = paths[0]
+        return path.read_bytes(), path.name, "application/octet-stream"
+
+    buffer = io.BytesIO()
+    used_names: set[str] = set()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for index, path in enumerate(paths, 1):
+            arcname = path.name
+            if arcname in used_names:
+                arcname = f"{path.stem}_{index}{path.suffix}"
+            used_names.add(arcname)
+            archive.write(path, arcname=arcname)
+    return buffer.getvalue(), "sobo_gcn.zip", "application/zip"
 
 def render_sobo_kpi_cards(pending_count: int, responded_count: int, avg_duration_str: str, has_overdue: bool):
     overdue_style = "animation: pulse 1.5s infinite; border-color: #ff4d4d; box-shadow: 0 0 10px rgba(255, 77, 77, 0.5);" if (has_overdue and pending_count > 0) else ""
@@ -252,6 +282,7 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
             "Thời gian": timer_str,
             "Bản đồ": r.get("link") or "",
             "Tiêu đề mail": r.get("outbound_subject") or "",
+            "File GCN": r.get("attachment_paths") or "",
             "_raw_status": status,
         })
 
@@ -341,9 +372,6 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         "PENDING": "🔴 Chờ phản hồi",
         "RESPONDED": "🟢 Đã phản hồi",
     }
-    raw_status_by_label = {label: raw for raw, label in status_label_by_raw.items()}
-    updates_payload = []
-
     def safe_display(value: object) -> str:
         if value is None or pd.isna(value):
             return ""
@@ -352,7 +380,7 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
     if is_guest:
         st.caption("Chế độ xem (chỉ đọc) dành cho tài khoản Khách.")
     else:
-        st.caption("Điều chỉnh trạng thái trực tiếp trên từng hồ sơ, sau đó bấm 'Lưu thay đổi'.")
+        st.caption("Trạng thái được cập nhật tự động khi hệ thống nhận mail phản hồi.")
 
     for _, row in df.iterrows():
         record_id = int(row["ID"])
@@ -368,58 +396,53 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
             duration_text = safe_display(row["Thời gian"])
             subject_text = safe_display(row["Tiêu đề mail"] or "-")
             map_link = "" if pd.isna(row["Bản đồ"]) else str(row["Bản đồ"] or "").strip()
+            gcn_paths = collect_existing_paths(row.get("File GCN"))
+            gcn_download = build_gcn_download(gcn_paths)
 
-            top_cols = st.columns([0.8, 2.8, 1.8, 1.4, 0.8])
-            with top_cols[0]:
-                st.markdown('<div class="sobo-card-muted">Mã hồ sơ</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="sobo-card-title">#{record_id}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="sobo-card-value">{sent_at}</div>', unsafe_allow_html=True)
-            with top_cols[1]:
-                st.markdown('<div class="sobo-card-muted">Tài sản</div>', unsafe_allow_html=True)
+            card_cols = st.columns([3.2, 1.2, 1.4, 0.8])
+            with card_cols[0]:
+                st.markdown('<div class="sobo-card-muted">Mã hồ sơ / ngày gửi</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-value"><b>#{record_id}</b> · {sent_at}</div>', unsafe_allow_html=True)
+                st.markdown('<div class="sobo-card-muted" style="margin-top:12px;">Tiêu đề mail</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-value">{subject_text}</div>', unsafe_allow_html=True)
+                st.markdown('<div class="sobo-card-muted" style="margin-top:12px;">Tài sản</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sobo-card-title">{asset_text}</div>', unsafe_allow_html=True)
-            with top_cols[2]:
-                st.markdown('<div class="sobo-card-muted">Nguồn / người nhận</div>', unsafe_allow_html=True)
+                st.markdown('<div class="sobo-card-muted" style="margin-top:12px;">Nguồn / người nhận</div>', unsafe_allow_html=True)
                 st.markdown(
                     f'<div class="sobo-card-value"><b>{source_text}</b><br>{recipient_text}</div>',
                     unsafe_allow_html=True,
                 )
-            with top_cols[3]:
+            with card_cols[1]:
                 st.markdown('<div class="sobo-card-muted">Trạng thái</div>', unsafe_allow_html=True)
-                if is_guest:
-                    st.markdown(
-                        f'<span class="sobo-status-pill {status_class}">{status_label}</span>',
-                        unsafe_allow_html=True,
+                st.markdown(
+                    f'<span class="sobo-status-pill {status_class}">{status_label}</span>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown('<div class="sobo-card-muted" style="margin-top:14px;">Thời gian</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-value">{duration_text}</div>', unsafe_allow_html=True)
+            with card_cols[2]:
+                st.markdown('<div class="sobo-card-muted" style="margin-top:52px;">Bản đồ</div>', unsafe_allow_html=True)
+                if map_link:
+                    st.link_button("Mở bản đồ", map_link, use_container_width=True)
+                else:
+                    st.button("Mở bản đồ", key=f"sobo_map_disabled_{record_id}", disabled=True, use_container_width=True)
+                if gcn_download:
+                    data, file_name, mime = gcn_download
+                    st.download_button(
+                        "Tải GCN",
+                        data=data,
+                        file_name=file_name,
+                        mime=mime,
+                        key=f"sobo_gcn_download_{record_id}",
+                        use_container_width=True,
                     )
                 else:
-                    selected_label = st.selectbox(
-                        "Trạng thái",
-                        options=list(raw_status_by_label.keys()),
-                        index=list(raw_status_by_label.keys()).index(status_label),
-                        key=f"sobo_status_{record_id}",
-                        label_visibility="collapsed",
-                    )
-                    selected_status = raw_status_by_label[selected_label]
-                    if selected_status != raw_status:
-                        updates_payload.append({"id": record_id, "status": selected_status})
-            with top_cols[4]:
+                    st.button("Tải GCN", key=f"sobo_gcn_missing_{record_id}", disabled=True, use_container_width=True)
+            with card_cols[3]:
                 if not is_guest:
                     st.markdown('<div class="sobo-card-muted">Thao tác</div>', unsafe_allow_html=True)
                     if st.button("Xóa", key=f"sobo_delete_request_{record_id}", use_container_width=True):
                         st.session_state[f"sobo_confirm_delete_{record_id}"] = True
-
-            bottom_cols = st.columns([1.2, 1.6, 3.2])
-            with bottom_cols[0]:
-                st.markdown('<div class="sobo-card-muted">Thời gian</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="sobo-card-value">{duration_text}</div>', unsafe_allow_html=True)
-            with bottom_cols[1]:
-                st.markdown('<div class="sobo-card-muted">Bản đồ</div>', unsafe_allow_html=True)
-                if map_link:
-                    st.link_button("Mở bản đồ", map_link, use_container_width=True)
-                else:
-                    st.markdown('<div class="sobo-card-value">-</div>', unsafe_allow_html=True)
-            with bottom_cols[2]:
-                st.markdown('<div class="sobo-card-muted">Tiêu đề mail</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="sobo-card-value">{subject_text}</div>', unsafe_allow_html=True)
 
             if not is_guest and st.session_state.get(f"sobo_confirm_delete_{record_id}"):
                 st.warning(f"Xóa hồ sơ sơ bộ #{record_id}? Thao tác này không thể hoàn tác.")
@@ -437,14 +460,3 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
                     if st.button("Hủy", key=f"sobo_delete_cancel_{record_id}", use_container_width=True):
                         st.session_state.pop(f"sobo_confirm_delete_{record_id}", None)
                         st.rerun()
-
-    if updates_payload and not is_guest:
-        if st.button("💾 Lưu thay đổi", type="primary", use_container_width=True):
-            with st.spinner("Đang lưu các thay đổi..."):
-                try:
-                    for item in updates_payload:
-                        loop.run_until_complete(update_sobo_record_status(records_db_path, item["id"], item["status"]))
-                    st.success("Đã lưu các thay đổi thành công!")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Lỗi khi lưu dữ liệu: {exc}")

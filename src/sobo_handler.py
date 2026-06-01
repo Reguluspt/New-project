@@ -1180,7 +1180,8 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
                     "outbound_message_id": result.message_id,
                     "status": "PENDING",
                     "note": sobo.get("note"),
-                    "equipment_name": sobo.get("equipment_name")
+                    "equipment_name": sobo.get("equipment_name"),
+                    "attachment_paths": "\n".join(file_path) if isinstance(file_path, list) else (file_path or ""),
                 }
                 await create_sobo_record(db_path, record_payload)
             except Exception as db_exc:
