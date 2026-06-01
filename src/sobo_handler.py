@@ -1052,13 +1052,32 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         
         if not result.success:
-            await query.edit_message_text(f"Loi: {result.user_message}")
+            await query.edit_message_text(f"Lỗi: {result.user_message}")
             return ConversationHandler.END
 
         if result.success:
             await query.edit_message_text("✅ Đã gửi Email Yêu cầu Sơ bộ thành công!")
-        else:
-            await query.edit_message_text("❌ Việc gửi Email thất bại. Hãy kiểm tra lại tài khoản SMTP (MAIL_USERNAME, MAIL_PASSWORD) trong API.env.")
+            from .database_manager import resolve_records_db_path, create_sobo_record
+            try:
+                db_path = resolve_records_db_path()
+                record_payload = {
+                    "asset_type": sobo.get("asset_type"),
+                    "asset_sub_type": sobo.get("asset_sub_type"),
+                    "source": sobo.get("source"),
+                    "so_thua": sobo.get("so_thua"),
+                    "so_to": sobo.get("so_to"),
+                    "dia_chi": sobo.get("dia_chi"),
+                    "link": sobo.get("link"),
+                    "email_recipient": sobo.get("email"),
+                    "outbound_subject": sobo.get("subject"),
+                    "outbound_message_id": result.message_id,
+                    "status": "PENDING",
+                    "note": sobo.get("note"),
+                    "equipment_name": sobo.get("equipment_name")
+                }
+                await create_sobo_record(db_path, record_payload)
+            except Exception as db_exc:
+                logger.error(f"Loi khi luu thong tin so bo vao CSDL: {db_exc}", exc_info=True)
             
     else:
         await query.edit_message_text("🚫 Đã hủy yêu cầu Gửi Sơ bộ.")
@@ -1070,6 +1089,7 @@ async def sobo_cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🚫 Đã hủy thao tác Sơ bộ.", reply_markup=ReplyKeyboardRemove())
     context.user_data.pop('sobo', None)
     return ConversationHandler.END
+        
 
 def get_sobo_conversation_handler() -> ConversationHandler:
     return ConversationHandler(

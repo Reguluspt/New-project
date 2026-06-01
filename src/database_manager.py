@@ -208,6 +208,7 @@ async def ensure_tracking_record_schema(db_path: str | Path) -> None:
         )
         await db.commit()
 
+    await ensure_sobo_schema(db_path)
     _TRACKING_SCHEMA_INITIALIZED[path_key] = True
 
 
@@ -753,4 +754,147 @@ def owner_name_from_record(record: Mapping[str, Any]) -> str:
         or record.get("recipient_name")
         or f"#{record.get('id', '')}"
     ).strip()
+
+
+async def ensure_sobo_schema(db_path: str | Path) -> None:
+    db_path = resolve_records_db_path(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute("PRAGMA busy_timeout = 30000")
+        await db.execute("PRAGMA journal_mode = WAL")
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS sobo_records ("
+            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+            "  asset_type TEXT NOT NULL,"
+            "  asset_sub_type TEXT,"
+            "  source TEXT,"
+            "  so_thua TEXT,"
+            "  so_to TEXT,"
+            "  dia_chi TEXT,"
+            "  link TEXT,"
+            "  email_recipient TEXT,"
+            "  outbound_subject TEXT,"
+            "  outbound_message_id TEXT,"
+            "  outbound_sent_at TEXT,"
+            "  responded_at TEXT,"
+            "  status TEXT NOT NULL DEFAULT 'PENDING',"
+            "  note TEXT,"
+            "  equipment_name TEXT"
+            ")"
+        )
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_sobo_outbound_msg_id ON sobo_records(outbound_message_id)")
+        await db.commit()
+
+
+async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    fields = [
+        "asset_type", "asset_sub_type", "source", "so_thua", "so_to", "dia_chi",
+        "link", "email_recipient", "outbound_subject", "outbound_message_id",
+        "outbound_sent_at", "status", "note", "equipment_name"
+    ]
+    columns = ", ".join(fields)
+    placeholders = ", ".join(f":{f}" for f in fields)
+    
+    payload = {f: str(values.get(f) or "").strip() for f in fields}
+    if not payload["status"]:
+        payload["status"] = "PENDING"
+    if not payload["outbound_sent_at"]:
+        payload["outbound_sent_at"] = datetime.now().isoformat()
+        
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        cursor = await db.execute(
+            f"INSERT INTO sobo_records ({columns}) VALUES ({placeholders})",
+            payload
+        )
+        await db.commit()
+        return int(cursor.lastrowid)
+
+
+async def update_sobo_record_status(db_path: str | Path, record_id: int, status: str, responded_at: str | None = None) -> None:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    if not responded_at and status == "RESPONDED":
+        responded_at = datetime.now().isoformat()
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute(
+            "UPDATE sobo_records SET status = ?, responded_at = ? WHERE id = ?",
+            (status, responded_at, int(record_id))
+        )
+        await db.commit()
+
+
+async def update_sobo_record_note(db_path: str | Path, record_id: int, note: str) -> None:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute(
+            "UPDATE sobo_records SET note = ? WHERE id = ?",
+            (note.strip(), int(record_id))
+        )
+        await db.commit()
+
+
+async def get_all_sobo_records(db_path: str | Path) -> list[dict[str, Any]]:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM sobo_records ORDER BY id DESC")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def find_sobo_record_by_thread(db_path: str | Path, ref_blob: str, subject: str) -> dict[str, Any] | None:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    ref_blob = ref_blob.strip()
+    normalized_subject = _normalize_subject(subject)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # 1. Đối soát bằng message_id
+        if ref_blob:
+            cursor = await db.execute(
+                "SELECT * FROM sobo_records "
+                "WHERE outbound_message_id IS NOT NULL AND TRIM(outbound_message_id) <> '' "
+                "  AND INSTR(?, outbound_message_id) > 0 "
+                "ORDER BY id DESC LIMIT 1",
+                (ref_blob,)
+            )
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+                
+        # 2. Đối soát bằng tiêu đề
+        if normalized_subject:
+            like_pattern = _like_pattern(normalized_subject)
+            cursor = await db.execute(
+                "SELECT * FROM sobo_records "
+                "WHERE outbound_subject IS NOT NULL AND TRIM(outbound_subject) <> '' "
+                "  AND ( "
+                "    LOWER(outbound_subject) LIKE ? ESCAPE '\\' "
+                "    OR ? LIKE '%' || LOWER(outbound_subject) || '%' "
+                "  ) "
+                "ORDER BY id DESC LIMIT 1",
+                (like_pattern, normalized_subject)
+            )
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+                
+            # Fallback đối soát bằng Python-side comparison trên 500 dòng gần nhất để hỗ trợ tiếng Việt có dấu
+            cursor = await db.execute(
+                "SELECT * FROM sobo_records "
+                "WHERE outbound_subject IS NOT NULL AND TRIM(outbound_subject) <> '' "
+                "ORDER BY id DESC LIMIT 500"
+            )
+            rows = await cursor.fetchall()
+            for r in rows:
+                row_subject = _normalize_subject(str(r["outbound_subject"] or ""))
+                if row_subject and (row_subject in normalized_subject or normalized_subject in row_subject):
+                    return dict(r)
+                    
+    return None
 

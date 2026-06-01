@@ -25,18 +25,38 @@ def _configured_credentials() -> tuple[str, str]:
     )
 
 
-def authenticate(username: str, password: str) -> bool:
-    expected_username, expected_password = _configured_credentials()
-    if not expected_username or not expected_password:
-        return False
-    return hmac.compare_digest(username.strip(), expected_username) and hmac.compare_digest(
-        password,
-        expected_password,
+def _configured_guest_credentials() -> tuple[str, str]:
+    return (
+        os.getenv("APP_GUEST_USERNAME", "khach").strip(),
+        os.getenv("APP_GUEST_PASSWORD", "Cen2026"),
     )
 
 
+def authenticate(username: str, password: str) -> bool:
+    expected_username, expected_password = _configured_credentials()
+    if expected_username and expected_password:
+        if hmac.compare_digest(username.strip(), expected_username) and hmac.compare_digest(
+            password,
+            expected_password,
+        ):
+            return True
+
+    guest_username, guest_password = _configured_guest_credentials()
+    if guest_username and guest_password:
+        if hmac.compare_digest(username.strip(), guest_username) and hmac.compare_digest(
+            password,
+            guest_password,
+        ):
+            return True
+
+    return False
+
+
 def _create_auth_token(username: str, *, now: int | None = None) -> str:
-    _, password = _configured_credentials()
+    _, admin_pass = _configured_credentials()
+    guest_user, guest_pass = _configured_guest_credentials()
+
+    password = guest_pass if username == guest_user else admin_pass
     expires_at = (int(time.time()) if now is None else now) + AUTH_COOKIE_MAX_AGE_SECONDS
     payload = f"{username}|{expires_at}"
     encoded_payload = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii").rstrip("=")
@@ -45,26 +65,35 @@ def _create_auth_token(username: str, *, now: int | None = None) -> str:
 
 
 def _validate_auth_token(token: str, *, now: int | None = None) -> str | None:
-    expected_username, password = _configured_credentials()
-    if not expected_username or not password:
-        return None
+    admin_user, admin_pass = _configured_credentials()
+    guest_user, guest_pass = _configured_guest_credentials()
+
     try:
         encoded_payload, signature = token.split(".", 1)
-        expected_signature = hmac.new(
-            password.encode("utf-8"),
-            encoded_payload.encode("ascii"),
-            hashlib.sha256,
-        ).hexdigest()
-        if not hmac.compare_digest(signature, expected_signature):
-            return None
         padding = "=" * (-len(encoded_payload) % 4)
         payload = base64.urlsafe_b64decode(encoded_payload + padding).decode("utf-8")
         username, expires_at_value = payload.rsplit("|", 1)
         expires_at = int(expires_at_value)
     except (binascii.Error, ValueError, UnicodeDecodeError):
         return None
+
+    if username == guest_user:
+        password = guest_pass
+    elif username == admin_user:
+        password = admin_pass
+    else:
+        return None
+
+    expected_signature = hmac.new(
+        password.encode("utf-8"),
+        encoded_payload.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(signature, expected_signature):
+        return None
+
     current_time = int(time.time()) if now is None else now
-    if expires_at < current_time or not hmac.compare_digest(username, expected_username):
+    if expires_at < current_time:
         return None
     return username
 
@@ -105,7 +134,11 @@ def render_login_gate() -> bool:
         if cookie_username:
             st.session_state["app_authenticated"] = True
             st.session_state["app_login_username"] = cookie_username
-            st.session_state.setdefault("active_view", "dashboard")
+            guest_user, _ = _configured_guest_credentials()
+            if cookie_username == guest_user:
+                st.session_state.setdefault("active_view", "sobo")
+            else:
+                st.session_state.setdefault("active_view", "dashboard")
             _render_cookie_script(_create_auth_token(cookie_username))
             return True
 
@@ -129,8 +162,14 @@ def render_login_gate() -> bool:
             if authenticate(username, password):
                 st.session_state["app_authenticated"] = True
                 st.session_state["app_login_username"] = username.strip()
-                st.session_state["active_view"] = "dashboard"
+                guest_user, _ = _configured_guest_credentials()
+                if username.strip() == guest_user:
+                    st.session_state["active_view"] = "sobo"
+                else:
+                    st.session_state["active_view"] = "dashboard"
                 st.rerun()
             st.error("Tên tài khoản hoặc mật khẩu không đúng.")
+
+    return False
 
     return False

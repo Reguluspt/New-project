@@ -46,6 +46,26 @@ class AuthTests(unittest.TestCase):
         ):
             self.assertIsNone(_validate_auth_token(token, now=101))
 
+    def test_authenticate_guest_uses_configured_or_default_credentials(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"APP_GUEST_USERNAME": "guestuser", "APP_GUEST_PASSWORD": "guestpassword"},
+            clear=False,
+        ):
+            self.assertTrue(authenticate("guestuser", "guestpassword"))
+            self.assertFalse(authenticate("guestuser", "wrong"))
+            self.assertFalse(authenticate("other", "guestpassword"))
+
+    def test_signed_auth_token_restores_guest_user(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"APP_GUEST_USERNAME": "guestuser", "APP_GUEST_PASSWORD": "guestpassword"},
+            clear=False,
+        ):
+            token = _create_auth_token("guestuser", now=100)
+            self.assertEqual(_validate_auth_token(token, now=101), "guestuser")
+            self.assertIsNone(_validate_auth_token(token, now=100 + 31 * 24 * 60 * 60))
+
 
 if __name__ == "__main__":
     unittest.main()

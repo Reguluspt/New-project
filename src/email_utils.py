@@ -3,7 +3,7 @@ import os
 import smtplib
 from dataclasses import dataclass
 from email.message import EmailMessage
-from email.utils import formataddr
+from email.utils import formataddr, make_msgid
 
 from dotenv import load_dotenv
 
@@ -16,6 +16,7 @@ class SoboEmailResult:
     success: bool
     user_message: str = ""
     technical_error: str = ""
+    message_id: str = ""
 
     def __bool__(self) -> bool:
         return self.success
@@ -80,6 +81,9 @@ async def send_sobo_email_with_result(
     user = os.getenv("SMTP_USERNAME", os.getenv("MAIL_USERNAME", os.getenv("EMAIL_USER", ""))).strip()
     mail_from_name = os.getenv("MAIL_FROM", "").strip()
     
+    domain = user.split("@")[-1] if "@" in user else "gmail.com"
+    message_id = make_msgid(domain=domain)
+
     if provider:
         try:
             print(f"Sending sobo email using OAuth2 API for provider: {provider}")
@@ -95,6 +99,7 @@ async def send_sobo_email_with_result(
             if cc_emails:
                 msg["Cc"] = ", ".join(cc_emails)
             msg.set_content(body)
+            msg["Message-ID"] = message_id
             
             if html_body:
                 msg.add_alternative(html_body, subtype="html")
@@ -121,7 +126,7 @@ async def send_sobo_email_with_result(
                 else:
                     msg["From"] = outlook_sender_email
                 await send_outlook_message_via_smtp_oauth2(msg)
-                return SoboEmailResult(True)
+                return SoboEmailResult(True, message_id=message_id)
 
             access_token = await get_valid_access_token_async(provider)
             
@@ -140,7 +145,7 @@ async def send_sobo_email_with_result(
                     response = await client.post(send_url, headers=headers, json={"raw": raw_b64})
                     if response.status_code not in [200, 201]:
                         raise RuntimeError(f"Gửi sobo qua Gmail API thất bại: {response.text}")
-                return SoboEmailResult(True)
+                return SoboEmailResult(True, message_id=message_id)
                 
             elif provider == "outlook":
                 import base64
@@ -185,7 +190,10 @@ async def send_sobo_email_with_result(
                         },
                         "toRecipients": to_recipients,
                         "ccRecipients": cc_recipients,
-                        "attachments": attachments_payload
+                        "attachments": attachments_payload,
+                        "internetMessageHeaders": [
+                            {"name": "Message-ID", "value": message_id}
+                        ]
                     }
                 }
                 async with httpx.AsyncClient(timeout=30.0) as client:
@@ -197,7 +205,7 @@ async def send_sobo_email_with_result(
                     response = await client.post(send_url, headers=headers, json=email_payload)
                     if response.status_code not in [200, 202]:
                         raise RuntimeError(f"Gửi sobo qua Microsoft Graph API thất bại: {response.text}")
-                return SoboEmailResult(True)
+                return SoboEmailResult(True, message_id=message_id)
                 
         except Exception as exc:
             message = f"Gửi mail qua {provider.upper()} OAuth2 thất bại: {exc}"
@@ -226,6 +234,7 @@ async def send_sobo_email_with_result(
     if cc_emails:
         msg["Cc"] = ", ".join(cc_emails)
     msg.set_content(body)
+    msg["Message-ID"] = message_id
 
     if html_body:
         msg.add_alternative(html_body, subtype="html")
@@ -264,7 +273,7 @@ async def send_sobo_email_with_result(
                 server.login(user, password)
                 server.send_message(msg)
         logger.info("Gui email thanh cong.")
-        return SoboEmailResult(True)
+        return SoboEmailResult(True, message_id=message_id)
     except smtplib.SMTPAuthenticationError as e:
         message = _smtp_auth_error_message()
         logger.error(f"Loi xac thuc SMTP khi gui email: {e}")

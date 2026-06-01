@@ -613,16 +613,27 @@ def render_app_theme() -> None:
 
 
 def render_app_header(current_user: str, active_view: str, *, on_logout: Callable[[], None]) -> str:
-    initials = "".join(part[:1] for part in current_user.split()[:2]).upper() or "AD"
-    nav_items = (
-        ("dashboard", "Dashboard", ":material/dashboard:"),
-        ("entry", "Nhập hồ sơ", ":material/document_scanner:"),
-        ("cases", "Quản lý hồ sơ", ":material/folder_shared:"),
-        ("organizations", "Tổ chức", ":material/corporate_fare:"),
-        ("delivery", "Chuyển phát", ":material/local_shipping:"),
-        ("templates", "Templates", ":material/description:"),
-        ("settings", "Cấu hình", ":material/settings:"),
-    )
+    import os
+    guest_user = os.getenv("APP_GUEST_USERNAME", "khach").strip()
+    is_guest = (st.session_state.get("app_login_username") == guest_user)
+
+    if is_guest:
+        initials = "KH"
+        nav_items = (
+            ("sobo", "Sơ bộ", ":material/pending_actions:"),
+        )
+    else:
+        initials = "".join(part[:1] for part in current_user.split()[:2]).upper() or "AD"
+        nav_items = (
+            ("dashboard", "Dashboard", ":material/dashboard:"),
+            ("entry", "Nhập hồ sơ", ":material/document_scanner:"),
+            ("cases", "Quản lý hồ sơ", ":material/folder_shared:"),
+            ("sobo", "Sơ bộ", ":material/pending_actions:"),
+            ("organizations", "Tổ chức", ":material/corporate_fare:"),
+            ("delivery", "Chuyển phát", ":material/local_shipping:"),
+            ("templates", "Templates", ":material/description:"),
+            ("settings", "Cấu hình", ":material/settings:"),
+        )
     with st.container(key="app_header", horizontal=True, vertical_alignment="center", gap="small"):
         st.markdown(
             f"""

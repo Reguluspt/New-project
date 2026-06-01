@@ -37,6 +37,8 @@ from .database_manager import (
     update_certificate_received,
     update_certificate_forwarded,
     update_matched_record_contract,
+    find_sobo_record_by_thread,
+    update_sobo_record_status,
 )
 from .mail_renderer import mail_data_from_record, render_appraisal_email
 from .mail_service import GmailSmtpSettings, _dedupe_emails, _parse_email_list, attach_inline_logo, load_gmail_smtp_settings
@@ -918,6 +920,70 @@ async def notify_telegram(settings: MailListenerSettings, text: str) -> None:
     await bot.send_message(chat_id=settings.telegram_chat_id, text=text)
 
 
+async def process_sobo_reply(incoming: IncomingEmail, *, settings: MailListenerSettings) -> bool:
+    ref_blob = f"{incoming.in_reply_to or ''} {incoming.references or ''}".strip()
+    
+    sobo_record = await find_sobo_record_by_thread(
+        settings.records_db_path,
+        ref_blob=ref_blob,
+        subject=incoming.subject
+    )
+    
+    if not sobo_record:
+        append_listener_log(
+            "skipped",
+            uid=incoming.uid,
+            subject=incoming.subject,
+            from_email=incoming.from_email,
+            reason="sobo_record_not_found"
+        )
+        return False
+
+    if sobo_record.get("status") == "RESPONDED":
+        append_listener_log(
+            "skipped",
+            uid=incoming.uid,
+            subject=incoming.subject,
+            from_email=incoming.from_email,
+            reason="sobo_already_responded"
+        )
+        return True
+
+    await update_sobo_record_status(
+        settings.records_db_path,
+        sobo_record["id"],
+        status="RESPONDED"
+    )
+
+    asset_info = ""
+    if sobo_record.get("asset_type") == "machinery":
+        asset_info = f"Thiết bị: {sobo_record.get('equipment_name')}"
+    else:
+        asset_info = f"Thửa đất: {sobo_record.get('so_thua')}, tờ: {sobo_record.get('so_to')}; tại địa chỉ {sobo_record.get('dia_chi')}"
+
+    email_text_summary = incoming.text.strip()
+    if len(email_text_summary) > 300:
+        email_text_summary = email_text_summary[:300] + "..."
+
+    msg_text = (
+        "🔔 *Thông báo phản hồi Sơ bộ* 🔔\n\n"
+        f"📍 *Tài sản:* {asset_info}\n"
+        f"👤 *Nguồn khách hàng:* {sobo_record.get('source')}\n"
+        f"✉️ *Đã phản hồi bởi:* {incoming.from_email}\n\n"
+        f"💬 *Nội dung phản hồi:* \n_{email_text_summary}_"
+    )
+    
+    await notify_telegram(settings, msg_text)
+    
+    append_listener_log(
+        "sobo_responded",
+        uid=incoming.uid,
+        subject=incoming.subject,
+        record_id=sobo_record["id"]
+    )
+    return True
+
+
 async def process_certificate_reply(incoming: IncomingEmail, *, settings: MailListenerSettings) -> RecordMatch | None:
     if not _is_from_admin(incoming, settings):
         append_listener_log(
@@ -1099,6 +1165,10 @@ async def process_incoming_email(
 ) -> RecordMatch | None:
     incoming = parse_incoming_email(raw, uid=uid, thread_id=thread_id)
     try:
+        if "[sơ bộ]" in incoming.subject.lower():
+            await process_sobo_reply(incoming, settings=settings)
+            return None
+
         if settings.admin_email and settings.professional_dept_email:
             return await process_certificate_reply(incoming, settings=settings)
 

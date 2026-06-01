@@ -31,6 +31,7 @@ from views import settings as settings_view
 from views import templates as templates_view
 from views import organizations_view as organizations_view
 from views import delivery_view as delivery_view
+from views import sobo_view as sobo_view
 from src.backup_service import create_backup
 
 
@@ -110,6 +111,12 @@ def main() -> None:
     ai_provider, api_key, model, api_key_label = _load_ai_runtime_config()
 
     active_view = str(st.session_state.get("active_view") or "dashboard")
+    guest_user = os.getenv("APP_GUEST_USERNAME", "khach").strip()
+    is_guest = (st.session_state.get("app_login_username") == guest_user)
+    if is_guest and active_view != "sobo":
+        active_view = "sobo"
+        st.session_state["active_view"] = "sobo"
+
     active_view = render_app_header(current_user, active_view, on_logout=logout)
 
     if "extraction" not in st.session_state:
@@ -150,6 +157,9 @@ def main() -> None:
 
     elif active_view == "delivery":
         delivery_view.render(records_db_path)
+
+    elif active_view == "sobo":
+        sobo_view.render(records_db_path, is_guest=is_guest)
 
     elif active_view == "templates":
         templates_view.render(
