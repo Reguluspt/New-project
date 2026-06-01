@@ -27,13 +27,13 @@ def parse_sent_time(val: str) -> datetime | None:
 
 def format_duration(seconds: float) -> str:
     if seconds < 0:
-        return "0 phút"
-    mins = int(seconds // 60)
-    hours = mins // 60
-    remaining_mins = mins % 60
-    if hours > 0:
-        return f"{hours}g {remaining_mins}p"
-    return f"{remaining_mins}p"
+        return "0g"
+    total_hours = int(seconds // 3600)
+    days = total_hours // 24
+    hours = total_hours % 24
+    if days > 0:
+        return f"{days} ngày {hours}g"
+    return f"{hours}g"
 
 def render_sobo_kpi_cards(pending_count: int, responded_count: int, avg_duration_str: str, has_overdue: bool):
     overdue_style = "animation: pulse 1.5s infinite; border-color: #ff4d4d; box-shadow: 0 0 10px rgba(255, 77, 77, 0.5);" if (has_overdue and pending_count > 0) else ""
@@ -224,7 +224,21 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         if r.get("asset_type") == "machinery":
             asset_info = f"⚙️ Thiết bị: {r.get('equipment_name')}"
         else:
-            asset_info = f"🏠 Thửa: {r.get('so_thua') or '-'}, Tờ: {r.get('so_to') or '-'}; {r.get('dia_chi') or ''}"
+            so_thua = r.get('so_thua') or ''
+            so_to = r.get('so_to') or ''
+            dia_chi = r.get('dia_chi') or ''
+            parts = []
+            if so_thua:
+                parts.append(f"Thửa: {so_thua}")
+            if so_to:
+                parts.append(f"Tờ: {so_to}")
+            prefix = ", ".join(parts)
+            if prefix and dia_chi:
+                asset_info = f"🏠 {prefix}; {dia_chi}"
+            elif dia_chi:
+                asset_info = f"🏠 {dia_chi}"
+            else:
+                asset_info = f"🏠 {prefix}" if prefix else "🏠"
 
         formatted_rows.append({
             "ID": r["id"],
@@ -269,32 +283,21 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         return
 
     # 7. Render Grid (Editable for admins, read-only for guests)
-    col_title, col_lock = st.columns([4, 1.5])
-    with col_title:
-        st.markdown("**Danh sách chi tiết yêu cầu Sơ bộ**")
-    with col_lock:
-        locked = st.toggle("Khóa cột", value=st.session_state.get("sobo_col_locked", True), key="sobo_col_locked")
-
-    # Build column_config based on lock state
-    _w = {
-        "id": 60, "date": 130, "source": 110, "asset": 250,
-        "recipient": 160, "status": 120, "time": 100, "map": 180, "subject": 250,
-    } if locked else {}
-
+    st.markdown("**Danh sách chi tiết yêu cầu Sơ bộ**")
     if is_guest:
         st.caption("Chế độ xem (chỉ đọc) dành cho tài khoản Khách.")
         st.dataframe(
             df[["ID", "Ngày gửi", "Nguồn khách", "Tài sản", "Người nhận", "Trạng thái", "Thời gian", "Bản đồ", "Tiêu đề mail"]],
             column_config={
-                "ID": st.column_config.NumberColumn("Mã", **({"width": _w["id"]} if _w else {})),
-                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", **({"width": _w["date"]} if _w else {})),
-                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", **({"width": _w["source"]} if _w else {})),
-                "Tài sản": st.column_config.TextColumn("Tài sản", **({"width": _w["asset"]} if _w else {})),
-                "Người nhận": st.column_config.TextColumn("Người nhận", **({"width": _w["recipient"]} if _w else {})),
-                "Trạng thái": st.column_config.TextColumn("Trạng thái", **({"width": _w["status"]} if _w else {})),
-                "Thời gian": st.column_config.TextColumn("Thời gian", **({"width": _w["time"]} if _w else {})),
-                "Bản đồ": st.column_config.LinkColumn("Bản đồ", **({"width": _w["map"]} if _w else {})),
-                "Tiêu đề mail": st.column_config.TextColumn("Tiêu đề mail", **({"width": _w["subject"]} if _w else {})),
+                "ID": st.column_config.NumberColumn("Mã", width=60),
+                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", width=130),
+                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", width=110),
+                "Tài sản": st.column_config.TextColumn("Tài sản", width=250),
+                "Người nhận": st.column_config.TextColumn("Người nhận", width=160),
+                "Trạng thái": st.column_config.TextColumn("Trạng thái", width=120),
+                "Thời gian": st.column_config.TextColumn("Thời gian", width=100),
+                "Bản đồ": st.column_config.LinkColumn("Bản đồ", width=180),
+                "Tiêu đề mail": st.column_config.TextColumn("Tiêu đề mail", width=250),
             },
             hide_index=True,
             use_container_width=True,
@@ -304,15 +307,15 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         edited_df = st.data_editor(
             df[["ID", "Ngày gửi", "Nguồn khách", "Tài sản", "Người nhận", "Trạng thái", "Thời gian", "Bản đồ", "Tiêu đề mail"]],
             column_config={
-                "ID": st.column_config.NumberColumn("Mã", disabled=True, **({"width": _w["id"]} if _w else {})),
-                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", disabled=True, **({"width": _w["date"]} if _w else {})),
-                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", disabled=True, **({"width": _w["source"]} if _w else {})),
-                "Tài sản": st.column_config.TextColumn("Tài sản", disabled=True, **({"width": _w["asset"]} if _w else {})),
-                "Người nhận": st.column_config.TextColumn("Người nhận", disabled=True, **({"width": _w["recipient"]} if _w else {})),
-                "Trạng thái": st.column_config.SelectboxColumn("Trạng thái", options=["🔴 Chờ phản hồi", "🟢 Đã phản hồi"], **({"width": _w["status"]} if _w else {})),
-                "Thời gian": st.column_config.TextColumn("Thời gian", disabled=True, **({"width": _w["time"]} if _w else {})),
-                "Bản đồ": st.column_config.LinkColumn("Bản đồ", disabled=True, **({"width": _w["map"]} if _w else {})),
-                "Tiêu đề mail": st.column_config.TextColumn("Tiêu đề mail", disabled=True, **({"width": _w["subject"]} if _w else {})),
+                "ID": st.column_config.NumberColumn("Mã", disabled=True, width=60),
+                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", disabled=True, width=130),
+                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", disabled=True, width=110),
+                "Tài sản": st.column_config.TextColumn("Tài sản", disabled=True, width=250),
+                "Người nhận": st.column_config.TextColumn("Người nhận", disabled=True, width=160),
+                "Trạng thái": st.column_config.SelectboxColumn("Trạng thái", options=["🔴 Chờ phản hồi", "🟢 Đã phản hồi"], width=120),
+                "Thời gian": st.column_config.TextColumn("Thời gian", disabled=True, width=100),
+                "Bản đồ": st.column_config.LinkColumn("Bản đồ", disabled=True, width=180),
+                "Tiêu đề mail": st.column_config.TextColumn("Tiêu đề mail", disabled=True, width=250),
             },
             hide_index=True,
             use_container_width=True,
