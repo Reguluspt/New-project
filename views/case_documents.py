@@ -531,6 +531,43 @@ def _render_file_actions(paths: list[Path], selected_folder: Path) -> None:
                     st.warning(f"Không thể mở trực tiếp: {exc}")
 
 
+@st.dialog("Tùy chọn gửi mail cho nghiệp vụ", width="medium")
+def open_quick_mail_dialog(
+    *,
+    selected_id: int,
+    export_case: dict[str, object],
+    output_base_dir: Path,
+    selected_folder: Path,
+    db_path: Path | None,
+) -> None:
+    st.markdown("**Gửi mail yêu cầu định giá**")
+    st.caption("Chọn người nhận và nghiệp vụ chuyển tiếp:")
+    professional_options = _professional_forward_options(f"quick_action_mail_{selected_id}")
+    
+    st.write("")
+    col1, col2 = st.columns(2)
+    with col1:
+        send_clicked = st.button("Gửi mail 📧", type="primary", width="stretch")
+    with col2:
+        cancel_clicked = st.button("Hủy ❌", width="stretch")
+
+    if send_clicked:
+        if _persist_before_action(
+            db_path=db_path,
+            selected_id=selected_id,
+            output_base_dir=output_base_dir,
+            selected_folder=selected_folder,
+            export_case=export_case,
+        ):
+            try:
+                _send_case_mail({**export_case, **professional_options})
+            except Exception as exc:
+                st.error(f"Gửi mail thất bại: {exc}")
+        st.rerun()
+    elif cancel_clicked:
+        st.rerun()
+
+
 def handle_quick_action(
     action: dict[str, object],
     *,
@@ -551,17 +588,13 @@ def handle_quick_action(
     action_type = action.get("type")
 
     if action_type == "mail":
-        if _persist_before_action(
-            db_path=db_path,
+        open_quick_mail_dialog(
             selected_id=selected_id,
+            export_case=export_case,
             output_base_dir=output_base_dir,
             selected_folder=selected_folder,
-            export_case=export_case,
-        ):
-            try:
-                _send_case_mail(export_case)
-            except Exception as exc:
-                st.error(f"Gửi mail thất bại: {exc}")
+            db_path=db_path,
+        )
 
     elif action_type == "mail_phathanh":
         open_phathanh_delivery_dialog(

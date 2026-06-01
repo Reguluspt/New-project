@@ -618,11 +618,23 @@ async def fill_basic_info(page, data: Mapping[str, str]) -> None:
     await _check_by_label_text(page, "Thẩm định giá")
     logger.info("Chọn Kiểu thẩm định: Thẩm định giá")
     
-    # Chi nhánh thẩm định (Fixed)
-    await _select_dropdown(page, "Chi nhánh thẩm định", "Đà Nẵng")
+    # Chi nhánh thẩm định (Dynamic mapping)
+    branch_val = str(data.get("valuation_branch") or data.get("branch") or "").strip()
+    if branch_val.lower().startswith("cn "):
+        branch_val = branch_val[3:].strip()
+    if not branch_val:
+        branch_val = "Đà Nẵng"
+    await _select_dropdown(page, "Chi nhánh thẩm định", branch_val)
+    logger.info("Chọn Chi nhánh thẩm định: %s", branch_val)
 
-    # Chọn Văn Phòng (Fixed)
-    await _select_dropdown(page, "Chọn Văn Phòng", "Đà Nẵng")
+    # Chọn Văn Phòng (Dynamic mapping)
+    office_val = str(data.get("office") or "").strip()
+    if office_val.lower().startswith("vp "):
+        office_val = office_val[3:].strip()
+    if not office_val:
+        office_val = "Đà Nẵng"
+    await _select_dropdown(page, "Chọn Văn Phòng", office_val)
+    logger.info("Chọn Văn Phòng: %s", office_val)
 
     # Ghi chú: Bỏ qua (Skip)
 

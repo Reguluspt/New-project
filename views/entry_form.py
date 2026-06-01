@@ -104,6 +104,15 @@ def _render_missing_web_fields(missing_fields: list[dict[str, str]]) -> None:
     )
 
 
+def _format_date_input(key: str) -> None:
+    val = str(st.session_state.get(key) or "").strip()
+    if val.isdigit():
+        if len(val) == 8:
+            st.session_state[key] = f"{val[:2]}/{val[2:4]}/{val[4:]}"
+        elif len(val) == 6:
+            st.session_state[key] = f"{val[:2]}/{val[2:4]}/20{val[4:]}"
+
+
 def render(
     *,
     sqlite_db_path: Path,
@@ -150,7 +159,13 @@ def render(
         with ind_col_top1:
             contract_number_ind = st.text_input("Số hợp đồng", key="entry_contract_number_ind")
         with ind_col_top2:
-            contract_date_ind = st.text_input("Ngày hợp đồng", key="entry_contract_date_ind", placeholder="VD: 06/10/2025")
+            contract_date_ind = st.text_input(
+                "Ngày hợp đồng",
+                key="entry_contract_date_ind",
+                placeholder="VD: 06/10/2025",
+                on_change=_format_date_input,
+                args=("entry_contract_date_ind",)
+            )
         customer_info_ind = st.text_input("Tên khách hàng", key="entry_customer_info_ind")
         ind_col1, ind_col2, ind_col3 = st.columns(3)
         with ind_col1:
@@ -178,7 +193,13 @@ def render(
         with org_col_top1:
             contract_number_org = st.text_input("Số hợp đồng", key="entry_contract_number_org")
         with org_col_top2:
-            contract_date_org = st.text_input("Ngày hợp đồng", key="entry_contract_date_org", placeholder="VD: 06/10/2025")
+            contract_date_org = st.text_input(
+                "Ngày hợp đồng",
+                key="entry_contract_date_org",
+                placeholder="VD: 06/10/2025",
+                on_change=_format_date_input,
+                args=("entry_contract_date_org",)
+            )
         
         from src.sqlite_store import get_all_organizations
         orgs = get_all_organizations(sqlite_db_path)
@@ -218,10 +239,26 @@ def render(
 
     # --- Thông tin Nghiệp vụ ---
     st.subheader("Thông tin Nghiệp vụ")
-    asset_description = st.text_area("Tài sản thẩm định giá", height=88, key="entry_asset_description")
+    asset_description = st.text_area(
+        "Tài sản thẩm định giá",
+        height=88,
+        key="entry_asset_description",
+        placeholder="Vd: Thửa đất số ...., tờ bản đồ số ....; tại địa chỉ....."
+    )
     asset_type = selectbox_from_excel("Loại tài sản", "asset_type", excel_dropdown_options, "entry_asset_type")
     preliminary_status = selectbox_from_excel("Sơ bộ", "preliminary_status", excel_dropdown_options, "entry_preliminary_status")
     valuation_purpose = selectbox_from_excel("Mục đích thẩm định", "valuation_purpose", excel_dropdown_options, "entry_valuation_purpose")
+    
+    branch_options = ["cn Đà Nẵng", "cn Miền Bắc", "CN Miền Nam"]
+    office_mapping = {
+        "cn Đà Nẵng": ["vp Đà Nẵng"],
+        "cn Miền Bắc": ["vp Hưng Yên", "vp Hải Phòng", "vp Hà Nam Ninh", "vp Hà Nội", "vp Nghệ An", "vp Thái Nguyên"],
+        "CN Miền Nam": ["vp Cần Thơ", "vp HCM", "vp Đồng Nai", "vp Bình Dương"]
+    }
+    valuation_branch = st.selectbox("Chi nhánh thẩm định", branch_options, index=0, key="entry_valuation_branch")
+    current_offices = office_mapping.get(valuation_branch, ["vp Đà Nẵng"])
+    office = st.selectbox("Chọn Văn Phòng", current_offices, index=0, key=f"entry_office_{valuation_branch}")
+
     source = selectbox_from_excel("Nguồn/đối tác", "source", excel_dropdown_options, "entry_source")
     valuation_fee_number = st.text_input("Phí thẩm định", key="entry_valuation_fee_number", on_change=_format_fee_input)
     advance_payment = st.text_input("Tạm ứng", key="entry_advance_payment")
@@ -251,6 +288,8 @@ def render(
         "asset_description": asset_description,
         "preliminary_status": preliminary_status,
         "valuation_purpose": valuation_purpose,
+        "valuation_branch": valuation_branch,
+        "office": office,
         "source": source,
         "customer_info": customer_info,
         "customer_phone": customer_phone,

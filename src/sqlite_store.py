@@ -56,6 +56,8 @@ CASE_FIELDS = [
     "handover_contact_name",
     "handover_contact_position",
     "handover_contact_phone",
+    "valuation_branch",
+    "office",
     "web_case_id",
 ]
 
@@ -77,6 +79,8 @@ OPTIONAL_COLUMNS = {
     "handover_contact_name": "TEXT",
     "handover_contact_position": "TEXT",
     "handover_contact_phone": "TEXT",
+    "valuation_branch": "TEXT DEFAULT 'cn Đà Nẵng'",
+    "office": "TEXT DEFAULT 'vp Đà Nẵng'",
     "web_case_id": "TEXT",
 }
 
