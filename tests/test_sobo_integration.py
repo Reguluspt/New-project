@@ -21,6 +21,10 @@ from src.database_manager import (
 from src.mail_listener import (
     MailListenerSettings,
     process_incoming_email,
+    parse_sobo_subject,
+    clean_sobo_reply_subject,
+    extract_maps_link,
+    sync_sobo_emails_from_mailbox,
 )
 
 def _raw_sobo_reply(in_reply_to: str, subject: str) -> bytes:
@@ -243,6 +247,88 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(rec["dia_chi"], "Hanoi")
             self.assertEqual(rec["status"], "PENDING")
             self.assertEqual(rec["note"], "Gấp lắm")
+
+    def test_parse_sobo_subject(self) -> None:
+        # Test real estate single
+        res1 = parse_sobo_subject("[SƠ BỘ] - VCB Gia Lai - Thửa đất số 72, tờ bản đồ số 13; tại địa chỉ Pleiku")
+        self.assertIsNotNone(res1)
+        self.assertEqual(res1["source"], "VCB Gia Lai")
+        self.assertEqual(res1["so_thua"], "72")
+        self.assertEqual(res1["so_to"], "13")
+        self.assertEqual(res1["dia_chi"], "Pleiku")
+        self.assertEqual(res1["asset_sub_type"], "single")
+
+        # Test real estate multi
+        res2 = parse_sobo_subject("[SƠ BỘ] - BIDV - Thửa đất số 101 + 102, tờ bản đồ số 5; tại địa chỉ Hanoi")
+        self.assertIsNotNone(res2)
+        self.assertEqual(res2["source"], "BIDV")
+        self.assertEqual(res2["so_thua"], "101 + 102")
+        self.assertEqual(res2["so_to"], "5")
+        self.assertEqual(res2["dia_chi"], "Hanoi")
+        self.assertEqual(res2["asset_sub_type"], "multi")
+
+        # Test machinery
+        res3 = parse_sobo_subject("[SƠ BỘ] - Máy móc thiết bị - Máy cắt CNC")
+        self.assertIsNotNone(res3)
+        self.assertEqual(res3["source"], "Máy móc thiết bị")
+        self.assertEqual(res3["asset_type"], "machinery")
+        self.assertEqual(res3["equipment_name"], "Máy cắt CNC")
+
+    def test_clean_sobo_reply_subject(self) -> None:
+        self.assertEqual(clean_sobo_reply_subject("Re: [SƠ BỘ] - Thửa 1"), "[SƠ BỘ] - Thửa 1")
+        self.assertEqual(clean_sobo_reply_subject("RE: re: [SƠ BỘ] - Thửa 2"), "[SƠ BỘ] - Thửa 2")
+
+    def test_extract_maps_link(self) -> None:
+        text = "Hello, here is link: https://maps.app.goo.gl/XYZ123 for you."
+        self.assertEqual(extract_maps_link(text), "https://maps.app.goo.gl/XYZ123")
+
+    async def test_sync_sobo_emails_from_mailbox(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            db_path = str(Path(tmpdir) / "records.db")
+            await ensure_tracking_schema(db_path)
+            
+            # Construct a raw mock email bytes
+            # Request email
+            msg1 = EmailMessage()
+            msg1["From"] = "bot@cenvalue.vn"
+            msg1["To"] = "sobo.danang@gmail.com"
+            msg1["Subject"] = "[SƠ BỘ] - BIDV - Thửa đất số 77, tờ bản đồ số 88; tại địa chỉ Danang"
+            msg1["Message-ID"] = "<msg-request-999@example.com>"
+            msg1["Date"] = "Mon, 1 Jun 2026 10:00:00 +0700"
+            msg1.set_content("Định vị: https://maps.google.com/77")
+            
+            # Response email
+            msg2 = EmailMessage()
+            msg2["From"] = "sobo.danang@gmail.com"
+            msg2["To"] = "bot@cenvalue.vn"
+            msg2["Subject"] = "Re: [SƠ BỘ] - BIDV - Thửa đất số 77, tờ bản đồ số 88; tại địa chỉ Danang"
+            msg2["Message-ID"] = "<msg-reply-999@example.com>"
+            msg2["In-Reply-To"] = "<msg-request-999@example.com>"
+            msg2["References"] = "<msg-request-999@example.com>"
+            msg2["Date"] = "Mon, 1 Jun 2026 11:30:00 +0700"
+            msg2.set_content("Kết quả sơ bộ: 10 tỷ.")
+            
+            mock_emails = [
+                {"raw_bytes": msg1.as_bytes(), "uid": "1", "thread_id": "1"},
+                {"raw_bytes": msg2.as_bytes(), "uid": "2", "thread_id": "1"},
+            ]
+            
+            with (
+                patch("src.oauth2_service.get_enabled_oauth_provider", return_value="google"),
+                patch("src.oauth2_service.fetch_emails_via_oauth2", AsyncMock(return_value=mock_emails)),
+            ):
+                synced = await sync_sobo_emails_from_mailbox(db_path)
+                self.assertEqual(synced, 2)
+                
+            sobo_recs = await get_all_sobo_records(db_path)
+            self.assertEqual(len(sobo_recs), 1)
+            rec = sobo_recs[0]
+            self.assertEqual(rec["outbound_message_id"], "<msg-request-999@example.com>")
+            self.assertEqual(rec["so_thua"], "77")
+            self.assertEqual(rec["so_to"], "88")
+            self.assertEqual(rec["dia_chi"], "Danang")
+            self.assertEqual(rec["link"], "https://maps.google.com/77")
+            self.assertEqual(rec["status"], "RESPONDED")
 
 
 # Helper helper mock to ensure tracking schema runs correctly

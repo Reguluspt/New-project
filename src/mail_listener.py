@@ -1341,6 +1341,303 @@ async def poll_unseen_once(settings: MailListenerSettings) -> int:
     return processed
 
 
+def parse_sobo_subject(subject: str) -> dict[str, Any] | None:
+    """Parse sobo subject to extract details: source, asset_type, and specific fields."""
+    # 1. Clean Re: prefixes
+    subj_clean = re.sub(r'^(?i:\s*re\s*:\s*)+', '', subject).strip()
+    
+    # 2. Check if it is a [SƠ BỘ] email
+    if not (subj_clean.upper().startswith("[SƠ BỘ]") or subj_clean.upper().startswith("[SO BO]")):
+        return None
+        
+    parts = [p.strip() for p in subj_clean.split("-", 2)]
+    if len(parts) < 3:
+        return None
+        
+    source = parts[1]
+    details = parts[2]
+    
+    res = {
+        "source": source,
+        "raw_details": details,
+        "asset_type": "real_estate",
+        "asset_sub_type": "single",
+        "so_thua": "",
+        "so_to": "",
+        "dia_chi": "",
+        "equipment_name": "",
+    }
+    
+    if source.lower() == "máy móc thiết bị" or source.lower() == "may moc thiet bi":
+        res["asset_type"] = "machinery"
+        res["asset_sub_type"] = ""
+        res["equipment_name"] = details
+    else:
+        # Match "Thửa đất số X, tờ bản đồ số Y; tại địa chỉ Z"
+        m = re.search(
+            r"(?:th\u1eeda\s+\u0111\u1ea5t\s+s\u1ed1|thua\s+dat\s+so)\s+([\d\s\+\-\/a-zA-Z]+),\s*(?:t\u1edd\s+b\u1ea3n\s+\u0111\u1ed3\s+s\u1ed1|to\s+ban\s+do\s+so)\s+(\d+)",
+            details,
+            re.IGNORECASE
+        )
+        if m:
+            res["so_thua"] = m.group(1).strip()
+            res["so_to"] = m.group(2).strip()
+            addr_part = details[m.end():].strip()
+            addr_m = re.search(r"(?:t\u1ea1i\s+\u0111\u1ecba\s+ch\u1ec9|tai\s+dia\s+chi)\s+(.*)$", addr_part, re.IGNORECASE)
+            if addr_m:
+                res["dia_chi"] = addr_m.group(1).strip()
+            else:
+                res["dia_chi"] = re.sub(r"^[;,\s]+", "", addr_part).strip()
+            
+            if "+" in res["so_thua"] or "," in res["so_thua"]:
+                res["asset_sub_type"] = "multi"
+        else:
+            res["dia_chi"] = details
+            
+    return res
+
+
+def clean_sobo_reply_subject(subject: str) -> str:
+    """Clean Re: prefixes from subject."""
+    return re.sub(r'^(?i:\s*re\s*:\s*)+', '', subject).strip()
+
+
+def extract_maps_link(text: str) -> str:
+    """Find any Google Maps link inside the email body text."""
+    if not text:
+        return ""
+    m = re.search(r'(https?://(?:[a-zA-Z0-9-]+\.)*(?:google\.[a-z.]+|goo\.gl)/[^\s<>"]+)', text)
+    if m:
+        return m.group(1)
+    m2 = re.search(r'(https?://[^\s<>"]+)', text)
+    if m2:
+        return m2.group(1)
+    return ""
+
+
+async def sync_sobo_emails_from_mailbox(db_path: str | Path | None = None) -> int:
+    """Sync historical preliminary valuation emails (requests and responses) from mailbox to sobo_records."""
+    import email
+    from email.utils import parsedate_to_datetime, parseaddr
+    import aiosqlite
+    from .database_manager import create_sobo_record
+    
+    settings = load_mail_listener_settings()
+    db_path = resolve_records_db_path(db_path or settings.records_db_path)
+    
+    raw_emails = []
+    
+    from .oauth2_service import get_enabled_oauth_provider, fetch_emails_via_oauth2
+    provider = get_enabled_oauth_provider()
+    
+    if provider:
+        try:
+            print(f"Syncing sobo emails via OAuth2 API for provider: {provider}", flush=True)
+            # Fetch up to 150 recent emails containing "[SƠ BỘ]"
+            oauth_emails = await fetch_emails_via_oauth2(
+                provider,
+                query_contract="[SƠ BỘ]",
+                limit=150,
+                unread_only=False,
+            )
+            for item in oauth_emails:
+                raw_emails.append(item["raw_bytes"])
+        except Exception as exc:
+            logger.error(f"Lỗi fetch OAuth2 sobo sync: {exc}")
+    else:
+        if not settings.imap_username or not settings.imap_password:
+            logger.warning("Không có cấu hình IMAP/OAuth2 để đồng bộ email.")
+            return 0
+        try:
+            client = aioimaplib.IMAP4_SSL(settings.imap_host, settings.imap_port)
+            await client.wait_hello_from_server()
+            await client.login(settings.imap_username, settings.imap_password)
+            
+            # Select folders to search
+            folders = [settings.mailbox, "Sent", "Sent Items", "[Gmail]/Sent Mail"]
+            seen_uids_folder = set()
+            
+            for folder in folders:
+                if not folder:
+                    continue
+                try:
+                    res = await client.select(folder)
+                    if res[0] != 'OK':
+                        continue
+                    
+                    status, data = await client.uid_search('SUBJECT "S\u01a1 b\u1ed9"')
+                    uids = _extract_imap_ids(data)
+                    
+                    status2, data2 = await client.uid_search('SUBJECT "SO BO"')
+                    uids2 = _extract_imap_ids(data2)
+                    
+                    all_uids = list(set(uids + uids2))
+                    if not all_uids:
+                        continue
+                    
+                    all_uids = sorted(all_uids, key=int)
+                    if len(all_uids) > 150:
+                        all_uids = all_uids[-150:]
+                        
+                    for uid in all_uids:
+                        dedupe_key = f"{folder}_{uid}"
+                        if dedupe_key in seen_uids_folder:
+                            continue
+                        seen_uids_folder.add(dedupe_key)
+                        
+                        raw = await _fetch_message_by_uid(client, uid)
+                        if raw:
+                            raw_emails.append(raw)
+                except Exception as folder_exc:
+                    logger.error(f"Lỗi duyệt folder {folder}: {folder_exc}")
+                    
+            await client.logout()
+        except Exception as imap_exc:
+            logger.error(f"Lỗi kết nối IMAP sobo sync: {imap_exc}")
+            return 0
+            
+    if not raw_emails:
+        return 0
+        
+    parsed_emails = []
+    
+    for raw in raw_emails:
+        try:
+            # We use parse_incoming_email which manages headers and parts beautifully
+            message = email.message_from_bytes(raw)
+            subject = _decode_header_value(message.get("Subject"))
+            if not subject:
+                continue
+                
+            parsed_subj = parse_sobo_subject(subject)
+            if not parsed_subj:
+                continue
+                
+            incoming = parse_incoming_email(raw)
+            
+            # Parse Date
+            date_str = str(message.get("Date") or "")
+            date_iso = ""
+            if date_str:
+                try:
+                    dt = parsedate_to_datetime(date_str)
+                    date_iso = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    pass
+            if not date_iso:
+                date_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+            is_reply = bool(re.match(r'^(?i:\s*re\s*:\s*)+', subject))
+            
+            parsed_emails.append({
+                "parsed_subj": parsed_subj,
+                "message_id": incoming.message_id or "",
+                "in_reply_to": incoming.in_reply_to or "",
+                "references": incoming.references or "",
+                "date_iso": date_iso,
+                "to_header": incoming.to_header or "",
+                "from_email": incoming.from_email or "",
+                "subject": subject,
+                "is_reply": is_reply,
+                "link": extract_maps_link(incoming.text)
+            })
+        except Exception as parse_exc:
+            logger.error(f"Lỗi parse email trong sync: {parse_exc}")
+            
+    parsed_emails.sort(key=lambda x: x["date_iso"])
+    
+    synced_count = 0
+    
+    for item in parsed_emails:
+        try:
+            p_sub = item["parsed_subj"]
+            msg_id = item["message_id"]
+            is_reply = item["is_reply"]
+            date_iso = item["date_iso"]
+            
+            if not is_reply:
+                exists = False
+                async with aiosqlite.connect(db_path, timeout=30) as conn:
+                    conn.row_factory = aiosqlite.Row
+                    if msg_id:
+                        cursor = await conn.execute("SELECT id FROM sobo_records WHERE outbound_message_id = ?", (msg_id,))
+                        exists = bool(await cursor.fetchone())
+                    else:
+                        cursor = await conn.execute(
+                            "SELECT id FROM sobo_records WHERE created_at = ? AND dia_chi = ?",
+                            (date_iso, p_sub["dia_chi"])
+                        )
+                        exists = bool(await cursor.fetchone())
+                        
+                if not exists:
+                    recipient = parseaddr(item["to_header"])[1] or item["to_header"]
+                    record_payload = {
+                        "created_at": date_iso,
+                        "asset_type": p_sub["asset_type"],
+                        "asset_sub_type": p_sub["asset_sub_type"],
+                        "source": p_sub["source"],
+                        "so_thua": p_sub["so_thua"],
+                        "so_to": p_sub["so_to"],
+                        "dia_chi": p_sub["dia_chi"],
+                        "link": item["link"],
+                        "email_recipient": recipient,
+                        "outbound_subject": item["subject"],
+                        "outbound_message_id": msg_id,
+                        "outbound_sent_at": date_iso,
+                        "status": "PENDING",
+                        "note": "",
+                        "equipment_name": p_sub["equipment_name"]
+                    }
+                    await create_sobo_record(db_path, record_payload)
+                    synced_count += 1
+            else:
+                ref_id = item["in_reply_to"] or item["references"] or ""
+                parent_record = await find_sobo_record_by_thread(
+                    db_path,
+                    ref_blob=ref_id,
+                    subject=item["subject"]
+                )
+                
+                if parent_record:
+                    if parent_record.get("status") == "PENDING":
+                        await update_sobo_record_status(db_path, parent_record["id"], "RESPONDED", responded_at=date_iso)
+                        synced_count += 1
+                else:
+                    exists = False
+                    async with aiosqlite.connect(db_path, timeout=30) as conn:
+                        cursor = await conn.execute(
+                            "SELECT id FROM sobo_records WHERE responded_at = ? AND dia_chi = ?",
+                            (date_iso, p_sub["dia_chi"])
+                        )
+                        exists = bool(await cursor.fetchone())
+                        
+                    if not exists:
+                        record_payload = {
+                            "created_at": date_iso,
+                            "asset_type": p_sub["asset_type"],
+                            "asset_sub_type": p_sub["asset_sub_type"],
+                            "source": p_sub["source"],
+                            "so_thua": p_sub["so_thua"],
+                            "so_to": p_sub["so_to"],
+                            "dia_chi": p_sub["dia_chi"],
+                            "link": item["link"],
+                            "email_recipient": item["from_email"],
+                            "outbound_subject": clean_sobo_reply_subject(item["subject"]),
+                            "outbound_message_id": ref_id,
+                            "outbound_sent_at": "",
+                            "responded_at": date_iso,
+                            "status": "RESPONDED",
+                            "note": "",
+                            "equipment_name": p_sub["equipment_name"]
+                        }
+                        await create_sobo_record(db_path, record_payload)
+                        synced_count += 1
+        except Exception as import_exc:
+            logger.error(f"Lỗi import email sơ bộ: {import_exc}")
+            
+    return synced_count
+
+
 async def listen_forever(settings: MailListenerSettings | None = None, *, poll_interval_seconds: int = 60) -> None:
     current_settings = settings or load_mail_listener_settings()
     log_records_db_path("mail_listener", current_settings.records_db_path)

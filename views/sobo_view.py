@@ -141,14 +141,17 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
             st.button("🔄 Đồng bộ Telegram", use_container_width=True, disabled=True, help="Tài khoản khách không thể đồng bộ hồ sơ Telegram.")
         else:
             if st.button("🔄 Đồng bộ Telegram", use_container_width=True, key="sobo_sync_telegram_btn"):
-                with st.spinner("Đang đồng bộ hồ sơ sơ bộ từ Telegram..."):
+                with st.spinner("Đang đồng bộ hồ sơ sơ bộ từ Telegram & Hộp thư..."):
                     try:
                         from src.database_manager import sync_telegram_records_to_sobo
-                        synced = loop.run_until_complete(sync_telegram_records_to_sobo(records_db_path))
+                        from src.mail_listener import sync_sobo_emails_from_mailbox
+                        synced_db = loop.run_until_complete(sync_telegram_records_to_sobo(records_db_path))
+                        synced_mail = loop.run_until_complete(sync_sobo_emails_from_mailbox(records_db_path))
+                        synced = synced_db + synced_mail
                         if synced > 0:
-                            st.success(f"Đồng bộ thành công! Đã thêm {synced} hồ sơ mới từ Telegram.")
+                            st.success(f"Đồng bộ thành công! Đã thêm/cập nhật {synced} hồ sơ mới từ Telegram & Hộp thư.")
                         else:
-                            st.info("Không phát hiện hồ sơ sơ bộ mới trên Telegram.")
+                            st.info("Không phát hiện hồ sơ sơ bộ mới trên Telegram hoặc Hộp thư.")
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Lỗi đồng bộ Telegram: {exc}")
