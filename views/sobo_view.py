@@ -363,6 +363,17 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
                 background: #ecfdf5;
                 border-color: #a7f3d0;
             }
+            .sobo-action-cell div[data-testid="stButton"] {
+                width: fit-content;
+            }
+            .sobo-action-cell div[data-testid="stButton"] > button,
+            .sobo-action-cell div[data-testid="stLinkButton"] > a,
+            .sobo-action-cell div[data-testid="stDownloadButton"] > button {
+                width: auto;
+                min-width: 96px;
+                padding-left: 18px;
+                padding-right: 18px;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -399,10 +410,12 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
             gcn_paths = collect_existing_paths(row.get("File GCN"))
             gcn_download = build_gcn_download(gcn_paths)
 
-            card_cols = st.columns([3.2, 1.2, 1.4, 0.8])
+            card_cols = st.columns([1.0, 3.0, 1.2, 1.3, 0.7])
             with card_cols[0]:
                 st.markdown('<div class="sobo-card-muted">Mã hồ sơ / ngày gửi</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="sobo-card-value"><b>#{record_id}</b> · {sent_at}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-title">#{record_id}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-value">{sent_at}</div>', unsafe_allow_html=True)
+            with card_cols[1]:
                 st.markdown('<div class="sobo-card-muted" style="margin-top:12px;">Tiêu đề mail</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sobo-card-value">{subject_text}</div>', unsafe_allow_html=True)
                 st.markdown('<div class="sobo-card-muted" style="margin-top:12px;">Tài sản</div>', unsafe_allow_html=True)
@@ -412,7 +425,7 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
                     f'<div class="sobo-card-value"><b>{source_text}</b><br>{recipient_text}</div>',
                     unsafe_allow_html=True,
                 )
-            with card_cols[1]:
+            with card_cols[2]:
                 st.markdown('<div class="sobo-card-muted">Trạng thái</div>', unsafe_allow_html=True)
                 st.markdown(
                     f'<span class="sobo-status-pill {status_class}">{status_label}</span>',
@@ -420,12 +433,13 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
                 )
                 st.markdown('<div class="sobo-card-muted" style="margin-top:14px;">Thời gian</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="sobo-card-value">{duration_text}</div>', unsafe_allow_html=True)
-            with card_cols[2]:
+            with card_cols[3]:
+                st.markdown('<div class="sobo-action-cell">', unsafe_allow_html=True)
                 st.markdown('<div class="sobo-card-muted" style="margin-top:52px;">Bản đồ</div>', unsafe_allow_html=True)
                 if map_link:
-                    st.link_button("Mở bản đồ", map_link, use_container_width=True)
+                    st.link_button("Mở bản đồ", map_link)
                 else:
-                    st.button("Mở bản đồ", key=f"sobo_map_disabled_{record_id}", disabled=True, use_container_width=True)
+                    st.button("Mở bản đồ", key=f"sobo_map_disabled_{record_id}", disabled=True)
                 if gcn_download:
                     data, file_name, mime = gcn_download
                     st.download_button(
@@ -434,15 +448,17 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
                         file_name=file_name,
                         mime=mime,
                         key=f"sobo_gcn_download_{record_id}",
-                        use_container_width=True,
                     )
                 else:
-                    st.button("Tải GCN", key=f"sobo_gcn_missing_{record_id}", disabled=True, use_container_width=True)
-            with card_cols[3]:
+                    st.button("Tải GCN", key=f"sobo_gcn_missing_{record_id}", disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            with card_cols[4]:
                 if not is_guest:
+                    st.markdown('<div class="sobo-action-cell">', unsafe_allow_html=True)
                     st.markdown('<div class="sobo-card-muted">Thao tác</div>', unsafe_allow_html=True)
-                    if st.button("Xóa", key=f"sobo_delete_request_{record_id}", use_container_width=True):
+                    if st.button("Xóa", key=f"sobo_delete_request_{record_id}"):
                         st.session_state[f"sobo_confirm_delete_{record_id}"] = True
+                    st.markdown('</div>', unsafe_allow_html=True)
 
             if not is_guest and st.session_state.get(f"sobo_confirm_delete_{record_id}"):
                 st.warning(f"Xóa hồ sơ sơ bộ #{record_id}? Thao tác này không thể hoàn tác.")
