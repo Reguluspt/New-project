@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import html
 import pandas as pd
 import streamlit as st
 from pathlib import Path
 
 from src.database_manager import (
+    delete_sobo_record,
     get_all_sobo_records,
     update_sobo_record_status,
     resolve_records_db_path,
@@ -282,72 +284,167 @@ def render(records_db_path: Path, is_guest: bool = False) -> None:
         st.warning("Không có hồ sơ nào khớp với bộ lọc tìm kiếm hiện tại.")
         return
 
-    # 7. Render Grid (Editable for admins, read-only for guests)
+    # 7. Render record cards (editable for admins, read-only for guests)
     st.markdown("**Danh sách chi tiết yêu cầu Sơ bộ**")
+    st.markdown(
+        """
+        <style>
+            div[data-testid="stVerticalBlockBorderWrapper"] {
+                border-color: var(--app-outline-soft);
+                box-shadow: var(--app-shadow-soft);
+                background: #ffffff;
+            }
+            .sobo-card-muted {
+                color: var(--app-muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
+            }
+            .sobo-card-title {
+                color: var(--app-text);
+                font-size: 15px;
+                font-weight: 700;
+                line-height: 1.35;
+            }
+            .sobo-card-value {
+                color: var(--app-text);
+                font-size: 14px;
+                line-height: 1.45;
+                word-break: break-word;
+            }
+            .sobo-status-pill {
+                display: inline-flex;
+                align-items: center;
+                padding: 6px 10px;
+                border-radius: 999px;
+                font-size: 13px;
+                font-weight: 700;
+                border: 1px solid transparent;
+            }
+            .sobo-status-pending {
+                color: #b91c1c;
+                background: #fef2f2;
+                border-color: #fecaca;
+            }
+            .sobo-status-responded {
+                color: #047857;
+                background: #ecfdf5;
+                border-color: #a7f3d0;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    status_label_by_raw = {
+        "PENDING": "🔴 Chờ phản hồi",
+        "RESPONDED": "🟢 Đã phản hồi",
+    }
+    raw_status_by_label = {label: raw for raw, label in status_label_by_raw.items()}
+    updates_payload = []
+
+    def safe_display(value: object) -> str:
+        if value is None or pd.isna(value):
+            return ""
+        return html.escape(str(value))
+
     if is_guest:
         st.caption("Chế độ xem (chỉ đọc) dành cho tài khoản Khách.")
-        st.dataframe(
-            df[["ID", "Ngày gửi", "Nguồn khách", "Tài sản", "Người nhận", "Trạng thái", "Thời gian", "Bản đồ", "Tiêu đề mail"]],
-            column_config={
-                "ID": st.column_config.NumberColumn("Mã", width=60),
-                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", width=130),
-                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", width=110),
-                "Tài sản": st.column_config.TextColumn("Tài sản", width=250),
-                "Người nhận": st.column_config.TextColumn("Người nhận", width=160),
-                "Trạng thái": st.column_config.TextColumn("Trạng thái", width=120),
-                "Thời gian": st.column_config.TextColumn("Thời gian", width=100),
-                "Bản đồ": st.column_config.LinkColumn("Bản đồ", width=180),
-                "Tiêu đề mail": st.column_config.TextColumn("Tiêu đề mail", width=250),
-            },
-            hide_index=True,
-            use_container_width=True,
-        )
     else:
-        st.caption("Mẹo: Nhấp đúp vào cột 'Trạng thái' để thay đổi trực tiếp, sau đó bấm 'Lưu thay đổi'.")
-        edited_df = st.data_editor(
-            df[["ID", "Ngày gửi", "Nguồn khách", "Tài sản", "Người nhận", "Trạng thái", "Thời gian", "Bản đồ", "Tiêu đề mail"]],
-            column_config={
-                "ID": st.column_config.NumberColumn("Mã", disabled=True, width=60),
-                "Ngày gửi": st.column_config.TextColumn("Ngày gửi", disabled=True, width=130),
-                "Nguồn khách": st.column_config.TextColumn("Nguồn khách", disabled=True, width=110),
-                "Tài sản": st.column_config.TextColumn("Tài sản", disabled=True, width=250),
-                "Người nhận": st.column_config.TextColumn("Người nhận", disabled=True, width=160),
-                "Trạng thái": st.column_config.SelectboxColumn("Trạng thái", options=["🔴 Chờ phản hồi", "🟢 Đã phản hồi"], width=120),
-                "Thời gian": st.column_config.TextColumn("Thời gian", disabled=True, width=100),
-                "Bản đồ": st.column_config.LinkColumn("Bản đồ", disabled=True, width=180),
-                "Tiêu đề mail": st.column_config.TextColumn("Tiêu đề mail", disabled=True, width=250),
-            },
-            hide_index=True,
-            use_container_width=True,
-        )
+        st.caption("Điều chỉnh trạng thái trực tiếp trên từng hồ sơ, sau đó bấm 'Lưu thay đổi'.")
 
-        # 8. Check for Changes & Save
-        # We compare edited_df with the original df
-        changes_detected = False
-        updates_payload = []
-        
-        for idx, row in edited_df.iterrows():
-            orig_row = df.iloc[idx]
-            new_status_str = row["Trạng thái"]
-            new_status = "RESPONDED" if new_status_str == "🟢 Đã phản hồi" else "PENDING"
-            
-            orig_status = orig_row["_raw_status"]
-            
-            if new_status != orig_status:
-                changes_detected = True
-                updates_payload.append({
-                    "id": orig_row["ID"],
-                    "status": new_status,
-                })
+    for _, row in df.iterrows():
+        record_id = int(row["ID"])
+        raw_status = str(row["_raw_status"] or "PENDING")
+        status_label = status_label_by_raw.get(raw_status, status_label_by_raw["PENDING"])
+        status_class = "sobo-status-responded" if raw_status == "RESPONDED" else "sobo-status-pending"
 
-        if changes_detected:
-            if st.button("💾 Lưu thay đổi", type="primary", use_container_width=True):
-                with st.spinner("Đang lưu các thay đổi..."):
-                    try:
-                        for item in updates_payload:
-                            loop.run_until_complete(update_sobo_record_status(records_db_path, item["id"], item["status"]))
-                        st.success("Đã lưu các thay đổi thành công!")
+        with st.container(border=True):
+            sent_at = safe_display(row["Ngày gửi"])
+            asset_text = safe_display(row["Tài sản"])
+            source_text = safe_display(row["Nguồn khách"])
+            recipient_text = safe_display(row["Người nhận"])
+            duration_text = safe_display(row["Thời gian"])
+            subject_text = safe_display(row["Tiêu đề mail"] or "-")
+            map_link = "" if pd.isna(row["Bản đồ"]) else str(row["Bản đồ"] or "").strip()
+
+            top_cols = st.columns([0.8, 2.8, 1.8, 1.4, 0.8])
+            with top_cols[0]:
+                st.markdown('<div class="sobo-card-muted">Mã hồ sơ</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-title">#{record_id}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-value">{sent_at}</div>', unsafe_allow_html=True)
+            with top_cols[1]:
+                st.markdown('<div class="sobo-card-muted">Tài sản</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-title">{asset_text}</div>', unsafe_allow_html=True)
+            with top_cols[2]:
+                st.markdown('<div class="sobo-card-muted">Nguồn / người nhận</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="sobo-card-value"><b>{source_text}</b><br>{recipient_text}</div>',
+                    unsafe_allow_html=True,
+                )
+            with top_cols[3]:
+                st.markdown('<div class="sobo-card-muted">Trạng thái</div>', unsafe_allow_html=True)
+                if is_guest:
+                    st.markdown(
+                        f'<span class="sobo-status-pill {status_class}">{status_label}</span>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    selected_label = st.selectbox(
+                        "Trạng thái",
+                        options=list(raw_status_by_label.keys()),
+                        index=list(raw_status_by_label.keys()).index(status_label),
+                        key=f"sobo_status_{record_id}",
+                        label_visibility="collapsed",
+                    )
+                    selected_status = raw_status_by_label[selected_label]
+                    if selected_status != raw_status:
+                        updates_payload.append({"id": record_id, "status": selected_status})
+            with top_cols[4]:
+                if not is_guest:
+                    st.markdown('<div class="sobo-card-muted">Thao tác</div>', unsafe_allow_html=True)
+                    if st.button("Xóa", key=f"sobo_delete_request_{record_id}", use_container_width=True):
+                        st.session_state[f"sobo_confirm_delete_{record_id}"] = True
+
+            bottom_cols = st.columns([1.2, 1.6, 3.2])
+            with bottom_cols[0]:
+                st.markdown('<div class="sobo-card-muted">Thời gian</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-value">{duration_text}</div>', unsafe_allow_html=True)
+            with bottom_cols[1]:
+                st.markdown('<div class="sobo-card-muted">Bản đồ</div>', unsafe_allow_html=True)
+                if map_link:
+                    st.link_button("Mở bản đồ", map_link, use_container_width=True)
+                else:
+                    st.markdown('<div class="sobo-card-value">-</div>', unsafe_allow_html=True)
+            with bottom_cols[2]:
+                st.markdown('<div class="sobo-card-muted">Tiêu đề mail</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="sobo-card-value">{subject_text}</div>', unsafe_allow_html=True)
+
+            if not is_guest and st.session_state.get(f"sobo_confirm_delete_{record_id}"):
+                st.warning(f"Xóa hồ sơ sơ bộ #{record_id}? Thao tác này không thể hoàn tác.")
+                confirm_cols = st.columns([1, 1, 4])
+                with confirm_cols[0]:
+                    if st.button("Xóa hồ sơ", key=f"sobo_delete_confirm_{record_id}", type="primary", use_container_width=True):
+                        try:
+                            loop.run_until_complete(delete_sobo_record(records_db_path, record_id))
+                            st.session_state.pop(f"sobo_confirm_delete_{record_id}", None)
+                            st.success(f"Đã xóa hồ sơ #{record_id}.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Lỗi khi xóa hồ sơ: {exc}")
+                with confirm_cols[1]:
+                    if st.button("Hủy", key=f"sobo_delete_cancel_{record_id}", use_container_width=True):
+                        st.session_state.pop(f"sobo_confirm_delete_{record_id}", None)
                         st.rerun()
-                    except Exception as exc:
-                        st.error(f"Lỗi khi lưu dữ liệu: {exc}")
 
+    if updates_payload and not is_guest:
+        if st.button("💾 Lưu thay đổi", type="primary", use_container_width=True):
+            with st.spinner("Đang lưu các thay đổi..."):
+                try:
+                    for item in updates_payload:
+                        loop.run_until_complete(update_sobo_record_status(records_db_path, item["id"], item["status"]))
+                    st.success("Đã lưu các thay đổi thành công!")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Lỗi khi lưu dữ liệu: {exc}")

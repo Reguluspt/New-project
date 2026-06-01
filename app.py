@@ -53,11 +53,13 @@ def main() -> None:
     )
     render_app_theme()
 
+    guest_user = os.getenv("APP_GUEST_USERNAME", "khach").strip()
+
     # Bypass login gate for users accessing via direct public view link
     view_param = st.query_params.get("view")
     if view_param == "sobo":
         st.session_state["app_authenticated"] = True
-        st.session_state["app_login_username"] = "guest_link"
+        st.session_state["app_login_username"] = guest_user
         st.session_state["active_view"] = "sobo"
 
     if not render_login_gate():
@@ -119,7 +121,6 @@ def main() -> None:
     ai_provider, api_key, model, api_key_label = _load_ai_runtime_config()
 
     active_view = str(st.session_state.get("active_view") or "dashboard")
-    guest_user = os.getenv("APP_GUEST_USERNAME", "khach").strip()
     is_guest = (st.session_state.get("app_login_username") == guest_user)
     if is_guest and active_view != "sobo":
         active_view = "sobo"

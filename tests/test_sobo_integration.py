@@ -12,6 +12,7 @@ import aiosqlite
 
 from src.database_manager import (
     create_sobo_record,
+    delete_sobo_record,
     get_all_sobo_records,
     find_sobo_record_by_thread,
     update_sobo_record_status,
@@ -88,6 +89,11 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
             records = await get_all_sobo_records(db_path)
             self.assertEqual(records[0]["note"], "Đã giục nghiệp vụ")
 
+            # 5. Delete record
+            await delete_sobo_record(db_path, 1)
+            records = await get_all_sobo_records(db_path)
+            self.assertEqual(records, [])
+
     async def test_find_sobo_record_by_thread_and_subject(self) -> None:
         with TemporaryDirectory() as tmpdir:
             db_path = str(Path(tmpdir) / "records.db")
@@ -127,6 +133,26 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIsNotNone(match_sub)
             self.assertEqual(match_sub["id"], 1)
+
+    async def test_create_sobo_record_preserves_historical_timestamps(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            db_path = str(Path(tmpdir) / "records.db")
+            await create_sobo_record(
+                db_path,
+                {
+                    "created_at": "2026-06-01 10:00:00",
+                    "asset_type": "real_estate",
+                    "outbound_sent_at": "2026-06-01 10:00:00",
+                    "responded_at": "2026-06-01 11:30:00",
+                    "status": "RESPONDED",
+                },
+            )
+
+            records = await get_all_sobo_records(db_path)
+
+            self.assertEqual(records[0]["created_at"], "2026-06-01 10:00:00")
+            self.assertEqual(records[0]["outbound_sent_at"], "2026-06-01 10:00:00")
+            self.assertEqual(records[0]["responded_at"], "2026-06-01 11:30:00")
 
     async def test_mail_listener_handles_sobo_reply_correctly(self) -> None:
         with TemporaryDirectory() as tmpdir:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import shutil
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import AsyncMock, Mock, patch
 
 from telegram.ext import ConversationHandler
@@ -42,6 +44,8 @@ from src.sobo_handler import (
     _process_sobo_extracted_file_multi,
     sobo_multi_doc_choice,
     _handle_machinery_media_group_photos,
+    cleanup_old_sobo_uploads,
+    sobo_receive_doc,
 )
 
 
@@ -63,6 +67,43 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         labels = [row[0].text for row in keyboard.inline_keyboard]
         self.assertIn("🏠 Bất động sản", labels)
         self.assertIn("⚙️ Máy móc thiết bị", labels)
+
+    def test_cleanup_old_sobo_uploads_only_removes_stale_sobo_files(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            old_sobo = Path(tmpdir) / "sobo_old.pdf"
+            old_other = Path(tmpdir) / "other_old.pdf"
+            new_sobo = Path(tmpdir) / "sobo_new.pdf"
+            for path in (old_sobo, old_other, new_sobo):
+                path.write_text("x", encoding="utf-8")
+
+            now = 1_000_000.0
+            old_mtime = now - (91 * 24 * 60 * 60)
+            new_mtime = now - (10 * 24 * 60 * 60)
+            os.utime(old_sobo, (old_mtime, old_mtime))
+            os.utime(old_other, (old_mtime, old_mtime))
+            os.utime(new_sobo, (new_mtime, new_mtime))
+
+            removed = cleanup_old_sobo_uploads(tmpdir, now=now)
+
+            self.assertEqual(removed, 1)
+            self.assertFalse(old_sobo.exists())
+            self.assertTrue(old_other.exists())
+            self.assertTrue(new_sobo.exists())
+
+    async def test_real_estate_doc_upload_is_rejected_while_ocr_is_running(self) -> None:
+        update = Mock()
+        update.message.document = Mock(file_id="file-1")
+        update.message.photo = None
+        update.message.reply_text = AsyncMock()
+        context = Mock()
+        context.user_data = {"sobo": {"ocr_processing": True}}
+
+        with patch("asyncio.create_task") as create_task:
+            state = await sobo_receive_doc(update, context)
+
+        self.assertEqual(state, SOBO_DOC)
+        create_task.assert_not_called()
+        self.assertIn("đang quét", update.message.reply_text.await_args.args[0].lower())
 
     def test_email_content_uses_approved_template_and_escapes_values(self) -> None:
         body, body_html = build_sobo_email_content(

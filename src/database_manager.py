@@ -790,14 +790,16 @@ async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int
     db_path = resolve_records_db_path(db_path)
     await ensure_sobo_schema(db_path)
     fields = [
-        "asset_type", "asset_sub_type", "source", "so_thua", "so_to", "dia_chi",
+        "created_at", "asset_type", "asset_sub_type", "source", "so_thua", "so_to", "dia_chi",
         "link", "email_recipient", "outbound_subject", "outbound_message_id",
-        "outbound_sent_at", "status", "note", "equipment_name"
+        "outbound_sent_at", "responded_at", "status", "note", "equipment_name"
     ]
     columns = ", ".join(fields)
     placeholders = ", ".join(f":{f}" for f in fields)
     
     payload = {f: str(values.get(f) or "").strip() for f in fields}
+    if not payload["created_at"]:
+        payload["created_at"] = datetime.now().isoformat()
     if not payload["status"]:
         payload["status"] = "PENDING"
     if not payload["outbound_sent_at"]:
@@ -833,6 +835,14 @@ async def update_sobo_record_note(db_path: str | Path, record_id: int, note: str
             "UPDATE sobo_records SET note = ? WHERE id = ?",
             (note.strip(), int(record_id))
         )
+        await db.commit()
+
+
+async def delete_sobo_record(db_path: str | Path, record_id: int) -> None:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute("DELETE FROM sobo_records WHERE id = ?", (int(record_id),))
         await db.commit()
 
 

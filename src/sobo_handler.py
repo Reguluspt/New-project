@@ -1,6 +1,7 @@
 import os
 import logging
 import html
+import time
 import unidecode
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -42,6 +43,78 @@ SOBO_MAPPING = {
 }
 SOBO_EMAIL_OPTIONS = tuple(SOBO_MAPPING.keys())
 SOBO_ASSET_TYPE = "Quyền sử dụng đất và CTXD (nếu có hoàn công trên sổ)"
+SOBO_UPLOAD_PREFIXES = (
+    "sobo_",
+    "sobo_multi_",
+    "sobo_merged_",
+    "sobo_merged_multi_",
+    "sobo_machinery_",
+    "sobo_machinery_merged_",
+)
+
+
+def _sobo_upload_dir() -> str:
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+
+
+def cleanup_old_sobo_uploads(upload_dir: str | None = None, *, max_age_days: int = 90, now: float | None = None) -> int:
+    upload_dir = upload_dir or _sobo_upload_dir()
+    if not os.path.isdir(upload_dir):
+        return 0
+
+    cutoff = (now if now is not None else time.time()) - (max_age_days * 24 * 60 * 60)
+    removed = 0
+    for filename in os.listdir(upload_dir):
+        if not filename.startswith(SOBO_UPLOAD_PREFIXES):
+            continue
+        path = os.path.join(upload_dir, filename)
+        if not os.path.isfile(path):
+            continue
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+                removed += 1
+        except OSError:
+            logger.warning("Không thể xóa file upload sơ bộ cũ: %s", path, exc_info=True)
+    return removed
+
+
+def cleanup_old_sobo_uploads_once(context: ContextTypes.DEFAULT_TYPE) -> None:
+    bot_data = getattr(context, "bot_data", None)
+    if not isinstance(bot_data, dict):
+        return
+    now = time.time()
+    last_cleanup = float(bot_data.get("sobo_upload_cleanup_at") or 0)
+    if now - last_cleanup < 24 * 60 * 60:
+        return
+    cleanup_old_sobo_uploads(now=now)
+    bot_data["sobo_upload_cleanup_at"] = now
+
+
+def _is_sobo_ocr_blocked(context: ContextTypes.DEFAULT_TYPE, media_group_id: str | None = None) -> bool:
+    sobo = context.user_data.get("sobo", {})
+    if not sobo.get("ocr_processing"):
+        return False
+    active_group_id = sobo.get("ocr_media_group_id")
+    return not media_group_id or active_group_id != media_group_id
+
+
+def _mark_sobo_ocr_processing(context: ContextTypes.DEFAULT_TYPE, media_group_id: str | None = None) -> None:
+    sobo = context.user_data.setdefault("sobo", {})
+    sobo["ocr_processing"] = True
+    if media_group_id:
+        sobo["ocr_media_group_id"] = media_group_id
+
+
+def _clear_sobo_ocr_processing(context: ContextTypes.DEFAULT_TYPE) -> None:
+    sobo = context.user_data.get("sobo")
+    if isinstance(sobo, dict):
+        sobo.pop("ocr_processing", None)
+        sobo.pop("ocr_media_group_id", None)
+
+
+async def _reply_sobo_ocr_busy(update: Update) -> None:
+    await update.message.reply_text("⏳ Hệ thống đang quét hồ sơ trước đó. Vui lòng đợi kết quả OCR rồi thao tác tiếp.")
 
 
 def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
@@ -325,6 +398,7 @@ def build_machinery_doc_choice_keyboard() -> InlineKeyboardMarkup:
 
 
 async def cmd_sobo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cleanup_old_sobo_uploads_once(context)
     await update.message.reply_text(
         "📝 *Bắt đầu quy trình Gửi Sơ bộ*\n\n"
         "Vui lòng chọn **loại tài sản** cần gửi sơ bộ:",
@@ -401,14 +475,26 @@ from telegram.ext import ConversationHandler
 async def sobo_receive_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if message.document:
+        if _is_sobo_ocr_blocked(context):
+            await _reply_sobo_ocr_busy(update)
+            return SOBO_DOC
+        _mark_sobo_ocr_processing(context)
         asyncio.create_task(_process_sobo_single_file(update, context, message.document, "pdf"))
         return SOBO_DOC
     elif message.photo:
         media_group_id = message.media_group_id
         if not media_group_id:
+            if _is_sobo_ocr_blocked(context):
+                await _reply_sobo_ocr_busy(update)
+                return SOBO_DOC
+            _mark_sobo_ocr_processing(context)
             asyncio.create_task(_process_sobo_single_file(update, context, message.photo[-1], "jpg"))
             return SOBO_DOC
 
+        if _is_sobo_ocr_blocked(context, media_group_id):
+            await _reply_sobo_ocr_busy(update)
+            return SOBO_DOC
+        _mark_sobo_ocr_processing(context, media_group_id)
         if "sobo_media_groups" not in context.bot_data:
             context.bot_data["sobo_media_groups"] = {}
         
@@ -427,14 +513,26 @@ async def sobo_receive_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def sobo_receive_doc_multi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if message.document:
+        if _is_sobo_ocr_blocked(context):
+            await _reply_sobo_ocr_busy(update)
+            return SOBO_DOC_MULTI
+        _mark_sobo_ocr_processing(context)
         asyncio.create_task(_process_sobo_single_file_multi(update, context, message.document, "pdf"))
         return SOBO_DOC_MULTI
     elif message.photo:
         media_group_id = message.media_group_id
         if not media_group_id:
+            if _is_sobo_ocr_blocked(context):
+                await _reply_sobo_ocr_busy(update)
+                return SOBO_DOC_MULTI
+            _mark_sobo_ocr_processing(context)
             asyncio.create_task(_process_sobo_single_file_multi(update, context, message.photo[-1], "jpg"))
             return SOBO_DOC_MULTI
 
+        if _is_sobo_ocr_blocked(context, media_group_id):
+            await _reply_sobo_ocr_busy(update)
+            return SOBO_DOC_MULTI
+        _mark_sobo_ocr_processing(context, media_group_id)
         if "sobo_media_groups_multi" not in context.bot_data:
             context.bot_data["sobo_media_groups_multi"] = {}
         
@@ -458,15 +556,18 @@ async def _wait_and_process_sobo_media_group_multi(media_group_id: str, context:
 
 
 async def _process_sobo_single_file_multi(update: Update, context: ContextTypes.DEFAULT_TYPE, file_ref, ext: str):
-    file = await context.bot.get_file(file_ref.file_id)
-    await update.message.reply_text("⏳ Đang tải và phân tích GCN bằng AI Gemini, vui lòng đợi giây lát...")
+    try:
+        file = await context.bot.get_file(file_ref.file_id)
+        await update.message.reply_text("⏳ Đang tải và phân tích GCN bằng AI Gemini, vui lòng đợi giây lát...")
     
-    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
-    os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(upload_dir, f"sobo_multi_{uuid4().hex}.{ext}")
-    await file.download_to_drive(file_path)
-    
-    return await _process_sobo_extracted_file_multi(update, context, file_path)
+        upload_dir = _sobo_upload_dir()
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, f"sobo_multi_{uuid4().hex}.{ext}")
+        await file.download_to_drive(file_path)
+        
+        return await _process_sobo_extracted_file_multi(update, context, file_path)
+    finally:
+        _clear_sobo_ocr_processing(context)
 
 
 async def _handle_sobo_media_group_photos_multi(updates: list[Update], context: ContextTypes.DEFAULT_TYPE):
@@ -476,7 +577,7 @@ async def _handle_sobo_media_group_photos_multi(updates: list[Update], context: 
     try:
         updates.sort(key=lambda u: u.message.message_id)
         image_paths = []
-        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+        upload_dir = _sobo_upload_dir()
         os.makedirs(upload_dir, exist_ok=True)
         
         for i, up in enumerate(updates):
@@ -511,6 +612,8 @@ async def _handle_sobo_media_group_photos_multi(updates: list[Update], context: 
     except Exception as exc:
         await first_update.message.reply_text(f"Xử lý album ảnh thất bại: {exc}")
         return SOBO_DOC_MULTI
+    finally:
+        _clear_sobo_ocr_processing(context)
 
 
 async def _process_sobo_extracted_file_multi(update: Update, context: ContextTypes.DEFAULT_TYPE, file_path: str):
@@ -638,7 +741,7 @@ async def sobo_receive_machinery_doc(update: Update, context: ContextTypes.DEFAU
         return SOBO_MACHINERY_DOC
 
     file = await context.bot.get_file(file_ref.file_id)
-    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+    upload_dir = _sobo_upload_dir()
     os.makedirs(upload_dir, exist_ok=True)
     file_path = os.path.join(upload_dir, f"sobo_machinery_{uuid4().hex}{extension}")
     await file.download_to_drive(file_path)
@@ -671,7 +774,7 @@ async def _handle_machinery_media_group_photos(updates: list[Update], context: C
     try:
         updates.sort(key=lambda item: item.message.message_id)
         image_paths = []
-        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+        upload_dir = _sobo_upload_dir()
         os.makedirs(upload_dir, exist_ok=True)
 
         for index, item in enumerate(updates):
@@ -769,15 +872,18 @@ async def _wait_and_process_sobo_media_group(media_group_id: str, context: Conte
         await _handle_sobo_media_group_photos(updates, context)
 
 async def _process_sobo_single_file(update: Update, context: ContextTypes.DEFAULT_TYPE, file_ref, ext: str):
-    file = await context.bot.get_file(file_ref.file_id)
-    await update.message.reply_text("⏳ Đang tải và phân tích GCN bằng AI Gemini, vui lòng đợi giây lát...")
-    
-    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
-    os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(upload_dir, f"sobo_{uuid4().hex}.{ext}")
-    await file.download_to_drive(file_path)
-    
-    return await _process_sobo_extracted_file(update, context, file_path)
+    try:
+        file = await context.bot.get_file(file_ref.file_id)
+        await update.message.reply_text("⏳ Đang tải và phân tích GCN bằng AI Gemini, vui lòng đợi giây lát...")
+        
+        upload_dir = _sobo_upload_dir()
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, f"sobo_{uuid4().hex}.{ext}")
+        await file.download_to_drive(file_path)
+        
+        return await _process_sobo_extracted_file(update, context, file_path)
+    finally:
+        _clear_sobo_ocr_processing(context)
 
 async def _handle_sobo_media_group_photos(updates: list[Update], context: ContextTypes.DEFAULT_TYPE):
     first_update = updates[0]
@@ -786,7 +892,7 @@ async def _handle_sobo_media_group_photos(updates: list[Update], context: Contex
     try:
         updates.sort(key=lambda u: u.message.message_id)
         image_paths = []
-        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "uploads")
+        upload_dir = _sobo_upload_dir()
         os.makedirs(upload_dir, exist_ok=True)
         
         for i, up in enumerate(updates):
@@ -821,6 +927,8 @@ async def _handle_sobo_media_group_photos(updates: list[Update], context: Contex
     except Exception as exc:
         await first_update.message.reply_text(f"Xử lý album ảnh thất bại: {exc}")
         return SOBO_DOC
+    finally:
+        _clear_sobo_ocr_processing(context)
 
 async def _process_sobo_extracted_file(update: Update, context: ContextTypes.DEFAULT_TYPE, file_path: str):
     try:
@@ -946,7 +1054,6 @@ async def sobo_receive_loc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SOBO_SOURCE
 
 async def sobo_receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"DEBUG: sobo_receive_source received: {update.message.text}")
     source = update.message.text.strip()
     sobo = context.user_data['sobo']
     sobo['source'] = source
