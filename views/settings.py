@@ -326,6 +326,62 @@ def render_oauth2_integration() -> None:
             except Exception as e:
                 st.error(f"Lỗi tạo link gửi alias: {e}")
 
+    st.divider()
+    st.markdown("##### Mail Sơ bộ")
+    st.caption("Cấu hình này chỉ áp dụng cho mail Sơ bộ gửi từ Telegram bot. Luồng gửi hồ sơ bình thường vẫn dùng cấu hình OAuth2 chung bên trên.")
+
+    sobo_config = oauth_config.get("sobo_email", {})
+    if not isinstance(sobo_config, dict):
+        sobo_config = {}
+    google_ready = bool(g_config.get("enabled") and g_config.get("refresh_token"))
+    outlook_ready = bool(o_config.get("enabled") and (o_config.get("refresh_token") or o_smtp_config.get("refresh_token")))
+
+    status_parts = []
+    status_parts.append("Google đã liên kết" if google_ready else "Google chưa liên kết")
+    status_parts.append("Outlook đã liên kết" if outlook_ready else "Outlook chưa liên kết")
+    st.caption(" | ".join(status_parts))
+
+    provider_options = ["google", "outlook"]
+    saved_provider = str(sobo_config.get("provider") or "google").strip().lower()
+    if saved_provider not in provider_options:
+        saved_provider = "google"
+
+    with st.form("sobo_email_oauth_form"):
+        sobo_provider = st.selectbox(
+            "Nhà cung cấp gửi mail Sơ bộ",
+            provider_options,
+            index=provider_options.index(saved_provider),
+            format_func=lambda value: "Google Gmail API" if value == "google" else "Microsoft Outlook",
+            key="sobo_email_provider",
+        )
+        sobo_username = st.text_input(
+            "Tài khoản gửi mail Sơ bộ",
+            value=str(sobo_config.get("mail_username") or "hostktpro@gmail.com"),
+            placeholder="hostktpro@gmail.com",
+            key="sobo_mail_username",
+        )
+        sobo_from = st.text_input(
+            "From hiển thị cho mail Sơ bộ",
+            value=str(sobo_config.get("mail_from") or "hostktpro@gmail.com"),
+            placeholder="hostktpro@gmail.com",
+            key="sobo_mail_from",
+        )
+        sobo_save = st.form_submit_button("Lưu cấu hình mail Sơ bộ", type="secondary")
+        if sobo_save:
+            oauth_config["sobo_email"] = {
+                "provider": sobo_provider,
+                "mail_username": sobo_username.strip(),
+                "mail_from": sobo_from.strip(),
+            }
+            save_oauth_config(oauth_config)
+            st.success("Đã lưu cấu hình mail Sơ bộ.")
+            st.rerun()
+
+    if saved_provider == "google" and not google_ready:
+        st.warning("Mail Sơ bộ đang chọn Google nhưng tài khoản Google chưa liên kết OAuth2. Hãy cấu hình và bấm Kết nối Google Workspace ở cột bên trái.")
+    elif saved_provider == "outlook" and not outlook_ready:
+        st.warning("Mail Sơ bộ đang chọn Outlook nhưng Outlook chưa liên kết OAuth2.")
+
 
 def render(
     config_path: Path,

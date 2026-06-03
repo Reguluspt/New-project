@@ -163,6 +163,29 @@ class SoboEmailUtilsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(raw_message, str)
         self.assertGreater(len(raw_message), 0)
 
+    async def test_sobo_uses_ui_managed_oauth_config_when_env_is_empty(self) -> None:
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.post = AsyncMock(return_value=Mock(status_code=200, json=lambda: {"id": "gmail-id"}))
+
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("src.email_utils.load_dotenv"),
+            patch("src.oauth2_service.get_sobo_email_config", return_value={
+                "provider": "google",
+                "mail_username": "hostktpro@gmail.com",
+                "mail_from": "hostktpro@gmail.com",
+            }),
+            patch("src.oauth2_service.is_oauth_enabled", side_effect=lambda provider: provider == "google"),
+            patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
+            patch("httpx.AsyncClient", return_value=client),
+        ):
+            result = await send_sobo_email_with_result("to@example.com", "Subject", "Body")
+
+        self.assertTrue(result.success)
+        self.assertIn("raw", client.post.await_args.kwargs["json"])
+
     async def test_outlook_error_does_not_fall_back_to_smtp_gmail(self) -> None:
         smtp = Mock()
         smtp.__enter__ = Mock(return_value=smtp)

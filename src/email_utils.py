@@ -79,13 +79,15 @@ async def send_sobo_email_with_result(
     from .oauth2_service import (
         get_enabled_oauth_provider,
         get_outlook_sender_email,
+        get_sobo_email_config,
         get_valid_access_token_async,
         is_oauth_enabled,
         is_outlook_smtp_enabled,
         send_outlook_message_via_smtp_oauth2,
     )
 
-    sobo_provider = os.getenv("SOBO_OAUTH_PROVIDER", "").strip().lower()
+    sobo_config = get_sobo_email_config()
+    sobo_provider = os.getenv("SOBO_OAUTH_PROVIDER", "").strip().lower() or sobo_config["provider"]
     if sobo_provider in {"google", "outlook"} and is_oauth_enabled(sobo_provider):
         provider = sobo_provider
     elif is_oauth_enabled("google"):
@@ -100,7 +102,9 @@ async def send_sobo_email_with_result(
         "MAIL_USERNAME",
         "EMAIL_USER",
     )
-    mail_from_name = _env_first("SOBO_MAIL_FROM", "MAIL_FROM")
+    if not user:
+        user = sobo_config["mail_username"]
+    mail_from_name = _env_first("SOBO_MAIL_FROM", "MAIL_FROM") or sobo_config["mail_from"]
     
     domain = user.split("@")[-1] if "@" in user else "gmail.com"
     message_id = make_msgid(domain=domain)

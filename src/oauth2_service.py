@@ -49,6 +49,11 @@ DEFAULT_OAUTH_CONFIG = {
         "expires_at": 0.0,
         "enabled": False,
     },
+    "sobo_email": {
+        "provider": "google",
+        "mail_username": "hostktpro@gmail.com",
+        "mail_from": "hostktpro@gmail.com",
+    },
     "redirect_uri": "http://localhost:8501/"
 }
 
@@ -69,6 +74,12 @@ def load_oauth_config() -> dict[str, Any]:
                 for k, v in DEFAULT_OAUTH_CONFIG[provider].items():
                     if k not in data[provider]:
                         data[provider][k] = v
+        if "sobo_email" not in data or not isinstance(data.get("sobo_email"), dict):
+            data["sobo_email"] = dict(DEFAULT_OAUTH_CONFIG["sobo_email"])
+        else:
+            for k, v in DEFAULT_OAUTH_CONFIG["sobo_email"].items():
+                if k not in data["sobo_email"]:
+                    data["sobo_email"][k] = v
         # Ensure redirect_uri key is loaded
         if "redirect_uri" not in data:
             data["redirect_uri"] = DEFAULT_OAUTH_CONFIG["redirect_uri"]
@@ -110,6 +121,22 @@ def get_outlook_sender_email() -> str:
     """Return the Outlook alias to expose as the sender when one is configured."""
     config = load_oauth_config()
     return str(config.get("outlook", {}).get("sender_email") or "").strip()
+
+
+def get_sobo_email_config() -> dict[str, str]:
+    """Return UI-managed Sơ bộ email settings."""
+    config = load_oauth_config()
+    sobo_config = config.get("sobo_email", {})
+    if not isinstance(sobo_config, dict):
+        sobo_config = {}
+    provider = str(sobo_config.get("provider") or "google").strip().lower()
+    if provider not in {"google", "outlook"}:
+        provider = "google"
+    return {
+        "provider": provider,
+        "mail_username": str(sobo_config.get("mail_username") or "hostktpro@gmail.com").strip(),
+        "mail_from": str(sobo_config.get("mail_from") or "hostktpro@gmail.com").strip(),
+    }
 
 
 def is_outlook_smtp_enabled() -> bool:
