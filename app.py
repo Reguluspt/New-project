@@ -45,17 +45,32 @@ def _load_ai_runtime_config() -> tuple[str, str, str, str]:
     )
 
 
+def _entry_excel_template_candidates(excel_template_path: Path) -> list[Path]:
+    return [
+        excel_template_path,
+        DATA_DIR / "Form_nhap_lieu.xlsx",
+        DATA_DIR / "form_nhap_lieu.xlsx",
+        SAMPLE_TEMPLATE,
+    ]
+
+
+def _resolve_entry_excel_template_path(excel_template_path: Path) -> Path:
+    for candidate in _entry_excel_template_candidates(excel_template_path):
+        if candidate.exists():
+            return candidate
+    return excel_template_path
+
+
 def _load_entry_dropdown_options(excel_template_path: Path) -> dict[str, list[str]]:
     options: dict[str, list[str]] = {}
-    if excel_template_path.exists():
+    for candidate in _entry_excel_template_candidates(excel_template_path):
+        if not candidate.exists():
+            continue
         try:
-            options = load_dropdown_options(excel_template_path)
+            candidate_options = load_dropdown_options(candidate)
         except Exception:
-            options = {}
-
-    if SAMPLE_TEMPLATE.exists():
-        sample_options = load_dropdown_options(SAMPLE_TEMPLATE)
-        for field_key, values in sample_options.items():
+            continue
+        for field_key, values in candidate_options.items():
             if not options.get(field_key):
                 options[field_key] = values
     return options
@@ -123,14 +138,13 @@ def main() -> None:
     log_records_db_path("streamlit_app", records_db_path)
 
     template_config = load_template_config(TEMPLATE_CONFIG_PATH, DEFAULT_TEMPLATE_CONFIG)
-    excel_template_path = Path(str(template_config["excel_template_path"]))
-    if not excel_template_path.exists() and SAMPLE_TEMPLATE.exists():
-        excel_template_path = SAMPLE_TEMPLATE
+    configured_excel_template_path = Path(str(template_config["excel_template_path"]))
+    excel_template_path = _resolve_entry_excel_template_path(configured_excel_template_path)
     individual_template_dir = Path(str(template_config["individual_template_dir"]))
     organization_template_dir = Path(str(template_config["organization_template_dir"]))
     current_user = str(template_config.get("template_editor_name") or os.getenv("USERNAME", "Unknown"))
     try:
-        excel_dropdown_options = _load_entry_dropdown_options(excel_template_path)
+        excel_dropdown_options = _load_entry_dropdown_options(configured_excel_template_path)
     except Exception as exc:
         excel_dropdown_options = {}
         st.warning(f"Không đọc được danh sách chọn từ file Excel mẫu: {exc}")
