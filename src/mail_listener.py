@@ -6,6 +6,7 @@ import email
 import json
 import os
 import re
+import unicodedata
 from dataclasses import dataclass
 from email.header import decode_header, make_header
 from email.message import EmailMessage, Message
@@ -53,6 +54,21 @@ DEFAULT_PID_PATH = DATA_DIR / "mail_listener.pid"
 DEFAULT_LOG_PATH = LOG_DIR / "mail_listener_events.jsonl"
 AUTO_REPLY_CC = "hostktpro@gmail.com"
 MATCH_THRESHOLD = 0.8
+
+
+def _normalize_mail_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", str(value or ""))
+    without_marks = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    return re.sub(r"\s+", " ", without_marks.replace("đ", "d").replace("Đ", "D").lower()).strip()
+
+
+def _strip_reply_prefixes(subject: str) -> str:
+    return re.sub(r'^(?i:\s*(?:re|fw|fwd)\s*:\s*)+', '', str(subject or "")).strip()
+
+
+def is_sobo_subject(subject: str) -> bool:
+    normalized = _normalize_mail_text(_strip_reply_prefixes(subject))
+    return bool(re.match(r"^\[\s*so\s*bo\s*\]", normalized))
 
 
 class EmailMatchExtraction(BaseModel):
@@ -1165,7 +1181,7 @@ async def process_incoming_email(
 ) -> RecordMatch | None:
     incoming = parse_incoming_email(raw, uid=uid, thread_id=thread_id)
     try:
-        if "[sơ bộ]" in incoming.subject.lower():
+        if is_sobo_subject(incoming.subject):
             await process_sobo_reply(incoming, settings=settings)
             return None
 
@@ -1400,6 +1416,75 @@ def parse_sobo_subject(subject: str) -> dict[str, Any] | None:
 def clean_sobo_reply_subject(subject: str) -> str:
     """Clean Re: prefixes from subject."""
     return re.sub(r'^(?i:\s*re\s*:\s*)+', '', subject).strip()
+
+
+def parse_sobo_subject(subject: str) -> dict[str, Any] | None:
+    """Parse sobo subject to extract details, accepting non-numeric map-sheet labels."""
+    subj_clean = _strip_reply_prefixes(subject)
+    if not is_sobo_subject(subj_clean):
+        return None
+
+    close_bracket = subj_clean.find("]")
+    content = subj_clean[close_bracket + 1 :].strip(" -–—") if close_bracket >= 0 else subj_clean
+    detail_separator = re.search(
+        r"\s+[-–—]\s+(?=(?:thửa\s+đất\s+số|thua\s+dat\s+so))",
+        content,
+        re.IGNORECASE,
+    )
+    if detail_separator:
+        source = content[: detail_separator.start()].strip()
+        details = content[detail_separator.end() :].strip()
+    else:
+        parts = [part.strip() for part in re.split(r"\s+[-–—]\s+", content, maxsplit=1)]
+        if len(parts) < 2:
+            return None
+        source, details = parts[0], parts[1]
+
+    if not source or not details:
+        return None
+
+    res = {
+        "source": source,
+        "raw_details": details,
+        "asset_type": "real_estate",
+        "asset_sub_type": "single",
+        "so_thua": "",
+        "so_to": "",
+        "dia_chi": "",
+        "equipment_name": "",
+    }
+
+    if _normalize_mail_text(source) == "may moc thiet bi":
+        res["asset_type"] = "machinery"
+        res["asset_sub_type"] = ""
+        res["equipment_name"] = details
+        return res
+
+    match = re.search(
+        r"(?:thửa\s+đất\s+số|thua\s+dat\s+so)\s+([^,;]+),\s*(?:tờ\s+bản\s+đồ\s+số|to\s+ban\s+do\s+so)\s+([^,;]+)",
+        details,
+        re.IGNORECASE,
+    )
+    if not match:
+        res["dia_chi"] = details
+        return res
+
+    res["so_thua"] = match.group(1).strip()
+    res["so_to"] = match.group(2).strip()
+    address_part = details[match.end():].strip()
+    address_match = re.search(r"(?:tại\s+địa\s+chỉ|tai\s+dia\s+chi)\s+(.*)$", address_part, re.IGNORECASE)
+    if address_match:
+        res["dia_chi"] = address_match.group(1).strip()
+    else:
+        res["dia_chi"] = re.sub(r"^[;,\s]+", "", address_part).strip()
+    if "+" in res["so_thua"] or "," in res["so_thua"]:
+        res["asset_sub_type"] = "multi"
+    return res
+
+
+def clean_sobo_reply_subject(subject: str) -> str:
+    """Clean Re/Fw prefixes from subject."""
+    return _strip_reply_prefixes(subject)
 
 
 def extract_maps_link(text: str) -> str:

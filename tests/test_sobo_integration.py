@@ -23,6 +23,7 @@ from src.mail_listener import (
     MailListenerSettings,
     process_incoming_email,
     parse_sobo_subject,
+    is_sobo_subject,
     clean_sobo_reply_subject,
     extract_maps_link,
     sync_sobo_emails_from_mailbox,
@@ -135,6 +136,22 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIsNotNone(match_sub)
             self.assertEqual(match_sub["id"], 1)
+
+    def test_parse_sobo_subject_accepts_non_numeric_map_sheet(self) -> None:
+        subject = (
+            "Re: [SƠ BỘ] - XỬ LÝ NỢ VCB HÀ TĨNH - "
+            "Thửa đất số 14, tờ bản đồ số Độc lập; tại địa chỉ Đường Lý Thái Tổ"
+        )
+
+        parsed = parse_sobo_subject(subject)
+
+        self.assertTrue(is_sobo_subject(subject))
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed["source"], "XỬ LÝ NỢ VCB HÀ TĨNH")
+        self.assertEqual(parsed["so_thua"], "14")
+        self.assertEqual(parsed["so_to"], "Độc lập")
+        self.assertEqual(parsed["dia_chi"], "Đường Lý Thái Tổ")
 
     async def test_create_sobo_record_preserves_historical_timestamps(self) -> None:
         with TemporaryDirectory() as tmpdir:
