@@ -134,6 +134,35 @@ class SoboEmailUtilsTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.success)
         self.assertEqual(send.await_args.args[0]["From"], "truongpnt2@outlook.com.vn")
 
+    async def test_sobo_prefers_google_oauth_even_when_outlook_is_enabled(self) -> None:
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.post = AsyncMock(return_value=Mock(status_code=200, json=lambda: {"id": "gmail-id"}))
+
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "SOBO_OAUTH_PROVIDER": "google",
+                    "SOBO_MAIL_USERNAME": "hostktpro@gmail.com",
+                    "SOBO_MAIL_FROM": "hostktpro@gmail.com",
+                    "MAIL_USERNAME": "legacy@gmail.com",
+                },
+                clear=True,
+            ),
+            patch("src.email_utils.load_dotenv"),
+            patch("src.oauth2_service.is_oauth_enabled", side_effect=lambda provider: provider in {"google", "outlook"}),
+            patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
+            patch("httpx.AsyncClient", return_value=client),
+        ):
+            result = await send_sobo_email_with_result("to@example.com", "Subject", "Body")
+
+        self.assertTrue(result.success)
+        raw_message = client.post.await_args.kwargs["json"]["raw"]
+        self.assertIsInstance(raw_message, str)
+        self.assertGreater(len(raw_message), 0)
+
     async def test_outlook_error_does_not_fall_back_to_smtp_gmail(self) -> None:
         smtp = Mock()
         smtp.__enter__ = Mock(return_value=smtp)

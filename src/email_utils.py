@@ -50,6 +50,14 @@ def _attach_sobo_logo(msg: EmailMessage) -> None:
         logger.error(f"Loi khi dinh kem logo email so bo: {exc}")
 
 
+def _env_first(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
 async def send_sobo_email_with_result(
     to_email: str,
     subject: str,
@@ -72,14 +80,27 @@ async def send_sobo_email_with_result(
         get_enabled_oauth_provider,
         get_outlook_sender_email,
         get_valid_access_token_async,
+        is_oauth_enabled,
         is_outlook_smtp_enabled,
         send_outlook_message_via_smtp_oauth2,
     )
 
-    provider = get_enabled_oauth_provider()
+    sobo_provider = os.getenv("SOBO_OAUTH_PROVIDER", "").strip().lower()
+    if sobo_provider in {"google", "outlook"} and is_oauth_enabled(sobo_provider):
+        provider = sobo_provider
+    elif is_oauth_enabled("google"):
+        provider = "google"
+    else:
+        provider = get_enabled_oauth_provider()
         
-    user = os.getenv("SMTP_USERNAME", os.getenv("MAIL_USERNAME", os.getenv("EMAIL_USER", ""))).strip()
-    mail_from_name = os.getenv("MAIL_FROM", "").strip()
+    user = _env_first(
+        "SOBO_SMTP_USERNAME",
+        "SOBO_MAIL_USERNAME",
+        "SMTP_USERNAME",
+        "MAIL_USERNAME",
+        "EMAIL_USER",
+    )
+    mail_from_name = _env_first("SOBO_MAIL_FROM", "MAIL_FROM")
     
     domain = user.split("@")[-1] if "@" in user else "gmail.com"
     message_id = make_msgid(domain=domain)
@@ -213,9 +234,9 @@ async def send_sobo_email_with_result(
             return SoboEmailResult(False, message, str(exc))
             
     # --- PHẦN SMTP GỐC ---
-    host = os.getenv("SMTP_HOST", os.getenv("MAIL_SERVER", os.getenv("EMAIL_HOST", "smtp.gmail.com"))).strip()
-    port = int(os.getenv("SMTP_PORT", os.getenv("MAIL_PORT", os.getenv("EMAIL_PORT", "587"))))
-    password = os.getenv("SMTP_PASSWORD", os.getenv("MAIL_PASSWORD", os.getenv("EMAIL_PASSWORD", ""))).strip().replace(" ", "")
+    host = _env_first("SOBO_SMTP_HOST", "SOBO_MAIL_SERVER", "SMTP_HOST", "MAIL_SERVER", "EMAIL_HOST") or "smtp.gmail.com"
+    port = int(_env_first("SOBO_SMTP_PORT", "SOBO_MAIL_PORT", "SMTP_PORT", "MAIL_PORT", "EMAIL_PORT") or "587")
+    password = _env_first("SOBO_SMTP_PASSWORD", "SOBO_MAIL_PASSWORD", "SMTP_PASSWORD", "MAIL_PASSWORD", "EMAIL_PASSWORD").replace(" ", "")
 
     if not user or not password:
         message = "Chua cau hinh MAIL_USERNAME/SMTP_USERNAME hoac MAIL_PASSWORD/SMTP_PASSWORD trong API.env."
