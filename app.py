@@ -45,6 +45,22 @@ def _load_ai_runtime_config() -> tuple[str, str, str, str]:
     )
 
 
+def _load_entry_dropdown_options(excel_template_path: Path) -> dict[str, list[str]]:
+    options: dict[str, list[str]] = {}
+    if excel_template_path.exists():
+        try:
+            options = load_dropdown_options(excel_template_path)
+        except Exception:
+            options = {}
+
+    if SAMPLE_TEMPLATE.exists():
+        sample_options = load_dropdown_options(SAMPLE_TEMPLATE)
+        for field_key, values in sample_options.items():
+            if not options.get(field_key):
+                options[field_key] = values
+    return options
+
+
 def main() -> None:
     load_dotenv(Path(__file__).resolve().parent / "API.env", override=True)
     st.set_page_config(
@@ -114,7 +130,7 @@ def main() -> None:
     organization_template_dir = Path(str(template_config["organization_template_dir"]))
     current_user = str(template_config.get("template_editor_name") or os.getenv("USERNAME", "Unknown"))
     try:
-        excel_dropdown_options = load_dropdown_options(excel_template_path) if excel_template_path.exists() else {}
+        excel_dropdown_options = _load_entry_dropdown_options(excel_template_path)
     except Exception as exc:
         excel_dropdown_options = {}
         st.warning(f"Không đọc được danh sách chọn từ file Excel mẫu: {exc}")
