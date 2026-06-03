@@ -4,7 +4,10 @@ from types import SimpleNamespace
 from src.web_automation import (
     WEB_STATUS_TABLE_TIMEOUT,
     WEB_SUBMIT_TIMEOUT,
+    _bank_web_value,
     _is_submit_response,
+    _purpose_web_value,
+    _source_web_candidates,
     find_created_web_case_id,
     missing_web_entry_fields,
 )
@@ -35,6 +38,19 @@ def test_missing_web_entry_fields_accepts_asset_address_fallback() -> None:
     )
 
     assert missing == []
+
+
+def test_web_dropdown_value_mapping_for_common_entry_values() -> None:
+    assert _purpose_web_value("Làm cơ sở tham khảo để thế chấp vay vốn tại ngân hàng BIDV") == "Thẩm định vay vốn ngân hàng"
+    assert _purpose_web_value("Làm cơ sở tham khảo để xử lý tài sản đảm bảo tại ngân hàng") == "Thanh lý, phát mãi tài sản"
+    assert _bank_web_value("BIDV Nam Gia Lai - Mr. Dương - 0902155345") == "BIDV"
+
+
+def test_source_web_candidates_try_original_source_before_bank_fallback() -> None:
+    assert _source_web_candidates("BIDV Nam Gia Lai - Mr. Dương - 0902155345") == [
+        "BIDV Nam Gia Lai - Mr. Dương - 0902155345",
+        "BIDV",
+    ]
 
 
 def test_submit_response_tracks_submit_api_and_waits_120_seconds() -> None:

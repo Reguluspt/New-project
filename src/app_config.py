@@ -382,6 +382,38 @@ def _extract_first_match(pattern: str, text: str) -> str:
     return match.group(1).strip(" .;,") if match else ""
 
 
+def normalize_short_asset_description(text: str) -> str:
+    def normalize_line(line: str) -> str:
+        value = line.strip()
+        if not value:
+            return value
+        if _re.search(r"\b(thửa|thua)\b", value, flags=_re.IGNORECASE):
+            return value
+
+        parts = [part.strip() for part in value.split(",", 2)]
+        if len(parts) != 3:
+            return value
+        so_thua, so_to, address = parts
+        if not so_thua or not so_to or not address:
+            return value
+        if not _re.fullmatch(r"[\w./-]+", so_thua, flags=_re.UNICODE):
+            return value
+        if not _re.fullmatch(r"[\w./-]+", so_to, flags=_re.UNICODE):
+            return value
+        return f"Thửa đất số {so_thua}, tờ bản đồ số {so_to}; tại địa chỉ {address}"
+
+    return "\n".join(normalize_line(line) for line in str(text or "").splitlines())
+
+
+def normalize_entry_asset_description_input() -> None:
+    key = "entry_asset_description"
+    current_value = str(st.session_state.get(key) or "")
+    normalized = normalize_short_asset_description(current_value)
+    if normalized != current_value:
+        st.session_state[key] = normalized
+    sync_form_to_gcn()
+
+
 def parse_asset_description_fields(text: str) -> dict[str, str]:
     value = (text or "").strip()
     return {

@@ -10,6 +10,7 @@ from src.app_config import (
     CASE_FILES_DIR,
     OUTPUT_DIR,
     UNPAID_STATUS,
+    normalize_entry_asset_description_input,
     reset_entry_workspace,
     selectbox_from_excel,
     sync_form_to_gcn_from_fields,
@@ -214,10 +215,11 @@ def render(
             representative_name = st.text_input("Người đại diện", key="entry_representative_name")
             representative_position = st.text_input("Chức vụ người đại diện", key="entry_representative_position")
         with org_col2:
-            handover_contact_name = st.text_input("Người nhận bàn giao", key="entry_handover_contact_name")
-            handover_contact_position = st.text_input("Chức vụ người nhận bàn giao", key="entry_handover_contact_position")
-            handover_contact_phone = st.text_input("Điện thoại người nhận bàn giao", key="entry_handover_contact_phone")
-        authorization_note = st.text_area("Căn cứ/giấy ủy quyền đại diện", height=70, key="entry_authorization_note")
+            with st.expander("Thông tin nhận bàn giao & ủy quyền đại diện (Ẩn/Hiện)", expanded=False):
+                handover_contact_name = st.text_input("Người nhận bàn giao", key="entry_handover_contact_name")
+                handover_contact_position = st.text_input("Chức vụ người nhận bàn giao", key="entry_handover_contact_position")
+                handover_contact_phone = st.text_input("Điện thoại người nhận bàn giao", key="entry_handover_contact_phone")
+                authorization_note = st.text_area("Căn cứ/giấy ủy quyền đại diện", height=70, key="entry_authorization_note")
 
     # --- Xác định loại khách hàng và gộp thông tin ---
     if customer_info_org:
@@ -243,7 +245,8 @@ def render(
         "Tài sản thẩm định giá",
         height=88,
         key="entry_asset_description",
-        placeholder="Vd: Thửa đất số ...., tờ bản đồ số ....; tại địa chỉ....."
+        placeholder="Vd: 43,12, Tổ 2 An Tân, phường An Khê, tỉnh Gia Lai",
+        on_change=normalize_entry_asset_description_input,
     )
     asset_type = selectbox_from_excel("Loại tài sản", "asset_type", excel_dropdown_options, "entry_asset_type")
     preliminary_status = selectbox_from_excel("Sơ bộ", "preliminary_status", excel_dropdown_options, "entry_preliminary_status")

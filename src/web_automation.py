@@ -129,6 +129,19 @@ def _bank_web_value(raw_source: str) -> str:
     return "KHN"
 
 
+def _source_web_candidates(raw_source: str) -> list[str]:
+    source = str(raw_source or "").strip()
+    candidates = [source, _bank_web_value(source)]
+    result: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = _normalize_text(candidate)
+        if candidate and key not in seen:
+            seen.add(key)
+            result.append(candidate)
+    return result
+
+
 def _is_submit_response(response) -> bool:
     return WEB_SUBMIT_API_PATH in response.url
 
@@ -369,7 +382,7 @@ async def start_browser_and_login(browser_context):
 # Form filling — THÔNG TIN KHÁCH HÀNG & THÔNG TIN THẨM ĐỊNH
 # ---------------------------------------------------------------------------
 
-async def _select_dropdown(page, label: str, value: str) -> None:
+async def _select_dropdown(page, label: str, value: str) -> bool:
     """Chọn một giá trị trong dropdown (``<select>``) theo label.
 
     Thử ba chiến lược lần lượt:
@@ -378,7 +391,7 @@ async def _select_dropdown(page, label: str, value: str) -> None:
     3. Fallback: click dropdown → chọn ``<option>`` chứa text gần đúng.
     """
     if not value:
-        return
+        return False
 
     select = page.get_by_label(label)
 
@@ -386,7 +399,7 @@ async def _select_dropdown(page, label: str, value: str) -> None:
     try:
         await select.select_option(label=value, timeout=3000)
         logger.info("Dropdown '%s' → '%s' (exact match)", label, value)
-        return
+        return True
     except Exception:
         pass
 
@@ -397,7 +410,7 @@ async def _select_dropdown(page, label: str, value: str) -> None:
             if option_text.strip().casefold() == value.strip().casefold():
                 await select.select_option(label=option_text)
                 logger.info("Dropdown '%s' → '%s' (case-insensitive)", label, option_text)
-                return
+                return True
     except Exception:
         pass
 
@@ -409,14 +422,15 @@ async def _select_dropdown(page, label: str, value: str) -> None:
             if needle in option_text.strip().casefold():
                 await select.select_option(label=option_text)
                 logger.info("Dropdown '%s' → '%s' (partial match for '%s')", label, option_text, value)
-                return
+                return True
     except Exception:
         pass
 
     if await _select_ng_dropdown_by_label(page, label, value):
-        return
+        return True
 
     logger.warning("Dropdown '%s': không tìm thấy giá trị '%s' trong danh sách.", label, value)
+    return False
 
 
 async def _open_ng_dropdown_by_label(page, label: str) -> bool:
@@ -488,6 +502,8 @@ async def _select_ng_dropdown_by_label(page, label: str, value: str) -> bool:
         return False
     await page.wait_for_timeout(500)
     # Robust fallback: type text and press Enter
+    await page.keyboard.press("Control+A")
+    await page.keyboard.press("Backspace")
     await page.keyboard.type(value, delay=50)
     await page.wait_for_timeout(1000)
     await page.keyboard.press("Enter")
@@ -503,6 +519,8 @@ async def _select_ng_dropdown_matching_text(page, label: str, source_text: str) 
         return False
     await page.wait_for_timeout(500)
     # Robust fallback: type text and press Enter
+    await page.keyboard.press("Control+A")
+    await page.keyboard.press("Backspace")
     await page.keyboard.type(source_text, delay=50)
     await page.wait_for_timeout(1500)
     await page.keyboard.press("Enter")
@@ -517,6 +535,8 @@ async def _select_random_ng_option_containing(page, label: str, needles: list[st
     await page.wait_for_timeout(500)
     import random
     chosen_needle = random.choice(needles)
+    await page.keyboard.press("Control+A")
+    await page.keyboard.press("Backspace")
     await page.keyboard.type(chosen_needle, delay=50)
     await page.wait_for_timeout(1500)
     await page.keyboard.press("Enter")
@@ -562,6 +582,65 @@ async def _check_by_label_text(page, label: str) -> bool:
         }""",
         label,
     ))
+
+
+async def _hide_fields_by_label_text(page, labels: list[str]) -> list[str]:
+    return list(await page.evaluate(
+        """(labels) => {
+            const normalize = (text) => (text || "")
+                .replaceAll("Đ", "D")
+                .replaceAll("đ", "d")
+                .normalize("NFD")
+                .replace(/[\\u0300-\\u036f]/g, "")
+                .toLowerCase()
+                .replace(/\\s+/g, " ")
+                .trim();
+            const wanted = labels.map(normalize);
+            const hidden = [];
+            const nodes = Array.from(document.querySelectorAll("label, .form-label, [class*='label']"));
+            for (const node of nodes) {
+                const text = normalize(node.textContent || "");
+                const matchIndex = wanted.findIndex((label) => label && text.includes(label));
+                if (matchIndex < 0) continue;
+
+                let container = node;
+                for (let i = 0; i < 5 && container; i += 1) {
+                    const hasField = container.querySelector?.("input, textarea, select, ng-select");
+                    const box = container.getBoundingClientRect();
+                    if (hasField && box.width > 0 && box.height > 0) break;
+                    container = container.parentElement;
+                }
+                if (!container) continue;
+
+                for (const field of Array.from(container.querySelectorAll("input, textarea"))) {
+                    if (field.type !== "hidden") {
+                        field.value = "";
+                        field.dispatchEvent(new Event("input", { bubbles: true }));
+                        field.dispatchEvent(new Event("change", { bubbles: true }));
+                    }
+                }
+                container.style.display = "none";
+                hidden.push(labels[matchIndex]);
+            }
+            return Array.from(new Set(hidden));
+        }""",
+        labels,
+    ))
+
+
+async def _hide_handover_authorization_fields(page) -> None:
+    hidden = await _hide_fields_by_label_text(
+        page,
+        [
+            "Người nhận bàn giao",
+            "Chức vụ người nhận bàn giao",
+            "Điện thoại người nhận bàn giao",
+            "Căn cứ/giấy ủy quyền đại diện",
+            "Căn cứ/ủy quyền đại diện",
+        ],
+    )
+    if hidden:
+        logger.info("Đã ẩn các trường bàn giao/ủy quyền: %s", ", ".join(hidden))
 
 
 async def fill_basic_info(page, data: Mapping[str, str]) -> None:
@@ -637,6 +716,7 @@ async def fill_basic_info(page, data: Mapping[str, str]) -> None:
     logger.info("Chọn Văn Phòng: %s", office_val)
 
     # Ghi chú: Bỏ qua (Skip)
+    await _hide_handover_authorization_fields(page)
 
 
 # ---------------------------------------------------------------------------
@@ -777,6 +857,11 @@ async def fill_asset_info(page, data: Mapping[str, str]) -> None:
     muc_dich = str(data.get("valuation_purpose") or "").strip()
     await _select_dropdown(page, "Mục đích thẩm định", _purpose_web_value(muc_dich))
 
+    source = str(data.get("source") or "").strip()
+    for source_candidate in _source_web_candidates(source):
+        if await _select_dropdown(page, "Nguồn/đối tác", source_candidate):
+            break
+
     # Loại tài sản & Nhóm tài sản (Dynamic mapping)
     asset_type = str(data.get("asset_type") or "").strip()
     target_type = _asset_web_value(asset_type)
@@ -784,6 +869,7 @@ async def fill_asset_info(page, data: Mapping[str, str]) -> None:
     if target_type:
         await _select_dropdown(page, "Loại tài sản", target_type)
         await _select_dropdown(page, "Nhóm tài sản", target_type)
+    await _hide_handover_authorization_fields(page)
 
 
 # ---------------------------------------------------------------------------

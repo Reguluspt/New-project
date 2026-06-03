@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from openpyxl import Workbook, load_workbook
 
-from src.app_config import UNPAID_STATUS, extraction_to_form_state
+from src.app_config import UNPAID_STATUS, extraction_to_form_state, normalize_short_asset_description
 from src.case_files import case_folder, save_original_file
 from src.excel_writer import fill_template
 from src.models import ExtractedValue, LandCertificateExtraction, PageOrientationMetadata
@@ -62,6 +62,16 @@ def _create_excel_template(path: Path) -> None:
 
 
 class EntryActionsTests(unittest.TestCase):
+    def test_normalize_short_asset_description_from_parcel_map_address(self) -> None:
+        self.assertEqual(
+            normalize_short_asset_description("43,12, Tổ 2 An Tân, phường An Khê, tỉnh Gia Lai"),
+            "Thửa đất số 43, tờ bản đồ số 12; tại địa chỉ Tổ 2 An Tân, phường An Khê, tỉnh Gia Lai",
+        )
+
+    def test_normalize_short_asset_description_keeps_free_text(self) -> None:
+        value = "Nhà xưởng, máy móc thiết bị tại Gia Lai"
+        self.assertEqual(normalize_short_asset_description(value), value)
+
     def test_run_ocr_extraction_uses_gemini_and_applies_form(self) -> None:
         extraction = object()
         remember_ai_config = Mock()

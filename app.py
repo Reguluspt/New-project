@@ -11,6 +11,7 @@ from src.app_config import (
     DATA_DIR,
     DEFAULT_TEMPLATE_CONFIG,
     OUTPUT_DIR,
+    SAMPLE_TEMPLATE,
     SQLITE_DATABASE,
     TEMPLATE_CONFIG_PATH,
     TEMPLATE_HISTORY_PATH,
@@ -107,6 +108,8 @@ def main() -> None:
 
     template_config = load_template_config(TEMPLATE_CONFIG_PATH, DEFAULT_TEMPLATE_CONFIG)
     excel_template_path = Path(str(template_config["excel_template_path"]))
+    if not excel_template_path.exists() and SAMPLE_TEMPLATE.exists():
+        excel_template_path = SAMPLE_TEMPLATE
     individual_template_dir = Path(str(template_config["individual_template_dir"]))
     organization_template_dir = Path(str(template_config["organization_template_dir"]))
     current_user = str(template_config.get("template_editor_name") or os.getenv("USERNAME", "Unknown"))

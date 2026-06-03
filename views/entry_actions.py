@@ -258,6 +258,42 @@ def _render_extraction_summary(extraction: object) -> None:
         st.caption(f"Khách hàng gợi ý: {customer or 'Chưa có'} | CCCD/CMND: {citizen_id or 'Chưa có'}")
 
 
+def _scanned_original_name(item: dict[str, object]) -> str:
+    names = ", ".join(str(name) for name in item.get("source_names", []))
+    if item.get("kind") == "image_pdf":
+        return "anh_gcn_ghep.pdf"
+    return names or Path(str(item.get("path"))).name
+
+
+def _remember_scanned_document(item: dict[str, object]) -> None:
+    approved = st.session_state.setdefault("entry_approved_documents", [])
+    path = item.get("path")
+    if any(str(document.get("path") or "") == str(path or "") for document in approved):
+        return
+    approved.append(
+        {
+            "path": path,
+            "original_name": _scanned_original_name(item),
+        }
+    )
+
+
+def _apply_scanned_item_to_form(item: dict[str, object]) -> int:
+    count = apply_extraction_collection_to_form(item["extraction"], append=True)
+    item["status"] = "applied"
+    item["asset_count"] = count
+    _remember_scanned_document(item)
+    return count
+
+
+def _apply_existing_review_items() -> int:
+    total = 0
+    for item in _queue_items():
+        if item.get("status") == "review" and item.get("extraction") is not None:
+            total += _apply_scanned_item_to_form(item)
+    return total
+
+
 def render_review_items() -> None:
     review_items = [item for item in _queue_items() if item.get("status") == "review" and item.get("extraction") is not None]
     if not review_items:
@@ -275,19 +311,7 @@ def render_review_items() -> None:
                     st.rerun()
             with cols[1]:
                 if st.button("Đưa vào form", key=f"review_apply_{item['id']}", type="primary", width="stretch"):
-                    count = apply_extraction_collection_to_form(item["extraction"], append=True)
-                    item["status"] = "applied"
-                    item["asset_count"] = count
-                    approved = st.session_state.setdefault("entry_approved_documents", [])
-                    original_name = names or Path(str(item.get("path"))).name
-                    if item.get("kind") == "image_pdf":
-                        original_name = "anh_gcn_ghep.pdf"
-                    approved.append(
-                        {
-                            "path": item.get("path"),
-                            "original_name": original_name,
-                        }
-                    )
+                    count = _apply_scanned_item_to_form(item)
                     st.success(f"Đã đưa {count} tài sản vào form.")
                     st.rerun()
             with cols[2]:
@@ -306,6 +330,9 @@ def render_queue_ocr_action(
     remember_ai_config: Callable[[], None],
 ) -> None:
     items = _queue_items()
+    auto_applied_count = _apply_existing_review_items()
+    if auto_applied_count:
+        st.success(f"Đã tự đưa {auto_applied_count} tài sản đã quét vào form.")
     render_upload_queue()
     if not items:
         return
@@ -336,12 +363,12 @@ def render_queue_ocr_action(
                         model=model,
                     )
                 item["extraction"] = result["extraction"]
-                item["status"] = "review"
                 item["provider_used"] = result["provider"]
                 item["model_used"] = result["model"]
                 item["attempts"] = result["attempts"]
                 item["message"] = result["message"]
-                item["asset_count"] = len(normalize_multi_extraction(result["extraction"]).assets)
+                count = _apply_scanned_item_to_form(item)
+                item["message"] = f"{result['message']} - Đã tự đưa {count} tài sản vào form."
             except Exception as exc:
                 item["status"] = "error"
                 item["message"] = str(exc)
@@ -349,8 +376,6 @@ def render_queue_ocr_action(
             progress.progress(index / len(items))
         remember_ai_config()
         st.rerun()
-
-    render_review_items()
 
 
 def render_ocr_action(
