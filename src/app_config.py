@@ -469,6 +469,6 @@ def options_with_current(options: list[str], current_value: str) -> list[str]:
 def selectbox_from_excel(label: str, field_key: str, options: dict[str, list[str]], session_key: str) -> str:
     current_value = str(st.session_state.get(session_key, "") or "").strip()
     field_options = options_with_current(options.get(field_key, []), current_value)
-    if session_key not in st.session_state or current_value not in field_options:
-        st.session_state[session_key] = field_options[0]
+    if current_value not in field_options:
+        st.session_state.pop(session_key, None)
     return st.selectbox(label, field_options, key=session_key)
