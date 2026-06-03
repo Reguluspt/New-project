@@ -460,10 +460,10 @@ def render_confidence_row(label: str, value, key: str, on_change=None) -> str:
 def options_with_current(options: list[str], current_value: str) -> list[str]:
     cleaned = [str(option).strip() for option in options if str(option).strip()]
     if current_value and current_value not in cleaned:
-        return [current_value, "", *cleaned]
+        return [current_value, *cleaned]
     if current_value:
-        return cleaned
-    return ["", *cleaned]
+        return cleaned or [current_value]
+    return cleaned or [""]
 
 
 def selectbox_from_excel(label: str, field_key: str, options: dict[str, list[str]], session_key: str) -> str:
