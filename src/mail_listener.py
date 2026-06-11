@@ -68,7 +68,7 @@ def _strip_reply_prefixes(subject: str) -> str:
 
 def is_sobo_subject(subject: str) -> bool:
     normalized = _normalize_mail_text(_strip_reply_prefixes(subject))
-    return bool(re.match(r"^\[\s*so\s*bo\s*\]", normalized))
+    return bool(re.match(r"^\[\s*so\s*bo(?:\s*#\s*\d+)?\s*\]", normalized))
 
 
 class EmailMatchExtraction(BaseModel):
@@ -1518,10 +1518,10 @@ async def sync_sobo_emails_from_mailbox(db_path: str | Path | None = None) -> in
     if provider:
         try:
             print(f"Syncing sobo emails via OAuth2 API for provider: {provider}", flush=True)
-            # Fetch up to 150 recent emails containing "[SƠ BỘ]"
+            # Fetch up to 150 recent emails containing the sobo marker.
             oauth_emails = await fetch_emails_via_oauth2(
                 provider,
-                query_contract="[SƠ BỘ]",
+                query_contract="SƠ BỘ",
                 limit=150,
                 unread_only=False,
             )

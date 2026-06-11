@@ -1246,6 +1246,65 @@ async def notify_telegram(text: str) -> None:
         logger.error("Gửi tin nhắn Telegram thất bại: %s", exc)
 
 
+async def _capture_web_entry_error_artifacts(page, error_dir: Path, *, record_id: object, timestamp: int, asset_index: int | None = None) -> list[Path]:
+    suffix = f"_asset_{asset_index}" if asset_index is not None else ""
+    base_name = f"error_web_entry_{record_id}{suffix}_{timestamp}"
+    captured: list[Path] = []
+
+    async def _screenshot(name: str, *, full_page: bool = True) -> None:
+        path = error_dir / f"{base_name}_{name}.png"
+        await page.screenshot(path=str(path), full_page=full_page)
+        captured.append(path)
+
+    # Keep the exact failing state before changing any scroll position.
+    await _screenshot("current")
+
+    try:
+        await page.evaluate(
+            """() => {
+                const isScrollable = (el) => el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth;
+                for (const el of Array.from(document.querySelectorAll("*"))) {
+                    if (isScrollable(el)) {
+                        el.scrollTop = 0;
+                        el.scrollLeft = 0;
+                    }
+                }
+                window.scrollTo(0, 0);
+            }"""
+        )
+        await page.wait_for_timeout(300)
+        await _screenshot("form_top")
+    except Exception as exc:
+        logger.warning("Khong the chup anh phan dau form loi: %s", exc)
+
+    try:
+        await page.evaluate(
+            """() => {
+                const isScrollable = (el) => el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth;
+                for (const el of Array.from(document.querySelectorAll("*"))) {
+                    if (isScrollable(el)) {
+                        el.scrollTop = el.scrollHeight;
+                        el.scrollLeft = 0;
+                    }
+                }
+                window.scrollTo(0, document.body.scrollHeight);
+            }"""
+        )
+        await page.wait_for_timeout(300)
+        await _screenshot("form_bottom")
+    except Exception as exc:
+        logger.warning("Khong the chup anh phan cuoi form loi: %s", exc)
+
+    try:
+        html_path = error_dir / f"{base_name}.html"
+        html_path.write_text(await page.content(), encoding="utf-8")
+        captured.append(html_path)
+    except Exception as exc:
+        logger.warning("Khong the luu HTML trang loi: %s", exc)
+
+    return captured
+
+
 async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> str:
     """Thực hiện toàn bộ quy trình nhập Web Công ty.
 
@@ -1353,10 +1412,15 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
                             error_dir.mkdir(parents=True, exist_ok=True)
                             import time
                             timestamp = int(time.time())
-                            screenshot_path = error_dir / f"error_web_entry_{record_id}_asset_{i+1}_{timestamp}.png"
-                            await page.screenshot(path=str(screenshot_path), full_page=True)
-                            logger.info("Đã lưu ảnh màn hình lỗi tại: %s", screenshot_path)
-                            err_msg += f"\nẢnh lỗi: {screenshot_path.name}"
+                            error_artifacts = await _capture_web_entry_error_artifacts(
+                                page,
+                                error_dir,
+                                record_id=record_id,
+                                asset_index=i + 1,
+                                timestamp=timestamp,
+                            )
+                            logger.info("Đã lưu artifact lỗi tại: %s", ", ".join(str(path) for path in error_artifacts))
+                            err_msg += "\nArtifact lỗi: " + ", ".join(path.name for path in error_artifacts)
                         except Exception as ss_exc:
                             logger.error("Không thể chụp ảnh màn hình: %s", ss_exc)
                             
@@ -1394,10 +1458,14 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
                 error_dir.mkdir(parents=True, exist_ok=True)
                 import time
                 timestamp = int(time.time())
-                screenshot_path = error_dir / f"error_web_entry_{record_id}_{timestamp}.png"
-                await page.screenshot(path=str(screenshot_path), full_page=True)
-                logger.info("Đã lưu ảnh màn hình lỗi tại: %s", screenshot_path)
-                err_msg += f"\nẢnh lỗi: {screenshot_path.name}"
+                error_artifacts = await _capture_web_entry_error_artifacts(
+                    page,
+                    error_dir,
+                    record_id=record_id,
+                    timestamp=timestamp,
+                )
+                logger.info("Đã lưu artifact lỗi tại: %s", ", ".join(str(path) for path in error_artifacts))
+                err_msg += "\nArtifact lỗi: " + ", ".join(path.name for path in error_artifacts)
             except Exception as ss_exc:
                 logger.error("Không thể chụp ảnh màn hình: %s", ss_exc)
                 

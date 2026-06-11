@@ -2,6 +2,7 @@ import os
 import logging
 import html
 import time
+import re
 import unidecode
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -13,6 +14,18 @@ from .email_utils import send_sobo_email_with_result
 from .models import LandCertificateExtraction
 
 logger = logging.getLogger(__name__)
+
+
+def _subject_with_sobo_record_id(subject: str, record_id: int) -> str:
+    text = str(subject or "").strip()
+    updated = re.sub(
+        r"^\[\s*(SƠ\s*BỘ|SO\s*BO)(?:\s*#\s*\d+)?\s*\]",
+        f"[SƠ BỘ #{record_id}]",
+        text,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    return updated if updated != text else f"[SƠ BỘ #{record_id}] - {text}"
 
 # Các trạng thái
 (
@@ -1149,43 +1162,56 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text("❌ Lỗi: Chưa xác định được Email phòng ban. Không thể gửi.")
             return ConversationHandler.END
             
-        result = await send_sobo_email_with_result(
-            email, 
-            subject, 
-            body, 
-            html_body=body_html, 
-            attachment_path=file_path,
-            cc_emails=["bksdn@cenvalue.vn", "truongpnt@cenvalue.vn"]
+        from .database_manager import (
+            create_sobo_record,
+            delete_sobo_record,
+            resolve_records_db_path,
+            update_sobo_record_outbound,
         )
-        
+        db_path = resolve_records_db_path()
+        record_payload = {
+            "asset_type": sobo.get("asset_type"),
+            "asset_sub_type": sobo.get("asset_sub_type"),
+            "source": sobo.get("source"),
+            "so_thua": sobo.get("so_thua"),
+            "so_to": sobo.get("so_to"),
+            "dia_chi": sobo.get("dia_chi"),
+            "link": sobo.get("link"),
+            "email_recipient": sobo.get("email"),
+            "outbound_subject": subject,
+            "outbound_message_id": "",
+            "status": "PENDING",
+            "note": sobo.get("note"),
+            "equipment_name": sobo.get("equipment_name"),
+            "attachment_paths": "\n".join(file_path) if isinstance(file_path, list) else (file_path or ""),
+        }
+        sobo_record_id = await create_sobo_record(db_path, record_payload)
+        subject_with_id = _subject_with_sobo_record_id(subject, sobo_record_id)
+        try:
+            result = await send_sobo_email_with_result(
+                email,
+                subject_with_id,
+                body,
+                html_body=body_html,
+                attachment_path=file_path,
+                cc_emails=["bksdn@cenvalue.vn", "truongpnt@cenvalue.vn"]
+            )
+        except Exception:
+            await delete_sobo_record(db_path, sobo_record_id)
+            raise
+
         if not result.success:
+            await delete_sobo_record(db_path, sobo_record_id)
             await query.edit_message_text(f"Lỗi: {result.user_message}")
             return ConversationHandler.END
 
-        if result.success:
-            await query.edit_message_text("✅ Đã gửi Email Yêu cầu Sơ bộ thành công!")
-            from .database_manager import resolve_records_db_path, create_sobo_record
-            try:
-                db_path = resolve_records_db_path()
-                record_payload = {
-                    "asset_type": sobo.get("asset_type"),
-                    "asset_sub_type": sobo.get("asset_sub_type"),
-                    "source": sobo.get("source"),
-                    "so_thua": sobo.get("so_thua"),
-                    "so_to": sobo.get("so_to"),
-                    "dia_chi": sobo.get("dia_chi"),
-                    "link": sobo.get("link"),
-                    "email_recipient": sobo.get("email"),
-                    "outbound_subject": sobo.get("subject"),
-                    "outbound_message_id": result.message_id,
-                    "status": "PENDING",
-                    "note": sobo.get("note"),
-                    "equipment_name": sobo.get("equipment_name"),
-                    "attachment_paths": "\n".join(file_path) if isinstance(file_path, list) else (file_path or ""),
-                }
-                await create_sobo_record(db_path, record_payload)
-            except Exception as db_exc:
-                logger.error(f"Loi khi luu thong tin so bo vao CSDL: {db_exc}", exc_info=True)
+        await update_sobo_record_outbound(
+            db_path,
+            sobo_record_id,
+            outbound_subject=subject_with_id,
+            outbound_message_id=str(result.message_id or ""),
+        )
+        await query.edit_message_text(f"✅ Đã gửi Email Yêu cầu Sơ bộ thành công! Mã hồ sơ: #{sobo_record_id}")
             
     else:
         await query.edit_message_text("🚫 Đã hủy yêu cầu Gửi Sơ bộ.")

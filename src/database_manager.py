@@ -523,6 +523,16 @@ def _like_pattern(value: str) -> str:
     return f"%{text}%"
 
 
+def _sobo_id_from_subject(subject: str) -> int | None:
+    match = re.search(r"\[\s*(?:sơ\s*bộ|so\s*bo)\s*#\s*(\d+)\s*\]", str(subject or ""), flags=re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
 async def find_record_by_thread_reference(
     db_path: str | Path,
     *,
@@ -843,6 +853,30 @@ async def update_sobo_record_note(db_path: str | Path, record_id: int, note: str
         await db.commit()
 
 
+async def update_sobo_record_outbound(
+    db_path: str | Path,
+    record_id: int,
+    *,
+    outbound_subject: str,
+    outbound_message_id: str = "",
+    outbound_sent_at: str | None = None,
+) -> None:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    if outbound_sent_at is None:
+        outbound_sent_at = datetime.now().isoformat()
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.execute(
+            """
+            UPDATE sobo_records
+            SET outbound_subject = ?, outbound_message_id = ?, outbound_sent_at = ?
+            WHERE id = ?
+            """,
+            (outbound_subject.strip(), outbound_message_id.strip(), outbound_sent_at, int(record_id)),
+        )
+        await db.commit()
+
+
 async def delete_sobo_record(db_path: str | Path, record_id: int) -> None:
     db_path = resolve_records_db_path(db_path)
     await ensure_sobo_schema(db_path)
@@ -870,6 +904,13 @@ async def find_sobo_record_by_thread(db_path: str | Path, ref_blob: str, subject
         db.row_factory = aiosqlite.Row
         
         # 1. Đối soát bằng message_id
+        subject_record_id = _sobo_id_from_subject(subject)
+        if subject_record_id is not None:
+            cursor = await db.execute("SELECT * FROM sobo_records WHERE id = ? LIMIT 1", (subject_record_id,))
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+
         if ref_blob:
             cursor = await db.execute(
                 "SELECT * FROM sobo_records "

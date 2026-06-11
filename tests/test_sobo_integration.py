@@ -137,6 +137,33 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(match_sub)
             self.assertEqual(match_sub["id"], 1)
 
+    async def test_find_sobo_record_by_subject_id_marker(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            db_path = str(Path(tmpdir) / "records.db")
+            await create_sobo_record(
+                db_path,
+                {
+                    "asset_type": "real_estate",
+                    "asset_sub_type": "single",
+                    "source": "Seabank",
+                    "so_thua": "312",
+                    "so_to": "573",
+                    "dia_chi": "Dak Lak",
+                    "email_recipient": "sobo@example.com",
+                    "outbound_subject": "[SO BO #1] - Seabank - Thua dat so 312, to ban do so 573; tai dia chi Dak Lak",
+                    "status": "PENDING",
+                },
+            )
+
+            match = await find_sobo_record_by_thread(
+                db_path,
+                ref_blob="",
+                subject="Re: [SO BO #1] - Da co ket qua so bo",
+            )
+
+            self.assertIsNotNone(match)
+            self.assertEqual(match["id"], 1)
+
     def test_parse_sobo_subject_accepts_non_numeric_map_sheet(self) -> None:
         subject = (
             "Re: [SƠ BỘ] - XỬ LÝ NỢ VCB HÀ TĨNH - "
@@ -318,6 +345,11 @@ class SoboIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res3["source"], "Máy móc thiết bị")
         self.assertEqual(res3["asset_type"], "machinery")
         self.assertEqual(res3["equipment_name"], "Máy cắt CNC")
+
+        res4 = parse_sobo_subject("[SO BO #19] - Seabank - Thua dat so 312, to ban do so 573; tai dia chi Dak Lak")
+        self.assertIsNotNone(res4)
+        self.assertEqual(res4["source"], "Seabank")
+        self.assertEqual(res4["so_thua"], "312")
 
     def test_clean_sobo_reply_subject(self) -> None:
         self.assertEqual(clean_sobo_reply_subject("Re: [SƠ BỘ] - Thửa 1"), "[SƠ BỘ] - Thửa 1")
