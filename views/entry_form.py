@@ -120,7 +120,37 @@ def render(
     excel_template_path: Path,
     excel_dropdown_options: dict,
 ) -> None:
-    st.subheader("Bước 1 - Kiểm tra và xuất form nhập liệu")
+    st.markdown(
+        """
+        <style>
+            .st-key-entry_new_case {
+                display: flex;
+                justify-content: flex-end;
+                padding-top: 2px;
+            }
+            .st-key-entry_new_case button {
+                width: 150px !important;
+                min-height: 40px !important;
+                border-radius: 8px !important;
+                font-size: 14px !important;
+                font-weight: 650 !important;
+                background: var(--app-primary) !important;
+                border-color: var(--app-primary) !important;
+                color: #fff !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    header_title_col, header_action_col = st.columns([0.58, 0.42], vertical_alignment="center")
+    with header_title_col:
+        st.subheader("Bước 1 - Kiểm tra và xuất form nhập liệu")
+    with header_action_col:
+        if st.button("Nhập hồ sơ mới", width="stretch", key="entry_new_case"):
+            reset_entry_workspace()
+            st.session_state.pop("last_saved_case_id", None)
+            st.session_state.pop("active_case_id", None)
+            st.rerun()
     if st.session_state.get("save_success_message"):
         st.success(st.session_state.pop("save_success_message"))
     extraction = st.session_state.get("extraction") or blank_extraction()
@@ -248,9 +278,13 @@ def render(
         placeholder="Vd: 43,12, Tổ 2 An Tân, phường An Khê, tỉnh Gia Lai",
         on_change=normalize_entry_asset_description_input,
     )
-    asset_type = selectbox_from_excel("Loại tài sản", "asset_type", excel_dropdown_options, "entry_asset_type")
-    preliminary_status = selectbox_from_excel("Sơ bộ", "preliminary_status", excel_dropdown_options, "entry_preliminary_status")
-    valuation_purpose = selectbox_from_excel("Mục đích thẩm định", "valuation_purpose", excel_dropdown_options, "entry_valuation_purpose")
+    business_row_1 = st.columns([0.82, 0.52, 1.66])
+    with business_row_1[0]:
+        asset_type = selectbox_from_excel("Loại tài sản", "asset_type", excel_dropdown_options, "entry_asset_type")
+    with business_row_1[1]:
+        preliminary_status = selectbox_from_excel("Sơ bộ", "preliminary_status", excel_dropdown_options, "entry_preliminary_status")
+    with business_row_1[2]:
+        valuation_purpose = selectbox_from_excel("Mục đích thẩm định", "valuation_purpose", excel_dropdown_options, "entry_valuation_purpose")
     
     branch_options = ["cn Đà Nẵng", "cn Miền Bắc", "CN Miền Nam"]
     office_mapping = {
@@ -258,14 +292,22 @@ def render(
         "cn Miền Bắc": ["vp Hưng Yên", "vp Hải Phòng", "vp Hà Nam Ninh", "vp Hà Nội", "vp Nghệ An", "vp Thái Nguyên"],
         "CN Miền Nam": ["vp Cần Thơ", "vp HCM", "vp Đồng Nai", "vp Bình Dương"]
     }
-    valuation_branch = st.selectbox("Chi nhánh thẩm định", branch_options, index=0, key="entry_valuation_branch")
+    business_row_2 = st.columns([0.82, 0.52, 1.66])
+    with business_row_2[0]:
+        valuation_branch = st.selectbox("Chi nhánh thẩm định", branch_options, index=0, key="entry_valuation_branch")
     current_offices = office_mapping.get(valuation_branch, ["vp Đà Nẵng"])
-    office = st.selectbox("Chọn Văn Phòng", current_offices, index=0, key=f"entry_office_{valuation_branch}")
+    with business_row_2[1]:
+        office = st.selectbox("Chọn Văn Phòng", current_offices, index=0, key=f"entry_office_{valuation_branch}")
+    with business_row_2[2]:
+        source = selectbox_from_excel("Nguồn/đối tác", "source", excel_dropdown_options, "entry_source")
 
-    source = selectbox_from_excel("Nguồn/đối tác", "source", excel_dropdown_options, "entry_source")
-    valuation_fee_number = st.text_input("Phí thẩm định", key="entry_valuation_fee_number", on_change=_format_fee_input)
-    advance_payment = st.text_input("Tạm ứng", key="entry_advance_payment")
-    valuation_staff = selectbox_from_excel("Chuyên viên nghiệp vụ", "valuation_staff", excel_dropdown_options, "entry_valuation_staff")
+    business_row_3 = st.columns([0.82, 0.52, 1.66])
+    with business_row_3[0]:
+        valuation_fee_number = st.text_input("Phí thẩm định", key="entry_valuation_fee_number", on_change=_format_fee_input)
+    with business_row_3[1]:
+        advance_payment = st.text_input("Tạm ứng", key="entry_advance_payment")
+    with business_row_3[2]:
+        valuation_staff = selectbox_from_excel("Chuyên viên nghiệp vụ", "valuation_staff", excel_dropdown_options, "entry_valuation_staff")
     personal_note = st.text_area("Ghi chú cá nhân", height=68, key="entry_personal_note")
 
     # --- Thông tin Tài sản (GCN) — ẩn trong expander mặc định đóng ---
@@ -321,7 +363,7 @@ def render(
 
     save_col, export_col, mail_col, web_col = st.columns(4)
     with save_col:
-        if st.button("Lưu hồ sơ vào SQLite", width="stretch"):
+        if st.button("Lưu SQLite", width="stretch"):
             try:
                 case_id = create_case(sqlite_db_path, output_values)
                 folder = case_folder(
@@ -358,22 +400,21 @@ def render(
                         "original_file_path": "\n".join(saved_original_paths),
                     },
                 )
-                reset_entry_workspace()
                 st.session_state["last_saved_case_id"] = case_id
                 st.session_state["active_case_id"] = case_id
-                st.session_state["save_success_message"] = f"Đã lưu hồ sơ #{case_id} vào SQLite. Các nút gửi mail/Web sẽ ưu tiên dùng hồ sơ vừa lưu nếu form đang trống."
+                st.session_state["save_success_message"] = f"Đã lưu hồ sơ #{case_id} vào SQLite. Thông tin trên form được giữ nguyên để anh kiểm tra, xuất Excel hoặc gửi mail/Web."
                 st.rerun()
             except Exception as exc:
                 st.error(f"Lưu SQLite thất bại: {exc}")
 
     with export_col:
-        export_clicked = st.button("Xuất ra Form nhập liệu Excel", type="primary", width="stretch")
+        export_clicked = st.button("Xuất Excel", type="primary", width="stretch")
 
     with mail_col:
-        mail_clicked = st.button("Gửi mail yêu cầu định giá", width="stretch", icon=":material/mail:")
+        mail_clicked = st.button("Gửi mail", width="stretch", icon=":material/mail:")
 
     with web_col:
-        web_clicked = st.button("Gửi yêu cầu lên Web", width="stretch", icon=":material/language:")
+        web_clicked = st.button("Gửi Web", width="stretch", icon=":material/language:")
 
     if web_clicked:
         web_payload, saved_case_id, used_saved_case = _entry_action_payload(sqlite_db_path, output_values)

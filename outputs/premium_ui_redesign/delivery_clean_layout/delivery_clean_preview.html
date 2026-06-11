@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chuyển Phát - Clean Fluent Preview</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #fff;
+      --surface-2: #f8fafc;
+      --surface-3: #eef3ff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe3f3;
+      --line-2: #e8eef8;
+      --brand: #0057d8;
+      --fluent: #0f6cbd;
+      --green: #047857;
+      --green-soft: #e7f8ef;
+      --orange: #c2410c;
+      --orange-soft: #fff7ed;
+      --red: #be123c;
+      --red-soft: #fff1f2;
+      --shadow: 0 18px 50px rgba(22, 39, 70, .10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+    .screen {
+      width: 1440px;
+      height: 1120px;
+      padding: 18px 22px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 78% 0%, rgba(0, 87, 216, .07), transparent 28%),
+        var(--bg);
+    }
+    .app {
+      height: 100%;
+      background: var(--surface);
+      border: 1px solid #ccd6e8;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-rows: 64px 1fr;
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: 260px 1fr 300px;
+      align-items: center;
+      gap: 18px;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.95);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 850;
+    }
+    .brand b { display: block; font-size: 18px; line-height: 1.1; }
+    .brand span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+    nav { display: flex; gap: 2px; align-items: center; height: 100%; }
+    nav a {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      padding: 0 13px;
+      color: #334155;
+      font-size: 14px;
+      text-decoration: none;
+      position: relative;
+    }
+    nav a.active {
+      color: #003c96;
+      font-weight: 700;
+    }
+    nav a.active::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 0;
+      height: 3px;
+      border-radius: 999px 999px 0 0;
+      background: var(--brand);
+    }
+    .top-actions { display: flex; justify-content: end; gap: 10px; align-items: center; }
+    .global-search {
+      width: 210px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #dbeafe;
+      color: #1e40af;
+      display: grid;
+      place-items: center;
+      font-weight: 850;
+    }
+    main {
+      min-height: 0;
+      padding: 20px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 12px;
+    }
+    h1 { margin: 0; font-size: 32px; line-height: 1.08; letter-spacing: -.02em; }
+    h2 { margin: 0; font-size: 18px; line-height: 1.25; }
+    h3 {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .caption { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      min-height: 82px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+    .metric label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .metric b {
+      display: block;
+      margin-top: 8px;
+      font-size: 27px;
+      line-height: 1;
+    }
+    .metric.primary {
+      color: #fff;
+      background: var(--fluent);
+      border-color: var(--fluent);
+      box-shadow: 0 8px 20px rgba(15, 108, 189, .22);
+    }
+    .metric.primary label { color: rgba(255,255,255,.78); }
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+      gap: 14px;
+    }
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .panel-head {
+      min-height: 50px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfdff;
+    }
+    .panel-head .meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr 170px 130px;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line-2);
+      background: var(--surface-2);
+    }
+    .input, .select, .button {
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+    .input { color: var(--muted); }
+    .select { justify-content: space-between; color: #334155; }
+    .button {
+      justify-content: center;
+      color: var(--brand);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .button.primary {
+      color: #fff;
+      background: var(--fluent);
+      border-color: var(--fluent);
+      box-shadow: 0 3px 8px rgba(15, 108, 189, .22);
+    }
+    .button.danger {
+      color: var(--red);
+      background: var(--red-soft);
+      border-color: #fecdd3;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 13px;
+    }
+    th {
+      height: 38px;
+      padding: 0 10px;
+      text-align: center;
+      color: #475569;
+      background: var(--surface-3);
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid rgba(219, 227, 243, .72);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    td {
+      height: 86px;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line-2);
+      border-right: 1px solid rgba(232, 238, 248, .78);
+      vertical-align: top;
+      overflow: hidden;
+    }
+    th:last-child, td:last-child { border-right: 0; }
+    tr.selected td {
+      background: linear-gradient(180deg, #f8fbff 0%, #f3f7ff 100%);
+    }
+    tr.selected td:first-child { box-shadow: inset 4px 0 0 var(--brand); }
+    .strong { font-weight: 820; color: #0f2d5c; }
+    .muted { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.35; }
+    .id { color: #dc2626; font-weight: 850; }
+    .details {
+      white-space: pre-line;
+      line-height: 1.38;
+      color: #1f2937;
+    }
+    .pill {
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--green);
+      background: var(--green-soft);
+      border: 1px solid #a7f3d0;
+    }
+    .pill.draft {
+      color: var(--fluent);
+      background: #eaf1ff;
+      border-color: #bfd3ff;
+    }
+    .side {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 0;
+    }
+    .form-body {
+      min-height: 0;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scrollbar-gutter: stable;
+    }
+    .field {
+      min-height: 50px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--surface-2);
+      padding: 7px 10px;
+      display: grid;
+      align-content: center;
+      gap: 3px;
+    }
+    .field.tall {
+      min-height: 150px;
+      align-content: start;
+      padding-top: 10px;
+    }
+    .field label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .field b {
+      font-size: 13px;
+      line-height: 1.35;
+      white-space: pre-line;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--line);
+      background: #fbfcff;
+    }
+    .empty-state {
+      display: grid;
+      place-items: center;
+      min-height: 280px;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="screen">
+    <div class="app">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo">C</div>
+          <div><b>Hệ Thống Thẩm Định</b><span>Phòng Quản Lý Tài Chính</span></div>
+        </div>
+        <nav>
+          <a href="#">Dashboard</a>
+          <a href="#">Nhập Hồ Sơ</a>
+          <a href="#">Quản Lý Hồ Sơ</a>
+          <a href="#">Tổ Chức</a>
+          <a class="active" href="#">Chuyển Phát</a>
+          <a href="#">Sổ Bộ</a>
+          <a href="#">Templates</a>
+          <a href="#">Cài Đặt</a>
+        </nav>
+        <div class="top-actions"><div class="global-search">⌕ Tìm kiếm...</div><div class="avatar">AD</div></div>
+      </div>
+
+      <main>
+        <div>
+          <h1>Danh bạ chuyển phát</h1>
+          <div class="caption">Danh sách người nhận hồ sơ phát hành chứng thư. Có thể chỉnh sửa trực tiếp và lưu lại vào danh bạ.</div>
+        </div>
+
+        <div class="summary">
+          <section class="metric primary"><label>Người nhận đã lưu</label><b>36</b></section>
+          <section class="metric"><label>Dùng trong tháng</label><b>18</b></section>
+          <section class="metric"><label>Thiếu điện thoại</label><b>2</b></section>
+          <section class="metric"><label>Cập nhật gần nhất</label><b style="font-size:22px;">06/06</b></section>
+        </div>
+
+        <div class="workspace">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Danh sách người nhận</h2>
+                <div class="meta">Data editor gồm ID, tên gợi nhớ và thông tin chi tiết người nhận</div>
+              </div>
+              <span class="pill">36 bản ghi</span>
+            </div>
+            <div class="toolbar">
+              <div class="input">⌕ Tìm theo tên gợi nhớ, địa chỉ, số điện thoại...</div>
+              <div class="select">Sắp xếp: Tên A-Z <span>⌄</span></div>
+              <div class="button primary">Tạo danh bạ mới</div>
+            </div>
+            <table>
+              <colgroup>
+                <col style="width:76px"><col style="width:240px"><col><col style="width:120px">
+              </colgroup>
+              <thead>
+                <tr><th>ID</th><th>Tên gợi nhớ</th><th>Thông tin chi tiết</th><th>Trạng thái</th></tr>
+              </thead>
+              <tbody>
+                <tr class="selected">
+                  <td><div class="id">#12</div></td>
+                  <td><div class="strong">VP Gia Lai</div><div class="muted">Cột trái khi chọn người nhận</div></td>
+                  <td><div class="details">VP Gia Lai
+90/60/3 Trường Chinh, Pleiku
+0905 226 968</div></td>
+                  <td><span class="pill">Đủ dữ liệu</span></td>
+                </tr>
+                <tr>
+                  <td><div class="id">#11</div></td>
+                  <td><div class="strong">BIDV Quy Nhơn</div><div class="muted">Phòng tín dụng doanh nghiệp</div></td>
+                  <td><div class="details">BIDV Quy Nhơn - Anh Minh
+72 Lê Duẩn, Quy Nhơn
+0914 118 203</div></td>
+                  <td><span class="pill">Đủ dữ liệu</span></td>
+                </tr>
+                <tr>
+                  <td><div class="id">#10</div></td>
+                  <td><div class="strong">VCB Đắk Lắk</div><div class="muted">Điểm nhận phát hành</div></td>
+                  <td><div class="details">VCB Đắk Lắk
+Buôn Ma Thuột
+0262 388 8999</div></td>
+                  <td><span class="pill">Đủ dữ liệu</span></td>
+                </tr>
+                <tr>
+                  <td><div class="id">#09</div></td>
+                  <td><div class="strong">Vietinbank Kon Tum</div><div class="muted">Bổ sung số điện thoại</div></td>
+                  <td><div class="details">Vietinbank Kon Tum
+TP. Kon Tum</div></td>
+                  <td><span class="pill" style="color:var(--orange);background:var(--orange-soft);border-color:#fed7aa;">Thiếu SĐT</span></td>
+                </tr>
+                <tr>
+                  <td><div class="id">#08</div></td>
+                  <td><div class="strong">Hành chính Đà Nẵng</div><div class="muted">Mặc định nội bộ</div></td>
+                  <td><div class="details">Phòng Hành chính
+Đà Nẵng
+0903 770 115</div></td>
+                  <td><span class="pill">Đủ dữ liệu</span></td>
+                </tr>
+                <tr>
+                  <td><div class="muted">Mới</div></td>
+                  <td><div class="strong">VP Pleiku</div><div class="muted">Dòng đang tạo mới</div></td>
+                  <td><div class="details">VP Pleiku
+90 Trường Chinh, Pleiku
+0901 889 221</div></td>
+                  <td><span class="pill draft">Nháp</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <aside class="panel side">
+            <div class="panel-head">
+              <div>
+                <h2>Tạo danh bạ mới</h2>
+                <div class="meta">Thêm người nhận mới vào danh bạ chuyển phát</div>
+              </div>
+            </div>
+            <div class="form-body">
+              <div class="field"><label>ID</label><b>Tự tạo sau khi lưu</b></div>
+              <div class="field"><label>Tên gợi nhớ *</label><b>VP Pleiku</b></div>
+              <div class="field tall"><label>Thông tin chi tiết</label><b>VP Gia Lai
+VP Pleiku
+90 Trường Chinh, Pleiku
+0901 889 221</b></div>
+              <div class="field"><label>Chuẩn hóa khi lưu</label><b>format_recipient_info()</b></div>
+              <div class="field"><label>Nơi sử dụng</label><b>Dialog gửi mail phát hành chứng thư</b></div>
+              <div class="field"><label>Ghi chú kiểm tra</label><b>Tên gợi nhớ và thông tin chi tiết là bắt buộc khi tạo mới.</b></div>
+            </div>
+            <div class="actions">
+              <div class="button primary">Tạo mới</div>
+              <div class="button">Lưu thay đổi</div>
+              <div class="button danger">Xóa dòng</div>
+              <div class="button">Làm mới</div>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

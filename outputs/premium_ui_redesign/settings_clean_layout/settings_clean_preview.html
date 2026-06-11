@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cài đặt - Clean Fluent Preview</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #fff;
+      --surface-2: #f8fafc;
+      --surface-3: #eef3ff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe3f3;
+      --line-2: #e8eef8;
+      --brand: #0057d8;
+      --fluent: #0f6cbd;
+      --green: #047857;
+      --green-soft: #e7f8ef;
+      --orange: #c2410c;
+      --orange-soft: #fff7ed;
+      --red: #be123c;
+      --red-soft: #fff1f2;
+      --shadow: 0 18px 50px rgba(22, 39, 70, .10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+    .screen {
+      width: 1440px;
+      height: 1120px;
+      padding: 18px 22px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 78% 0%, rgba(0, 87, 216, .07), transparent 28%),
+        var(--bg);
+    }
+    .app {
+      height: 100%;
+      background: var(--surface);
+      border: 1px solid #ccd6e8;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-rows: 64px 1fr;
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: 260px 1fr 300px;
+      align-items: center;
+      gap: 18px;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.95);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 850;
+    }
+    .brand b { display: block; font-size: 18px; line-height: 1.1; }
+    .brand span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+    nav { display: flex; gap: 2px; align-items: center; height: 100%; }
+    nav a {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      padding: 0 13px;
+      color: #334155;
+      font-size: 14px;
+      text-decoration: none;
+      position: relative;
+    }
+    nav a.active { color: #003c96; font-weight: 700; }
+    nav a.active::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 0;
+      height: 3px;
+      border-radius: 999px 999px 0 0;
+      background: var(--brand);
+    }
+    .top-actions { display: flex; justify-content: end; gap: 10px; align-items: center; }
+    .global-search {
+      width: 210px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #dbeafe;
+      color: #1e40af;
+      display: grid;
+      place-items: center;
+      font-weight: 850;
+    }
+    main {
+      min-height: 0;
+      padding: 20px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 12px;
+    }
+    .page-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 32px; line-height: 1.08; letter-spacing: -.02em; }
+    h2 { margin: 0; font-size: 18px; line-height: 1.25; }
+    h3 {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .caption { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .save-state {
+      min-width: 260px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdff;
+      color: #475569;
+      font-size: 13px;
+      text-align: right;
+    }
+    .save-state b { color: var(--green); }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      min-height: 82px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+    .metric label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .metric b {
+      display: block;
+      margin-top: 8px;
+      font-size: 25px;
+      line-height: 1;
+    }
+    .metric.primary {
+      color: #fff;
+      background: var(--fluent);
+      border-color: var(--fluent);
+      box-shadow: 0 8px 20px rgba(15, 108, 189, .22);
+    }
+    .metric.primary label { color: rgba(255,255,255,.78); }
+    .metric.warn { border-left: 5px solid #f97316; background: #fffaf5; }
+    .metric.ok { border-left: 5px solid #10b981; }
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr) 380px;
+      gap: 14px;
+    }
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .side {
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+    }
+    .setting-tab {
+      min-height: 58px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: start;
+      color: #334155;
+      border: 1px solid transparent;
+    }
+    .setting-tab.active {
+      background: #edf4ff;
+      border-color: #bfd7ff;
+      box-shadow: inset 4px 0 0 var(--brand);
+    }
+    .setting-tab b { display: block; font-size: 14px; color: #0f172a; }
+    .setting-tab span { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); line-height: 1.35; }
+    .tab-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #f1f5f9;
+      color: var(--fluent);
+    }
+    svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .backup-mini {
+      padding: 12px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .main-panel {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+    .panel-head {
+      min-height: 54px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfdff;
+    }
+    .panel-head .meta { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .form-grid {
+      min-height: 0;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-auto-rows: min-content;
+      gap: 12px;
+      overflow: hidden;
+    }
+    .field {
+      min-height: 78px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+    .field.wide { grid-column: 1 / -1; }
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .fake-input {
+      margin-top: 9px;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border: 1px solid #cbd8ee;
+      border-radius: 8px;
+      background: #fff;
+      color: #0f172a;
+      font-size: 13px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .path-ok {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .status-card {
+      min-height: 84px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+    .status-card b { display: block; font-size: 14px; }
+    .status-card span { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .pill {
+      min-height: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .pill.ok { color: #047857; background: #e7f8ef; border: 1px solid #a7f3d0; }
+    .pill.warn { color: #b45309; background: #fff7ed; border: 1px solid #fed7aa; }
+    .pill.err { color: #be123c; background: #fff1f2; border: 1px solid #fecdd3; }
+    .dropdown-editor {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+    .choice-list {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .choice {
+      min-height: 44px;
+      padding: 9px 11px;
+      border-bottom: 1px solid var(--line-2);
+      font-size: 13px;
+      font-weight: 760;
+    }
+    .choice:last-child { border-bottom: 0; }
+    .choice.active { color: #004fb8; background: #edf4ff; }
+    .text-area {
+      min-height: 178px;
+      padding: 12px;
+      border: 1px solid #cbd8ee;
+      border-radius: 10px;
+      background: #fbfdff;
+      color: #0f172a;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .panel-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      padding: 12px;
+      border-top: 1px solid var(--line);
+      background: #fbfdff;
+    }
+    .button {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      color: #064fb0;
+      font-size: 13px;
+      font-weight: 780;
+    }
+    .button.primary {
+      border-color: #0f6cbd;
+      background: #0f6cbd;
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(15, 108, 189, .18);
+    }
+    .button.danger {
+      color: #be123c;
+      background: #fff5f5;
+      border-color: #fecdd3;
+    }
+    .right {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto auto;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    .health-card, .oauth-card, .data-card {
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdff;
+    }
+    .check-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line-2);
+      font-size: 13px;
+    }
+    .check-row:last-child { border-bottom: 0; }
+    .check-row span { color: var(--muted); font-size: 12px; display: block; margin-top: 3px; }
+    .oauth-grid {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .provider {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+    .provider b { display: block; font-size: 13px; }
+    .provider span { display: block; margin-top: 7px; color: var(--muted); font-size: 12px; }
+    .danger-zone {
+      margin-top: 8px;
+      padding: 8px;
+      border: 1px solid #fecdd3;
+      border-radius: 10px;
+      background: #fff1f2;
+      color: #9f1239;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .data-card .button { min-height: 34px; }
+    .data-card .caption { margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="screen">
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo">AV</div>
+          <div>
+            <b>AVA Appraiser</b>
+            <span>Hồ sơ thẩm định giá</span>
+          </div>
+        </div>
+        <nav>
+          <a>Dashboard</a>
+          <a>Quản lý Hồ Sơ</a>
+          <a>Nhập Hồ Sơ</a>
+          <a>Tổ Chức</a>
+          <a>Chuyển phát</a>
+          <a>Sơ Bộ</a>
+          <a class="active">Cài đặt</a>
+        </nav>
+        <div class="top-actions">
+          <div class="global-search">Tìm cấu hình...</div>
+          <div class="avatar">KT</div>
+        </div>
+      </header>
+
+      <main>
+        <section class="page-head">
+          <div>
+            <h1>Cài đặt hệ thống</h1>
+            <div class="caption">Quản lý template, danh sách chọn Excel, sao lưu dữ liệu và cấu hình OAuth2.</div>
+          </div>
+          <div class="save-state">Cấu hình cập nhật <b>09:45</b> hôm nay</div>
+        </section>
+
+        <section class="summary">
+          <div class="metric primary">
+            <label>Nhóm cấu hình</label>
+            <b>4</b>
+          </div>
+          <div class="metric ok">
+            <label>Template Word</label>
+            <b>12 file</b>
+          </div>
+          <div class="metric ok">
+            <label>SQLite</label>
+            <b>OK</b>
+          </div>
+          <div class="metric warn">
+            <label>OAuth2</label>
+            <b>Chưa đủ</b>
+          </div>
+        </section>
+
+        <section class="workspace">
+          <aside class="panel side">
+            <div>
+              <div class="setting-tab active">
+                <div class="tab-icon"><svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/></svg></div>
+                <div><b>Cấu hình Template</b><span>Excel, Word cá nhân, Word tổ chức</span></div>
+              </div>
+              <div class="setting-tab">
+                <div class="tab-icon"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div>
+                <div><b>Sức khỏe hệ thống</b><span>SQLite, PDF, AI provider</span></div>
+              </div>
+              <div class="setting-tab">
+                <div class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></div>
+                <div><b>Quản trị dữ liệu</b><span>Sao lưu, khôi phục, xóa trắng</span></div>
+              </div>
+              <div class="setting-tab">
+                <div class="tab-icon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.2 1.2"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.2-1.2"/></svg></div>
+                <div><b>Tích hợp OAuth2</b><span>Google, Outlook, Mail Sơ bộ</span></div>
+              </div>
+            </div>
+            <div></div>
+            <div class="backup-mini">
+              Bản sao lưu gần nhất<br>
+              <b>backup_20260606_0912.zip</b><br>
+              2.4 MB, không gồm thư mục tài liệu.
+            </div>
+          </aside>
+
+          <div class="panel main-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Cấu hình template</h2>
+                <div class="meta">Đường dẫn form Excel, thư mục mẫu Word và danh sách chọn dùng trong form nhập liệu.</div>
+              </div>
+              <span class="pill ok">Đang dùng</span>
+            </div>
+
+            <div class="form-grid">
+              <div class="field wide">
+                <label>File mẫu Excel</label>
+                <div class="fake-input">E:\New project\samples\form_nhap_lieu.xlsx</div>
+              </div>
+              <div class="field">
+                <label>Thư mục mẫu Word cá nhân</label>
+                <div class="fake-input">samples\templates\individual</div>
+              </div>
+              <div class="field">
+                <label>Thư mục mẫu Word tổ chức</label>
+                <div class="fake-input">samples\templates\organization</div>
+              </div>
+              <div class="field">
+                <label>Người chỉnh sửa template</label>
+                <div class="fake-input">Truon</div>
+              </div>
+              <div class="field">
+                <label>Trạng thái đường dẫn</label>
+                <div class="fake-input">Form Excel đã tìm thấy</div>
+              </div>
+
+              <div class="path-ok">
+                <div class="status-card">
+                  <span class="pill ok">OK</span>
+                  <b>Form Excel</b>
+                  <span>Đọc được danh sách chọn từ vùng dữ liệu mẫu.</span>
+                </div>
+                <div class="status-card">
+                  <span class="pill ok">OK</span>
+                  <b>Mẫu cá nhân</b>
+                  <span>6 file .docx sẵn sàng để xuất hồ sơ.</span>
+                </div>
+                <div class="status-card">
+                  <span class="pill warn">Cần rà soát</span>
+                  <b>Mẫu tổ chức</b>
+                  <span>Thiếu nhãn hiển thị cho 1 template mới.</span>
+                </div>
+              </div>
+
+              <div class="dropdown-editor">
+                <div>
+                  <h3>Danh sách chọn trong Form Excel</h3>
+                  <div class="caption">Mỗi nhóm lưu lại vào vùng danh sách của file mẫu.</div>
+                  <div class="choice-list">
+                    <div class="choice active">Nguồn / đối tác</div>
+                    <div class="choice">Loại tài sản</div>
+                    <div class="choice">Mục đích thẩm định</div>
+                    <div class="choice">Chuyên viên nghiệp vụ</div>
+                  </div>
+                </div>
+                <div>
+                  <h3>Giá trị danh sách</h3>
+                  <div class="text-area">VCB Gia Lai<br>BIDV Quy Nhơn<br>Vietinbank Kon Tum<br>VCB Đắk Lắk<br>Agribank Gia Lai<br>Khách hàng cá nhân</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-actions">
+              <div class="button">Kiểm tra đường dẫn</div>
+              <div class="button">Lưu danh sách chọn</div>
+              <div class="button primary">Lưu cấu hình template</div>
+            </div>
+          </div>
+
+          <aside class="panel right">
+            <div class="health-card">
+              <div class="panel-head" style="padding:0 0 10px; border:0; min-height:auto; background:transparent;">
+                <div><h2>Sức khỏe hệ thống</h2><div class="meta">Tóm tắt kiểm tra nhanh</div></div>
+              </div>
+              <div class="check-row"><div><b>Cơ sở dữ liệu</b><span>app_data.sqlite</span></div><span class="pill ok">OK</span></div>
+              <div class="check-row"><div><b>LibreOffice PDF</b><span>Đã tìm thấy soffice.exe</span></div><span class="pill ok">OK</span></div>
+              <div class="check-row"><div><b>Gemini API</b><span>Chưa có GEMINI_API_KEY</span></div><span class="pill warn">Thiếu</span></div>
+            </div>
+
+            <div class="oauth-card">
+              <h2>Tích hợp OAuth2</h2>
+              <div class="caption">Cấu hình gửi/nhận mail bằng Google Workspace, Outlook và Mail Sơ bộ.</div>
+              <div class="oauth-grid">
+                <div class="provider">
+                  <b>Google Gmail API</b>
+                  <span class="pill err">Chưa liên kết</span>
+                </div>
+                <div class="provider">
+                  <b>Outlook Graph API</b>
+                  <span class="pill err">Chưa liên kết</span>
+                </div>
+              </div>
+              <div class="field wide" style="margin-top:10px; min-height:72px;">
+                <label>Redirect URI</label>
+                <div class="fake-input">http://localhost:8501/</div>
+              </div>
+              <div class="field wide" style="margin-top:10px; min-height:72px;">
+                <label>Mail Sơ bộ</label>
+                <div class="fake-input">Google Gmail API - hostktpro@gmail.com</div>
+              </div>
+            </div>
+
+            <div class="data-card">
+              <h2>Quản trị dữ liệu</h2>
+              <div class="caption">Sao lưu, khôi phục và xóa trắng dữ liệu hệ thống.</div>
+              <div class="panel-actions" style="grid-template-columns:1fr; gap:8px; padding:8px 0 0; border:0; background:transparent;">
+                <div class="button primary">Tạo bản sao lưu mới</div>
+                <div class="button">Khôi phục từ file ZIP</div>
+                <div class="button danger">Xóa toàn bộ dữ liệu</div>
+              </div>
+              <div class="danger-zone">Khu vực xóa trắng yêu cầu nhập chính xác `XAC NHAN XOA` trước khi thực hiện.</div>
+            </div>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

@@ -445,3 +445,161 @@ def render(
 
     with tab_oauth:
         render_oauth2_integration()
+
+
+def render(
+    config_path: Path,
+    template_config: dict[str, object],
+) -> None:
+    st.markdown(
+        """
+        <style>
+            .settings-title {
+                margin: 0;
+                color: var(--app-text);
+                font-size: 30px;
+                line-height: 36px;
+                font-weight: 750;
+            }
+            .settings-caption {
+                margin: 4px 0 14px;
+                color: var(--app-muted);
+                font-size: 13px;
+                line-height: 1.45;
+            }
+            .settings-kpi-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
+                margin: 10px 0 14px;
+            }
+            .settings-kpi {
+                min-height: 82px;
+                padding: 14px 16px;
+                border: 1px solid var(--app-outline);
+                border-radius: 12px;
+                background: #fff;
+            }
+            .settings-kpi.primary {
+                color: #fff;
+                background: var(--app-primary);
+                border-color: var(--app-primary);
+                box-shadow: 0 8px 18px rgba(15,108,189,.18);
+            }
+            .settings-kpi label {
+                display: block;
+                color: var(--app-muted);
+                font-size: 12px;
+                font-weight: 760;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+            }
+            .settings-kpi.primary label { color: rgba(255,255,255,.78); }
+            .settings-kpi b {
+                display: block;
+                margin-top: 8px;
+                font-size: 25px;
+                line-height: 1;
+            }
+            .settings-nav-note {
+                padding: 12px;
+                border: 1px solid var(--app-outline);
+                border-radius: 12px;
+                background: #f8fafc;
+                color: var(--app-muted);
+                font-size: 12px;
+                line-height: 1.45;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<h1 class="settings-title">Cài đặt hệ thống</h1>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="settings-caption">Quản lý template, danh sách chọn Excel, sao lưu dữ liệu và cấu hình OAuth2.</div>',
+        unsafe_allow_html=True,
+    )
+
+    excel_path = Path(str(template_config["excel_template_path"]))
+    individual_dir = Path(str(template_config["individual_template_dir"]))
+    organization_dir = Path(str(template_config["organization_template_dir"]))
+    template_count = len(list_docx_templates(individual_dir)) + len(list_docx_templates(organization_dir))
+    sqlite_state = "OK" if SQLITE_DATABASE.exists() else "Thiếu"
+    st.markdown(
+        f"""
+        <div class="settings-kpi-grid">
+            <div class="settings-kpi primary"><label>Nhóm cấu hình</label><b>4</b></div>
+            <div class="settings-kpi"><label>Template Word</label><b>{template_count} file</b></div>
+            <div class="settings-kpi"><label>SQLite</label><b>{sqlite_state}</b></div>
+            <div class="settings-kpi"><label>OAuth2</label><b>Cấu hình</b></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    nav_col, content_col = st.columns([0.28, 0.72], gap="large")
+    with nav_col:
+        selected_section = st.radio(
+            "Nhóm cài đặt",
+            ["Cấu hình Template", "Sức khỏe hệ thống", "Quản trị dữ liệu", "Tích hợp OAuth2"],
+            key="settings_section",
+        )
+        st.markdown(
+            """
+            <div class="settings-nav-note">
+                Các thao tác nguy hiểm như khôi phục hoặc xóa trắng vẫn giữ xác nhận như code gốc.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with content_col:
+        if selected_section == "Cấu hình Template":
+            st.subheader("Cấu hình template")
+            with st.form("template_config_form_v2"):
+                excel_template_path = st.text_input(
+                    "File mẫu Excel",
+                    value=str(template_config["excel_template_path"]),
+                )
+                individual_template_dir = st.text_input(
+                    "Thư mục mẫu Word cá nhân",
+                    value=str(template_config["individual_template_dir"]),
+                )
+                organization_template_dir = st.text_input(
+                    "Thư mục mẫu Word tổ chức",
+                    value=str(template_config["organization_template_dir"]),
+                )
+                template_editor_name = st.text_input(
+                    "Tên người chỉnh sửa template",
+                    value=str(template_config.get("template_editor_name", "")),
+                )
+                save_clicked = st.form_submit_button("Lưu cấu hình template", type="primary")
+
+            if save_clicked:
+                new_config = {
+                    "excel_template_path": excel_template_path.strip(),
+                    "individual_template_dir": individual_template_dir.strip(),
+                    "organization_template_dir": organization_template_dir.strip(),
+                    "template_editor_name": template_editor_name.strip() or os.getenv("USERNAME", "Unknown"),
+                    "locked_templates": list(template_config.get("locked_templates", [])),
+                    "template_labels": dict(template_config.get("template_labels", {})),
+                }
+                save_template_config(config_path, new_config)
+                st.success("Đã lưu cấu hình template.")
+                st.rerun()
+
+            editor_name = str(template_config.get("template_editor_name", os.getenv("USERNAME", "Unknown")))
+            st.subheader("Trạng thái đường dẫn")
+            st.caption(f"Form Excel: {excel_path}")
+            st.caption(f"Người chỉnh sửa hiện tại: {editor_name}")
+            if excel_path.exists():
+                st.success("Đã tìm thấy file form Excel.")
+            else:
+                st.error("Không tìm thấy file form Excel theo cấu hình hiện tại.")
+            render_dropdown_option_manager(excel_path)
+        elif selected_section == "Sức khỏe hệ thống":
+            render_system_health_check(template_config)
+        elif selected_section == "Quản trị dữ liệu":
+            render_data_management()
+        else:
+            render_oauth2_integration()

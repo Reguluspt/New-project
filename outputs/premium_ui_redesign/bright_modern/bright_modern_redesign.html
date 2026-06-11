@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bright Modern UI Redesign</title>
+  <style>
+    :root {
+      --bg: #eef7ff;
+      --shell: #ffffff;
+      --panel: #ffffff;
+      --soft: #f3f8fc;
+      --ink: #102033;
+      --muted: #617184;
+      --line: #d7e5ef;
+      --cyan: #00a9c7;
+      --cyan-soft: #dff8fb;
+      --mint: #10b981;
+      --mint-soft: #dcfce7;
+      --blue: #2563eb;
+      --blue-soft: #e6efff;
+      --amber: #f59e0b;
+      --amber-soft: #fff3d7;
+      --rose: #ef4444;
+      --rose-soft: #ffe4e6;
+      --violet: #7c3aed;
+      --shadow: 0 24px 70px rgba(20, 88, 130, .14);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Aptos", "Segoe UI", Arial, sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+
+    body:before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(0, 169, 199, .18), transparent 32%),
+        radial-gradient(circle at 82% 12%, rgba(16, 185, 129, .16), transparent 28%),
+        linear-gradient(90deg, rgba(37, 99, 235, .04) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(37, 99, 235, .035) 1px, transparent 1px);
+      background-size: auto, auto, 42px 42px, 42px 42px;
+    }
+
+    .screen {
+      width: 1440px;
+      height: 900px;
+      display: none;
+      padding: 22px;
+      overflow: hidden;
+    }
+
+    .screen.active { display: block; }
+
+    .app {
+      height: 100%;
+      background: rgba(255, 255, 255, .94);
+      border: 1px solid rgba(161, 205, 228, .9);
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-rows: 72px 1fr;
+      backdrop-filter: blur(14px);
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 252px 1fr 300px;
+      align-items: center;
+      gap: 18px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .86);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mark {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      box-shadow: 0 10px 24px rgba(0, 169, 199, .24);
+    }
+
+    .brand b { display: block; font-size: 17px; }
+    .brand small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+
+    nav {
+      display: flex;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    nav span {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 14px;
+      color: #3c4c60;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    nav .on {
+      color: #07566a;
+      background: var(--cyan-soft);
+      border-color: #a7e7ef;
+      font-weight: 800;
+      box-shadow: inset 0 -2px 0 var(--cyan);
+    }
+
+    .tools {
+      display: flex;
+      justify-content: end;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .search, .icon, .avatar, .btn, .field {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, .92);
+      padding: 0 12px;
+      font-size: 13px;
+    }
+
+    .search { width: 186px; color: var(--muted); background: #f7fbff; }
+    .icon, .avatar { width: 38px; justify-content: center; font-weight: 850; }
+    .avatar { color: white; background: #102033; border-color: #102033; }
+
+    main {
+      padding: 18px 22px;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 12px;
+    }
+
+    .head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1;
+      letter-spacing: -.02em;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 21px;
+      letter-spacing: -.015em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+      max-width: 760px;
+    }
+
+    .actions, .tabs {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      justify-content: center;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .primary {
+      color: white;
+      border-color: var(--cyan);
+      background: linear-gradient(135deg, var(--cyan), #0ea5e9);
+      box-shadow: 0 12px 28px rgba(14, 165, 233, .18);
+    }
+
+    .mint {
+      color: #065f46;
+      border-color: #a7f3d0;
+      background: var(--mint-soft);
+    }
+
+    .soft {
+      color: #1d4ed8;
+      border-color: #bfd3ff;
+      background: var(--blue-soft);
+    }
+
+    .warn {
+      color: #8a5200;
+      border-color: #f5d085;
+      background: var(--amber-soft);
+    }
+
+    .danger {
+      color: #9f1239;
+      border-color: #fecdd3;
+      background: var(--rose-soft);
+    }
+
+    .tabs {
+      padding: 0 2px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tab {
+      padding: 12px 14px;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tab.on {
+      color: #07566a;
+      border-color: var(--cyan);
+      font-weight: 850;
+    }
+
+    .panel {
+      min-width: 0;
+      overflow: hidden;
+      background: rgba(255, 255, 255, .88);
+      border: 1px solid var(--line);
+    }
+
+    .pad { padding: 16px; }
+    .grid { display: grid; gap: 14px; min-height: 0; }
+    .cols2 { grid-template-columns: 1fr 1fr; }
+    .cols3 { grid-template-columns: repeat(3, 1fr); }
+    .cols4 { grid-template-columns: repeat(4, 1fr); }
+    .rail { grid-template-columns: 1fr 330px; }
+    .half { grid-template-columns: 52% 48%; }
+
+    .strip {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      background: rgba(243, 248, 252, .88);
+      border: 1px solid var(--line);
+    }
+
+    .filters5 { grid-template-columns: repeat(5, minmax(0, 1fr)) auto; }
+    .filters3 { grid-template-columns: 1.4fr 1fr auto auto; }
+
+    .field {
+      color: var(--ink);
+      justify-content: space-between;
+      background: #fbfdff;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 850;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 850;
+    }
+
+    .metric {
+      min-height: 116px;
+      padding: 15px;
+      border: 1px solid var(--line);
+      background: linear-gradient(145deg, #fff, #f7fbff);
+    }
+
+    .metric.pop {
+      color: white;
+      border-color: transparent;
+      background:
+        radial-gradient(circle at 86% 12%, rgba(255,255,255,.22), transparent 32%),
+        linear-gradient(135deg, var(--blue), var(--cyan));
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 33px;
+      letter-spacing: -.02em;
+      line-height: 1;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 9px;
+      color: var(--muted);
+    }
+
+    .metric.pop small, .metric.pop .label { color: rgba(255,255,255,.78); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      padding: 11px 13px;
+      text-align: left;
+      background: #f3f8fc;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    td {
+      padding: 13px;
+      border-bottom: 1px solid #e6eef5;
+      vertical-align: middle;
+    }
+
+    .status {
+      min-height: 25px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 8px;
+      border: 1px solid #a7f3d0;
+      background: var(--mint-soft);
+      color: #065f46;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .status.blue { background: var(--blue-soft); border-color: #bfd3ff; color: #1d4ed8; }
+    .status.amber { background: var(--amber-soft); border-color: #f5d085; color: #8a5200; }
+    .status.red { background: var(--rose-soft); border-color: #fecdd3; color: #9f1239; }
+    .status.cyan { background: var(--cyan-soft); border-color: #a7e7ef; color: #07566a; }
+
+    .formgrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .input {
+      min-height: 64px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      background: #fbfdff;
+    }
+
+    .input label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      font-weight: 850;
+    }
+
+    .input b { font-size: 14px; line-height: 1.35; }
+    .wide { grid-column: 1 / -1; }
+
+    .chart {
+      height: 230px;
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      align-items: end;
+      gap: 10px;
+      padding: 20px 8px 0;
+      border-top: 1px solid var(--line);
+      background-image: linear-gradient(0deg, rgba(215, 229, 239, .8) 1px, transparent 1px);
+      background-size: 100% 46px;
+    }
+
+    .pair {
+      height: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: end;
+      gap: 3px;
+    }
+
+    .bar {
+      min-height: 14px;
+      background: linear-gradient(#22d3ee, var(--cyan));
+    }
+
+    .bar.debt { background: linear-gradient(#fbbf24, var(--amber)); }
+
+    .card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: #fbfdff;
+      margin-bottom: 10px;
+    }
+
+    .card b { display: block; margin-bottom: 6px; }
+    .card small { color: var(--muted); line-height: 1.42; }
+
+    .viewer {
+      height: 506px;
+      border: 1px solid var(--line);
+      background: #e9f5fb;
+      display: grid;
+      grid-template-columns: 82px 1fr;
+    }
+
+    .thumbs {
+      padding: 10px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      background: #f3f8fc;
+      border-right: 1px solid var(--line);
+    }
+
+    .thumb {
+      height: 76px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .thumb.on { border-color: var(--cyan); box-shadow: inset 0 0 0 2px rgba(0,169,199,.15); }
+
+    .paper {
+      width: 400px;
+      height: 470px;
+      margin: auto;
+      padding: 42px;
+      background: white;
+      border: 1px solid #bad8e7;
+      box-shadow: 0 18px 44px rgba(29, 78, 116, .18);
+      position: relative;
+    }
+
+    .docline { height: 9px; margin-bottom: 14px; background: #c7d8e5; }
+    .crop { position: absolute; left: 150px; top: 262px; width: 255px; height: 78px; border: 3px solid var(--cyan); background: rgba(0,169,199,.08); }
+    .timeline { padding: 16px; }
+    .event { position: relative; padding: 0 0 18px 24px; border-left: 1px solid #a7e7ef; }
+    .event:before { content: ""; position: absolute; left: -6px; top: 2px; width: 10px; height: 10px; border: 3px solid white; background: var(--cyan); box-shadow: 0 0 0 1px #a7e7ef; }
+  </style>
+</head>
+<body>
+  <section class="screen" data-screen="dashboard">
+    <div class="app">
+      <div class="top"><div class="brand"><div class="mark">C</div><div><b>Hệ thống thẩm định</b><small>Phòng quản lý tài chính</small></div></div><nav><span class="on">Dashboard</span><span>Nhập hồ sơ</span><span>Quản lý hồ sơ</span><span>Tổ chức</span><span>Sổ bộ</span><span>Cài đặt</span></nav><div class="tools"><div class="search">⌕ Tìm kiếm...</div><div class="icon">!</div><div class="avatar">AD</div></div></div>
+      <main>
+        <div class="head"><div><h1>Dashboard điều hành</h1><div class="sub">Tone sáng hơn: nền xanh rất nhạt, accent cyan/mint, vẫn giữ layout nghiệp vụ và bảng công nợ.</div></div><div class="actions"><div class="btn soft">Xuất Excel</div><div class="btn primary">Lọc dữ liệu</div></div></div>
+        <div class="strip filters5"><div class="field"><span><label>Năm</label>2026</span><span>⌄</span></div><div class="field"><span><label>Tháng</label>Tháng 06</span><span>⌄</span></div><div class="field"><span><label>Nguồn</label>VCB Gia Lai</span><span>⌄</span></div><div class="field"><span><label>Loại KH</label>Tất cả</span><span>⌄</span></div><div class="field"><span><label>Chuyên viên</label>Tất cả</span><span>⌄</span></div><div class="btn primary">Áp dụng</div></div>
+        <div class="grid rail">
+          <div class="grid">
+            <div class="grid cols4"><div class="metric"><div class="label">Doanh thu dự kiến</div><strong>18.520 Tr</strong><small>+12% so với năm trước</small></div><div class="metric"><div class="label">Đã thanh toán</div><strong>14.100 Tr</strong><small>Tỷ lệ thu 76%</small></div><div class="metric"><div class="label">Công nợ tồn</div><strong>4.420 Tr</strong><small>15 hồ sơ quá hạn</small></div><div class="metric pop"><div class="label">Trong tháng</div><strong>1.250 Tr</strong><small>Đạt 85% target</small></div></div>
+            <div class="panel pad"><div class="head" style="margin-bottom:12px"><h2>Doanh thu và công nợ theo tháng</h2><div class="actions"><span class="status cyan">Doanh thu</span><span class="status amber">Công nợ</span></div></div><div class="chart"><div class="pair"><div class="bar" style="height:52%"></div><div class="bar debt" style="height:31%"></div></div><div class="pair"><div class="bar" style="height:61%"></div><div class="bar debt" style="height:27%"></div></div><div class="pair"><div class="bar" style="height:68%"></div><div class="bar debt" style="height:22%"></div></div><div class="pair"><div class="bar" style="height:58%"></div><div class="bar debt" style="height:34%"></div></div><div class="pair"><div class="bar" style="height:73%"></div><div class="bar debt" style="height:19%"></div></div><div class="pair"><div class="bar" style="height:82%"></div><div class="bar debt" style="height:37%"></div></div><div class="pair"><div class="bar" style="height:77%"></div><div class="bar debt" style="height:29%"></div></div><div class="pair"><div class="bar" style="height:91%"></div><div class="bar debt" style="height:14%"></div></div><div class="pair"><div class="bar" style="height:74%"></div><div class="bar debt" style="height:26%"></div></div><div class="pair"><div class="bar" style="height:64%"></div><div class="bar debt" style="height:47%"></div></div><div class="pair"><div class="bar" style="height:70%"></div><div class="bar debt" style="height:23%"></div></div><div class="pair"><div class="bar" style="height:86%"></div><div class="bar debt" style="height:18%"></div></div></div></div>
+            <div class="panel"><table><tr><th>Tháng</th><th>Doanh thu</th><th>Đã thanh toán</th><th>Công nợ</th><th>Tỷ lệ</th></tr><tr><td>Tháng 10</td><td>1.250.000.000</td><td>450.000.000</td><td>800.000.000</td><td><span class="status red">36%</span></td></tr><tr><td>Tháng 9</td><td>1.820.000.000</td><td>1.500.000.000</td><td>320.000.000</td><td><span class="status blue">82%</span></td></tr></table></div>
+          </div>
+          <div class="panel pad"><div class="head" style="margin-bottom:12px"><h2>Công nợ ưu tiên</h2><span class="status red">T10</span></div><div class="card"><b>HS-2410-001</b><small>Công ty TNHH ABC · Vietcombank</small><br><span class="status red">45.000.000 · quá 3 ngày</span></div><div class="card"><b>HS-2410-045</b><small>Nguyễn Văn Khách · Techcombank</small><br><span class="status amber">12.500.000 · hạn 30/10</span></div><div class="card"><b>HS-2409-112</b><small>CP Đầu tư XYZ · MB Bank</small><br><span class="status amber">50.000.000 · hạn 05/11</span></div></div>
+        </div>
+      </main>
+    </div>
+  </section>
+
+  <section class="screen" data-screen="entry">
+    <div class="app"><div class="top"><div class="brand"><div class="mark">C</div><div><b>Hệ thống thẩm định</b><small>Nhập hồ sơ</small></div></div><nav><span>Dashboard</span><span class="on">Nhập hồ sơ</span><span>Quản lý hồ sơ</span><span>Sổ bộ</span><span>Cài đặt</span></nav><div class="tools"><div class="search">⌕ File / khách hàng...</div><div class="avatar">NL</div></div></div>
+      <main>
+        <div class="head"><div><h1>Nhập / quét hồ sơ OCR</h1><div class="sub">Giữ nguyên viewer, AI extraction và form cuối, nhưng dùng tone sáng cyan/mint để giao diện nhẹ và hiện đại hơn.</div></div><div class="actions"><div class="btn">Tải PDF</div><div class="btn warn">Xoay tự động</div><div class="btn primary">Đồng bộ</div></div></div>
+        <div class="tabs"><div class="tab on">Khách hàng cá nhân</div><div class="tab">Khách hàng tổ chức</div><div class="tab">GCN trích xuất từ AI</div></div>
+        <div class="grid half">
+          <div class="panel pad"><div class="head" style="margin-bottom:12px"><h2>Giấy chứng nhận QSDĐ</h2><span class="status blue">Trang 1/4</span></div><div class="viewer"><div class="thumbs"><div class="thumb on">1</div><div class="thumb">2</div><div class="thumb">3</div><div class="thumb">4</div></div><div style="display:grid;place-items:center"><div class="paper"><div class="docline" style="width:74%"></div><div class="docline" style="width:54%"></div><div class="docline" style="width:82%"></div><div class="docline" style="width:61%"></div><div class="docline" style="width:76%"></div><div class="docline" style="width:46%"></div><div class="crop"></div></div></div></div></div>
+          <div class="panel pad"><div class="head" style="margin-bottom:12px"><h2>Kết quả trích xuất AI</h2><span class="status mint">Đã quét xong</span></div><div class="formgrid"><div class="input"><label>Số thửa</label><b>123</b></div><div class="input"><label>Tờ bản đồ</label><b>45</b></div><div class="input wide"><label>Địa chỉ · dữ liệu chỉnh tay</label><b>Số 12, Đường Nguyễn Văn Linh, Phường Tân Phú, Quận 7, TP.HCM</b></div><div class="input"><label>Mã hồ sơ</label><b>HS-2023-0891</b></div><div class="input"><label>Loại tài sản</label><b>Đất ở đô thị</b></div><div class="input wide"><label>Mục đích thẩm định</label><b>Vay vốn ngân hàng</b></div></div><div class="card" style="margin-top:12px"><b>3 trường sẵn sàng lưu</b><small>1 trường đã chỉnh tay, cần giữ nhãn nguồn dữ liệu khi lưu.</small></div><div class="actions" style="justify-content:end"><div class="btn">Hủy</div><div class="btn primary">Lưu & tiếp tục</div></div></div>
+        </div>
+      </main></div>
+  </section>
+
+  <section class="screen" data-screen="cases">
+    <div class="app"><div class="top"><div class="brand"><div class="mark">C</div><div><b>Hệ thống thẩm định</b><small>Quản lý hồ sơ</small></div></div><nav><span>Dashboard</span><span>Nhập hồ sơ</span><span class="on">Quản lý hồ sơ</span><span>Tổ chức</span><span>Sổ bộ</span></nav><div class="tools"><div class="search">⌕ Tên KH, số HĐ...</div><div class="avatar">HS</div></div></div>
+      <main>
+        <div class="head"><div><h1>Quản lý hồ sơ</h1><div class="sub">Bảng vẫn là trung tâm, thêm summary sáng màu và right rail việc cần xử lý.</div></div><div class="actions"><div class="btn soft">Xuất danh sách</div><div class="btn primary">+ Tạo hồ sơ mới</div></div></div>
+        <div class="grid cols4"><div class="metric"><div class="label">Tổng hồ sơ</div><strong>125</strong></div><div class="metric"><div class="label">Chưa thanh toán</div><strong>38</strong></div><div class="metric"><div class="label">Thiếu tài liệu</div><strong>9</strong></div><div class="metric pop"><div class="label">Cần duyệt PDF</div><strong>14</strong></div></div>
+        <div class="grid rail">
+          <div class="panel"><div class="strip" style="grid-template-columns:1.4fr 1fr 1fr 1fr auto;border:0;border-bottom:1px solid var(--line)"><div class="field">⌕ Tên KH, Số HĐ, Mã HS...</div><div class="field">Tháng: Tất cả</div><div class="field">Thanh toán: Tất cả</div><div class="field">Ngân hàng: Tất cả</div><div class="btn primary">Lọc</div></div><table><tr><th>ID</th><th>Ngày tạo</th><th>Tên khách hàng</th><th>Số hợp đồng</th><th>Tài sản</th><th>Phí</th><th>Thanh toán</th></tr><tr><td>HS-2310-001</td><td>15/10/2023</td><td>Công ty TNHH ABC</td><td>HĐ-VCB-001</td><td>Bất động sản công nghiệp</td><td>25.000.000</td><td><span class="status">Đã thanh toán</span></td></tr><tr><td>HS-2310-002</td><td>14/10/2023</td><td>Trần Thị B</td><td>HĐ-TCB-042</td><td>Căn hộ chung cư</td><td>5.500.000</td><td><span class="status red">Chưa thanh toán</span></td></tr><tr><td>HS-2310-003</td><td>12/10/2023</td><td>CTCP Tập đoàn XYZ</td><td>HĐ-BIDV-105</td><td>Dây chuyền máy móc</td><td>18.200.000</td><td><span class="status">Đã thanh toán</span></td></tr><tr><td>HS-2310-004</td><td>11/10/2023</td><td>Nguyễn Văn Khách</td><td>HĐ-VCB-044</td><td>Đất ở đô thị</td><td>12.500.000</td><td><span class="status amber">Chờ thu</span></td></tr></table></div>
+          <div class="panel pad"><h2>Việc cần xử lý</h2><div class="card"><b>14 hồ sơ chờ duyệt PDF</b><small>Ưu tiên hồ sơ phát hành trước 16:00.</small></div><div class="card"><b>9 hồ sơ thiếu file gốc</b><small>Cần kiểm tra thư mục originals.</small></div><div class="card"><b>38 hồ sơ chưa thanh toán</b><small>Lọc theo ngân hàng để nhắc công nợ.</small></div></div>
+        </div>
+      </main></div>
+  </section>
+
+  <section class="screen" data-screen="sobo">
+    <div class="app"><div class="top"><div class="brand"><div class="mark">C</div><div><b>Hệ thống thẩm định</b><small>Sổ bộ</small></div></div><nav><span>Dashboard</span><span>Hồ sơ</span><span class="on">Sổ bộ</span><span>Cài đặt</span></nav><div class="tools"><div class="search">⌕ Địa chỉ, thửa, tờ...</div><div class="avatar">SB</div></div></div>
+      <main><div class="head"><div><h1>Giám sát yêu cầu Sổ bộ</h1><div class="sub">Tone sáng giúp màn hình giám sát bớt nặng, nhưng vẫn giữ cảnh báo trễ phản hồi rõ.</div></div><div class="actions"><div class="btn">Đồng bộ Telegram</div><div class="btn primary">Kiểm tra Mail ngay</div></div></div><div class="strip filters3"><div class="field">Tìm theo địa chỉ, thửa, tờ, nguồn...</div><div class="field">Trạng thái: Chờ phản hồi</div><div class="btn primary">Lọc</div><div class="btn soft">Guest: chỉ đọc</div></div><div class="grid rail"><div class="grid"><div class="grid cols3"><div class="metric"><div class="label">Chờ phản hồi</div><strong>18</strong><small>3 hồ sơ trễ trên 24g</small></div><div class="metric"><div class="label">Đã phản hồi</div><strong>42</strong><small>Trong tháng</small></div><div class="metric pop"><div class="label">TG phản hồi TB</div><strong>9g</strong><small>Từ outbound mail</small></div></div><div class="panel pad"><div class="card"><b>#103 · [Sổ bộ] Thửa 128 tờ 24 Pleiku</b><small>Nguồn: VCB Gia Lai · Người nhận: nghiepvu@cen.vn · Chờ phản hồi 27g</small><div class="actions" style="margin-top:10px"><span class="status red">Trễ</span><span class="status blue">Mở bản đồ</span><span class="status">Tải GCN</span></div></div><div class="card"><b>#104 · Máy móc thiết bị dây chuyền cà phê</b><small>Nguồn: BIDV Đắk Lắk · Đã phản hồi sau 6g</small><div class="actions" style="margin-top:10px"><span class="status">Đã phản hồi</span><span class="status blue">Mở bản đồ</span></div></div></div></div><div class="panel pad"><h2>Xác nhận xóa</h2><div class="card"><b>Xóa hồ sơ sơ bộ #103?</b><small>Thao tác không thể hoàn tác. Chỉ admin thấy action này.</small></div><div class="actions"><div class="btn danger">Xóa hồ sơ</div><div class="btn">Hủy</div></div></div></div></main></div>
+  </section>
+
+  <section class="screen" data-screen="settings_oauth">
+    <div class="app"><div class="top"><div class="brand"><div class="mark">C</div><div><b>Hệ thống thẩm định</b><small>OAuth2</small></div></div><nav><span>Dashboard</span><span>Cài đặt</span><span class="on">Tích hợp OAuth2</span></nav><div class="tools"><div class="avatar">OA</div></div></div>
+      <main><div class="head"><div><h1>Tích hợp Google Workspace & Outlook</h1><div class="sub">Tone sáng hơn cho phần cấu hình kỹ thuật: phân mảng Google, Outlook và mail Sổ bộ rõ ràng.</div></div><div class="btn primary">Lưu cấu hình mail Sổ bộ</div></div><div class="tabs"><div class="tab">Cấu hình Template</div><div class="tab">Sức khỏe hệ thống</div><div class="tab">Quản trị dữ liệu</div><div class="tab on">Tích hợp OAuth2</div></div><div class="grid cols2"><div class="panel pad"><h2>Google Workspace</h2><div class="formgrid" style="margin-top:18px"><div class="input wide"><label>Trạng thái</label><b>Chưa liên kết tài khoản</b></div><div class="input"><label>Client ID</label><b>••••••••••</b></div><div class="input"><label>Client Secret</label><b>••••••••••</b></div></div><div class="btn primary" style="margin-top:12px">Kết nối Google Workspace</div><h2 style="margin-top:24px">Mail Sổ bộ</h2><div class="formgrid" style="margin-top:14px"><div class="input"><label>Provider</label><b>Google Gmail API</b></div><div class="input"><label>Tài khoản gửi</label><b>hostktpro@gmail.com</b></div><div class="input wide"><label>From hiển thị</label><b>hostktpro@gmail.com</b></div></div></div><div class="panel pad"><h2>Microsoft Outlook</h2><div class="formgrid" style="margin-top:18px"><div class="input wide"><label>Trạng thái</label><b>Chưa liên kết tài khoản</b></div><div class="input"><label>Client ID</label><b>••••••••••</b></div><div class="input"><label>Tenant ID</label><b>common</b></div><div class="input wide"><label>Địa chỉ gửi Outlook alias</label><b>truongpnt2@outlook.com.vn</b></div></div><div class="actions" style="margin-top:12px"><div class="btn primary">Kết nối Outlook Graph</div><div class="btn soft">Kết nối SMTP alias</div></div></div></div></main></div>
+  </section>
+
+  <section class="screen" data-screen="template_editor">
+    <div class="app"><div class="top"><div class="brand"><div class="mark">C</div><div><b>Hệ thống thẩm định</b><small>Template editor</small></div></div><nav><span>Dashboard</span><span class="on">Templates</span><span>Cài đặt</span></nav><div class="tools"><div class="avatar">TPL</div></div></div>
+      <main><div class="head"><div><h1>Template editor chi tiết</h1><div class="sub">Phiên bản sáng hơn của màn hình sửa block placeholder và lịch sử snapshot/restore.</div></div><div class="actions"><div class="btn warn">Khóa production</div><div class="btn primary">Lưu đoạn đang sửa</div></div></div><div class="tabs"><div class="tab on">Mẫu tổ chức</div><div class="tab">Mẫu cá nhân</div><div class="tab">Lịch sử</div></div><div class="grid rail"><div class="panel pad"><div class="formgrid"><div class="input"><label>Nhãn phiên bản</label><b>testing</b></div><div class="input"><label>Production</label><b>Đang mở khóa</b></div><div class="input wide"><label>Placeholder bắt buộc</label><b>{{TEN_KHACH_HANG}}, {{TAI_SAN_THAM_DINH}}, {{PHI_THAM_DINH}}</b></div><div class="input wide"><label>Chọn đoạn cần sửa</label><b>paragraph:12 | Kính gửi {{NGAN_HANG}}, chúng tôi đề nghị...</b></div><div class="input wide" style="height:220px"><label>Nội dung đoạn</label><b>Kính gửi {{NGAN_HANG}}, chúng tôi đề nghị thẩm định tài sản {{TAI_SAN_THAM_DINH}} của khách hàng {{TEN_KHACH_HANG}}.</b></div></div></div><div class="panel"><div class="timeline"><div class="event"><div class="card"><b>edit_block · 10:30 hôm nay</b><small>Trần Thị B sửa placeholder phí thẩm định.</small></div></div><div class="event"><div class="card"><b>lock_template · hôm qua</b><small>Admin khóa production sau khi duyệt.</small></div></div><div class="event"><div class="card"><b>restore_snapshot · 02/06</b><small>Khôi phục từ bản backup trước chỉnh sửa.</small></div></div></div></div></div></main></div>
+  </section>
+
+  <script>
+    const screen = new URLSearchParams(location.search).get("screen") || "dashboard";
+    (document.querySelector(`[data-screen="${screen}"]`) || document.querySelector(".screen")).classList.add("active");
+  </script>
+</body>
+</html>

@@ -7,37 +7,41 @@ import streamlit as st
 
 
 def render_app_theme() -> None:
-    """Apply the Stitch/Figma enterprise visual system to Streamlit widgets."""
+    """Apply the approved Fluent-inspired visual system to Streamlit widgets."""
     st.markdown(
         """
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
         <style>
             :root {
-                --app-bg: #faf9ff;
+                --app-bg: #f5f7fb;
                 --app-surface: #ffffff;
-                --app-surface-low: #f1f3ff;
-                --app-surface-container: #e9edff;
-                --app-surface-high: #d8e2ff;
-                --app-primary: #0052cc;
-                --app-primary-strong: #003d9b;
-                --app-primary-soft: #dae2ff;
-                --app-text: #051a3e;
-                --app-muted: #434654;
-                --app-outline: #c3c6d6;
-                --app-outline-soft: #e2e8f0;
-                --app-error: #ba1a1a;
-                --app-error-soft: #ffdad6;
-                --app-shadow: 0 8px 24px -8px rgba(9, 30, 66, 0.16);
-                --app-shadow-soft: 0 4px 18px -8px rgba(9, 30, 66, 0.18);
+                --app-surface-low: #f8fafc;
+                --app-surface-container: #edf3ff;
+                --app-surface-high: #eaf1ff;
+                --app-primary: #0f6cbd;
+                --app-primary-strong: #0057d8;
+                --app-primary-soft: #eaf1ff;
+                --app-text: #0f172a;
+                --app-muted: #64748b;
+                --app-outline: #dbe3f3;
+                --app-outline-soft: #e8eef8;
+                --app-error: #be123c;
+                --app-error-soft: #fff1f2;
+                --app-success: #047857;
+                --app-success-soft: #e7f8ef;
+                --app-warning: #c2410c;
+                --app-warning-soft: #fff7ed;
+                --app-shadow: 0 18px 50px rgba(22, 39, 70, 0.10);
+                --app-shadow-soft: 0 8px 24px rgba(22, 39, 70, 0.07);
                 --app-radius: 12px;
             }
 
             html, body, [class*="css"] {
-                font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+                font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
                 letter-spacing: 0 !important;
+                font-variant-numeric: tabular-nums;
             }
 
             .material-symbols-outlined {
@@ -81,11 +85,11 @@ def render_app_theme() -> None:
             }
 
             .block-container {
-                padding-top: 5.6rem !important;
-                padding-left: 1.9rem !important;
-                padding-right: 1.9rem !important;
-                padding-bottom: 2rem !important;
-                max-width: 100% !important;
+                padding-top: 5.35rem !important;
+                padding-left: 1.5rem !important;
+                padding-right: 1.5rem !important;
+                padding-bottom: 1.5rem !important;
+                max-width: 1440px !important;
             }
 
             h1, h2, h3, h4 {
@@ -95,9 +99,9 @@ def render_app_theme() -> None:
 
             h2 {
                 font-size: 30px !important;
-                line-height: 38px !important;
-                font-weight: 700 !important;
-                margin-top: 0.5rem !important;
+                line-height: 36px !important;
+                font-weight: 750 !important;
+                margin-top: 0.25rem !important;
             }
 
             h3 {
@@ -107,40 +111,38 @@ def render_app_theme() -> None:
             }
 
             div[data-testid="stTabs"] > div[role="tablist"] {
-                position: sticky;
-                top: 64px;
-                z-index: 45;
                 background: var(--app-surface);
                 border-bottom: 1px solid var(--app-outline);
                 border-radius: 0;
-                box-shadow: 0 2px 8px -8px rgba(9, 30, 66, 0.24);
-                padding: 0 0 0 1.9rem;
-                gap: 8px;
-                margin: -1.2rem -1.9rem 24px;
+                box-shadow: none;
+                padding: 0;
+                gap: 4px;
+                margin: 0 0 18px;
             }
 
             button[data-baseweb="tab"] {
-                border-radius: 8px 8px 0 0 !important;
-                padding: 12px 18px !important;
-                color: #50627e !important;
+                border-radius: 0 !important;
+                padding: 9px 14px !important;
+                color: #475569 !important;
                 font-weight: 600 !important;
                 font-size: 14px !important;
-                height: 52px !important;
+                height: 42px !important;
+                background: transparent !important;
             }
 
             button[data-baseweb="tab"][aria-selected="true"] {
-                background: var(--app-surface-high) !important;
-                color: var(--app-primary) !important;
-                border-bottom: 4px solid var(--app-primary) !important;
+                background: transparent !important;
+                color: var(--app-primary-strong) !important;
+                border-bottom: 3px solid var(--app-primary-strong) !important;
             }
 
             div[data-testid="stMetric"] {
                 background: var(--app-surface);
-                border: 1px solid rgba(195, 198, 214, 0.45);
+                border: 1px solid var(--app-outline);
                 border-radius: var(--app-radius);
-                box-shadow: var(--app-shadow);
-                padding: 22px 24px;
-                min-height: 128px;
+                box-shadow: none;
+                padding: 16px 18px;
+                min-height: 92px;
             }
 
             div[data-testid="stMetric"] label {
@@ -153,8 +155,8 @@ def render_app_theme() -> None:
 
             div[data-testid="stMetric"] [data-testid="stMetricValue"] {
                 color: var(--app-text) !important;
-                font-size: 34px !important;
-                line-height: 42px !important;
+                font-size: 28px !important;
+                line-height: 34px !important;
                 font-weight: 750 !important;
             }
 
@@ -173,14 +175,14 @@ def render_app_theme() -> None:
             div[data-testid="stForm"] {
                 background: var(--app-surface) !important;
                 border: 1px solid var(--app-outline-soft) !important;
-                box-shadow: var(--app-shadow-soft);
+                box-shadow: none;
             }
 
             div[data-testid="stVegaLiteChart"],
             div[data-testid="stDataFrame"] {
                 background: var(--app-surface);
                 border: 1px solid var(--app-outline-soft);
-                box-shadow: var(--app-shadow-soft);
+                box-shadow: none;
                 padding: 8px;
             }
 
@@ -201,7 +203,7 @@ def render_app_theme() -> None:
                 border-color: var(--app-outline) !important;
                 background: var(--app-surface) !important;
                 color: var(--app-text) !important;
-                min-height: 42px;
+                min-height: 40px;
             }
 
             div[data-baseweb="select"] > div:focus-within,
@@ -237,7 +239,7 @@ def render_app_theme() -> None:
                 color: #ffffff !important;
                 font-weight: 650 !important;
                 min-height: 40px;
-                box-shadow: 0 6px 16px -10px rgba(0, 82, 204, 0.55);
+                box-shadow: 0 8px 18px rgba(15, 108, 189, 0.18);
             }
 
             .stButton > button:hover,
@@ -303,7 +305,7 @@ def render_app_theme() -> None:
                 font-size: 18px;
                 line-height: 22px;
                 font-weight: 750;
-                color: var(--app-primary);
+                color: var(--app-text);
                 white-space: nowrap;
             }
 
@@ -343,17 +345,31 @@ def render_app_theme() -> None:
                 display: inline-flex;
                 align-items: center;
                 gap: 7px;
-                padding: 7px 10px;
-                border-radius: 8px;
-                color: #5d6b82;
+                min-height: 42px;
+                padding: 0 10px;
+                border-radius: 0;
+                color: #334155;
                 font-size: 13px;
                 font-weight: 650;
                 text-decoration: none;
+                position: relative;
             }
 
             .app-nav-item.active {
-                background: rgba(0, 82, 204, 0.1);
-                color: var(--app-primary);
+                background: transparent;
+                color: var(--app-primary-strong);
+                font-weight: 750;
+            }
+
+            .app-nav-item.active::after {
+                content: "";
+                position: absolute;
+                left: 10px;
+                right: 10px;
+                bottom: -11px;
+                height: 3px;
+                border-radius: 999px 999px 0 0;
+                background: var(--app-primary-strong);
             }
 
             .app-nav-item.active .material-symbols-outlined {
@@ -374,13 +390,15 @@ def render_app_theme() -> None:
             }
 
             .st-key-app_header .stButton > button[kind="primary"] {
-                background: rgba(0, 82, 204, 0.1) !important;
-                color: var(--app-primary) !important;
+                background: transparent !important;
+                color: var(--app-primary-strong) !important;
+                border-bottom: 3px solid var(--app-primary-strong) !important;
+                border-radius: 0 !important;
             }
 
             .st-key-app_header .stButton > button:hover {
-                background: var(--app-primary-soft) !important;
-                color: var(--app-primary) !important;
+                background: #f8fafc !important;
+                color: var(--app-primary-strong) !important;
             }
 
             .app-top-actions {
@@ -393,9 +411,9 @@ def render_app_theme() -> None:
 
             .app-search {
                 min-width: 280px;
-                height: 44px;
+                height: 38px;
                 border: 1px solid var(--app-outline);
-                border-radius: 999px;
+                border-radius: 10px;
                 display: flex;
                 align-items: center;
                 gap: 10px;
@@ -418,7 +436,7 @@ def render_app_theme() -> None:
             .app-avatar {
                 width: 36px;
                 height: 36px;
-                border-radius: 999px;
+                border-radius: 10px;
                 background: var(--app-primary-soft);
                 color: var(--app-primary-strong);
                 font-weight: 750;
@@ -472,12 +490,12 @@ def render_app_theme() -> None:
 
             .dashboard-kpi-card {
                 position: relative;
-                min-height: 150px;
-                padding: 24px;
+                min-height: 116px;
+                padding: 16px 18px;
                 border-radius: 12px;
                 background: #ffffff;
-                box-shadow: var(--app-shadow);
-                border: 1px solid rgba(226, 232, 240, 0.72);
+                box-shadow: none;
+                border: 1px solid var(--app-outline);
                 overflow: hidden;
             }
 
@@ -502,10 +520,10 @@ def render_app_theme() -> None:
 
             .dashboard-kpi-value {
                 color: var(--app-text);
-                font-size: 36px;
-                line-height: 44px;
+                font-size: 30px;
+                line-height: 36px;
                 font-weight: 780;
-                margin-top: 12px;
+                margin-top: 8px;
             }
 
             .dashboard-kpi-card.primary .dashboard-kpi-value {

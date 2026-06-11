@@ -117,7 +117,7 @@ def _render_pdf_toolbar(preview_path: Path, visible_pages: list[int], metadata: 
             + " được xác định là Ảnh quét và đang chờ AI căn chỉnh."
         )
 
-    toolbar_cols = st.columns([1, 1, 2, 3])
+    toolbar_cols = st.columns([1, 1, 4])
     with toolbar_cols[0]:
         if st.button("↺ Xoay trái", key=f"toolbar_rotate_left_{preview_path.name}", width="stretch"):
             _adjust_page_rotations(preview_path, visible_pages, -90)
@@ -127,21 +127,13 @@ def _render_pdf_toolbar(preview_path: Path, visible_pages: list[int], metadata: 
             _adjust_page_rotations(preview_path, visible_pages, 90)
             st.rerun()
     with toolbar_cols[2]:
-        st.slider(
-            "Zoom",
-            min_value=1.0,
-            max_value=2.5,
-            step=0.1,
-            key="zoom_level",
-        )
-    with toolbar_cols[3]:
         rotation_notes = [
             f"T{page_number}: {_display_page_rotation(preview_path, metadata, page_number)}°"
             for page_number in visible_pages
         ]
         st.caption(" | ".join(rotation_notes))
 
-    return float(st.session_state["zoom_level"])
+    return 1.4
 
 
 def _render_pdf_preview(preview_path: Path) -> None:
@@ -241,18 +233,7 @@ def _render_single_page_view(current_page: int, page_images: dict[int, bytes], t
 
 
 def _render_image_preview(preview_path: Path) -> None:
-    zoom_key = f"preview_zoom_{preview_path.name}"
-    st.session_state.setdefault(zoom_key, 140)
-    zoom_col1, zoom_col2, zoom_col3 = st.columns([1, 2, 1])
-    with zoom_col1:
-        if st.button("Thu nhỏ", key=f"zoom_out_{preview_path.name}", width="stretch"):
-            st.session_state[zoom_key] = max(60, int(st.session_state[zoom_key]) - 20)
-    with zoom_col2:
-        st.slider("Độ phóng", min_value=60, max_value=240, step=10, key=zoom_key)
-    with zoom_col3:
-        if st.button("Phóng to", key=f"zoom_in_{preview_path.name}", width="stretch"):
-            st.session_state[zoom_key] = min(240, int(st.session_state[zoom_key]) + 20)
-    zoom_scale = float(st.session_state[zoom_key]) / 100.0
+    zoom_scale = 1.4
     auto_rotation = get_auto_rotation(preview_path, page_number=1)
     manual_rotation = get_manual_rotation(preview_path, page_number=1)
     rotation = (auto_rotation + manual_rotation) % 360

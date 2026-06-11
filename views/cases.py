@@ -21,6 +21,19 @@ def render(
     individual_templates_dir: Path,
     organization_templates_dir: Path,
 ) -> None:
+    st.markdown(
+        """
+        <style>
+            .block-container {
+                max-width: none !important;
+                width: 100% !important;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     tab_cases, tab_revenue = st.tabs(["📋 Danh mục hồ sơ", "📊 Doanh thu & Công nợ"])
 
     with tab_cases:

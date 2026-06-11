@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nhập Hồ Sơ - Clean Fluent Preview</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #fff;
+      --surface-2: #f8fafc;
+      --surface-3: #eef3ff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe3f3;
+      --line-2: #e8eef8;
+      --brand: #0057d8;
+      --fluent: #0f6cbd;
+      --green: #047857;
+      --green-soft: #e7f8ef;
+      --orange: #c2410c;
+      --orange-soft: #fff7ed;
+      --red: #be123c;
+      --red-soft: #fff1f2;
+      --shadow: 0 18px 50px rgba(22, 39, 70, .10);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .screen {
+      width: 1440px;
+      height: 1120px;
+      padding: 18px 22px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 78% 0%, rgba(0, 87, 216, .07), transparent 28%),
+        var(--bg);
+    }
+    .app {
+      height: 100%;
+      background: var(--surface);
+      border: 1px solid #ccd6e8;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-rows: 64px 1fr;
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: 260px 1fr 300px;
+      align-items: center;
+      gap: 18px;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.95);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 850;
+    }
+    .brand b { display: block; font-size: 18px; line-height: 1.1; }
+    .brand span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+    nav { display: flex; gap: 2px; align-items: center; height: 100%; }
+    nav a {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      padding: 0 13px;
+      color: #334155;
+      font-size: 14px;
+      text-decoration: none;
+      position: relative;
+    }
+    nav a.active {
+      color: #003c96;
+      font-weight: 700;
+    }
+    nav a.active::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 0;
+      height: 3px;
+      border-radius: 999px 999px 0 0;
+      background: var(--brand);
+    }
+    .top-actions { display: flex; justify-content: end; gap: 10px; align-items: center; }
+    .global-search {
+      width: 210px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #dbeafe;
+      color: #1e40af;
+      display: grid;
+      place-items: center;
+      font-weight: 850;
+    }
+
+    main {
+      min-height: 0;
+      padding: 20px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 12px;
+    }
+    h1 { margin: 0; font-size: 32px; line-height: 1.08; letter-spacing: -.02em; }
+    h2 { margin: 0; font-size: 18px; line-height: 1.25; }
+    h3 {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .caption { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+
+    .intake-bar {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.35fr) auto;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .upload-box,
+    .queue-box {
+      min-height: 74px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-2);
+      padding: 12px;
+    }
+    .upload-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .drop {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #334155;
+      font-size: 13px;
+    }
+    .drop-icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: #eaf1ff;
+      color: var(--brand);
+      font-weight: 850;
+    }
+    .button {
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--brand);
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .button.primary {
+      color: #fff;
+      background: var(--fluent);
+      border-color: var(--fluent);
+      box-shadow: 0 3px 8px rgba(15, 108, 189, .22);
+    }
+    .queue-box {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .queue-list {
+      display: grid;
+      gap: 7px;
+    }
+    .queue-item {
+      display: grid;
+      grid-template-columns: 32px 1fr 82px;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .status {
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--green);
+      background: var(--green-soft);
+      border: 1px solid #a7f3d0;
+    }
+    .status.pending {
+      color: var(--orange);
+      background: var(--orange-soft);
+      border-color: #fed7aa;
+    }
+
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 780px;
+      gap: 14px;
+    }
+    .panel {
+      min-width: 0;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .panel-head {
+      min-height: 50px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfdff;
+    }
+    .panel-head .meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .viewer {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+    .viewer-tools {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line-2);
+      background: var(--surface-2);
+    }
+    .tool {
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #242424;
+      background: transparent;
+      border: 1px solid transparent;
+      font-size: 15px;
+    }
+    .tool.primary {
+      color: #fff;
+      background: var(--fluent);
+      box-shadow: 0 3px 8px rgba(15, 108, 189, .20);
+    }
+    .doc-stage {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      gap: 10px;
+      padding: 12px;
+      background: #f4f7fb;
+    }
+    .thumbs {
+      display: grid;
+      align-content: start;
+      gap: 8px;
+    }
+    .thumb {
+      height: 92px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .thumb.active {
+      border-color: var(--brand);
+      box-shadow: inset 3px 0 0 var(--brand);
+    }
+    .page {
+      height: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background:
+        linear-gradient(90deg, transparent 0 38%, rgba(15,108,189,.06) 38% 39%, transparent 39%),
+        #fff;
+      padding: 22px 28px;
+      overflow: hidden;
+    }
+    .doc-title {
+      text-align: center;
+      font-weight: 850;
+      color: #1e3a5f;
+      margin: 10px 0 22px;
+    }
+    .doc-lines { display: grid; gap: 9px; }
+    .doc-line {
+      height: 10px;
+      border-radius: 999px;
+      background: #dbe3f3;
+    }
+    .doc-line.short { width: 54%; }
+    .doc-line.mid { width: 72%; }
+    .doc-line.long { width: 92%; }
+    .extract-card {
+      margin-top: 18px;
+      padding: 12px;
+      border: 1px solid #bfd3ff;
+      border-radius: 10px;
+      background: #f4f8ff;
+      color: #0f2d5c;
+      font-size: 13px;
+    }
+
+    .form-panel {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      padding: 0 12px;
+      background: #fff;
+    }
+    .tab {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 3px solid transparent;
+      color: #475569;
+      font-weight: 750;
+      font-size: 14px;
+      position: relative;
+    }
+    .tab.active {
+      color: var(--brand);
+      border-color: transparent;
+    }
+    .tab.active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 3px;
+      background: var(--brand);
+    }
+    .form-body {
+      min-height: 0;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scrollbar-gutter: stable;
+    }
+    .section {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .section-title {
+      min-height: 34px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line-2);
+      background: #fbfdff;
+    }
+    .fields {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .fields.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .field {
+      min-height: 47px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--surface-2);
+      padding: 6px 10px;
+      display: grid;
+      align-content: center;
+      gap: 3px;
+    }
+    .field label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .field b {
+      font-size: 13px;
+      line-height: 1.25;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .field.wide { grid-column: 1 / -1; }
+    .note {
+      min-height: 52px;
+      align-content: start;
+    }
+
+    .gcn-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px;
+      background: var(--surface-2);
+    }
+    .gcn-item {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      padding: 8px;
+      font-size: 12px;
+    }
+    .gcn-item span {
+      display: block;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--line);
+      background: #fbfcff;
+    }
+    .recent {
+      display: grid;
+      gap: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 12px;
+    }
+    th {
+      height: 32px;
+      padding: 0 8px;
+      text-align: center;
+      color: #475569;
+      background: var(--surface-3);
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid rgba(219, 227, 243, .72);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    td {
+      height: 36px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--line-2);
+      border-right: 1px solid rgba(232, 238, 248, .78);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    th:last-child, td:last-child { border-right: 0; }
+  </style>
+</head>
+<body>
+  <div class="screen">
+    <div class="app">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo">C</div>
+          <div><b>Hệ Thống Thẩm Định</b><span>Phòng Quản Lý Tài Chính</span></div>
+        </div>
+        <nav>
+          <a href="#">Dashboard</a>
+          <a class="active" href="#">Nhập Hồ Sơ</a>
+          <a href="#">Quản Lý Hồ Sơ</a>
+          <a href="#">Tổ Chức</a>
+          <a href="#">Chuyển Phát</a>
+          <a href="#">Sổ Bộ</a>
+          <a href="#">Templates</a>
+          <a href="#">Cài Đặt</a>
+        </nav>
+        <div class="top-actions"><div class="global-search">⌕ Tìm kiếm...</div><div class="avatar">AD</div></div>
+      </div>
+
+      <main>
+        <div>
+          <h1>Nhập hồ sơ</h1>
+          <div class="caption">Tải GCN, quét AI, kiểm tra form và lưu/xuất/gửi yêu cầu định giá.</div>
+        </div>
+
+        <div class="intake-bar">
+          <section class="upload-box">
+            <div class="drop">
+              <div class="drop-icon">PDF</div>
+              <div>
+                <b>Tải lên PDF/ảnh GCN</b>
+                <div class="caption">Hỗ trợ PDF, PNG, JPG, JPEG, WEBP · có thể chọn nhiều file</div>
+              </div>
+            </div>
+            <div class="button">Chọn file</div>
+          </section>
+          <section class="queue-box">
+            <div class="queue-list">
+              <div class="queue-item"><b>#1</b><span>GCN_N04-1055-DN.pdf</span><span class="status">applied</span></div>
+              <div class="queue-item"><b>#2</b><span>anh_gcn_bo_sung.webp</span><span class="status pending">pending</span></div>
+            </div>
+            <div class="button primary">Quét 1 file bằng Gemini</div>
+          </section>
+          <section class="upload-box" style="justify-content:center;">
+            <div>
+              <b>AI tìm thấy 2 tài sản</b>
+              <div class="caption">Đã tự đưa dữ liệu đã quét vào form</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="workspace">
+          <section class="panel viewer">
+            <div class="panel-head">
+              <div>
+                <h2>Tài liệu đầu vào</h2>
+                <div class="meta">GCN_N04-1055-DN.pdf · trang 1/3 · zoom 1.4</div>
+              </div>
+              <span class="status">Đã quét</span>
+            </div>
+            <div class="viewer-tools">
+              <div class="tool">↺</div>
+              <div class="tool">↻</div>
+              <div class="tool primary">1 trang</div>
+              <div class="tool">Zoom 140%</div>
+            </div>
+            <div class="doc-stage">
+              <div class="thumbs">
+                <div class="thumb active">Trang 1</div>
+                <div class="thumb">Trang 2</div>
+                <div class="thumb">Trang 3</div>
+              </div>
+              <div class="page">
+                <div class="doc-title">GIẤY CHỨNG NHẬN</div>
+                <div class="doc-lines">
+                  <div class="doc-line long"></div>
+                  <div class="doc-line mid"></div>
+                  <div class="doc-line long"></div>
+                  <div class="doc-line short"></div>
+                  <div class="doc-line long"></div>
+                  <div class="doc-line mid"></div>
+                  <div class="doc-line long"></div>
+                  <div class="doc-line short"></div>
+                  <div class="doc-line long"></div>
+                  <div class="doc-line mid"></div>
+                </div>
+                <div class="extract-card">
+                  <b>Vùng AI nhận diện</b><br>
+                  Số thửa: 218034 · Số tờ: 12 · Chủ sở hữu: Công ty TNHH ABC
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel form-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Bước 1 - Kiểm tra và xuất form nhập liệu</h2>
+                <div class="meta">Dữ liệu được AI tự điền, người dùng kiểm tra trước khi lưu</div>
+              </div>
+              <span class="status pending">Chưa lưu</span>
+            </div>
+            <div class="tabs">
+              <div class="tab active">Khách hàng Cá nhân</div>
+              <div class="tab">Khách hàng Tổ chức</div>
+            </div>
+            <div class="form-body">
+              <div class="section">
+                <div class="section-title"><h3>Thông tin khách hàng</h3></div>
+                <div class="fields">
+                  <div class="field"><label>Số hợp đồng</label><b>N04-1055-DN</b></div>
+                  <div class="field"><label>Ngày hợp đồng</label><b>06/06/2026</b></div>
+                  <div class="field wide"><label>Tên khách hàng</label><b>Nguyễn Văn Minh</b></div>
+                  <div class="field"><label>Địa chỉ</label><b>Phường Thắng Lợi, Pleiku</b></div>
+                  <div class="field"><label>CCCD/CMND</label><b>064089012345</b></div>
+                </div>
+              </div>
+
+              <div class="section">
+                <div class="section-title"><h3>Thông tin nghiệp vụ</h3></div>
+                <div class="fields three">
+                  <div class="field wide"><label>Tài sản thẩm định giá</label><b>QSDĐ tại TP. Pleiku, Gia Lai; Máy móc thiết bị</b></div>
+                  <div class="field"><label>Loại tài sản</label><b>Bất động sản</b></div>
+                  <div class="field"><label>Sơ bộ</label><b>Đã có sơ bộ</b></div>
+                  <div class="field"><label>Mục đích</label><b>Vay vốn</b></div>
+                  <div class="field"><label>Chi nhánh</label><b>cn Đà Nẵng</b></div>
+                  <div class="field"><label>Văn phòng</label><b>vp Đà Nẵng</b></div>
+                  <div class="field"><label>Nguồn/đối tác</label><b>VCB Gia Lai</b></div>
+                  <div class="field"><label>Phí thẩm định</label><b>25.000.000</b></div>
+                  <div class="field"><label>Chuyên viên</label><b>Trần Minh Khoa</b></div>
+                  <div class="field note wide"><label>Ghi chú cá nhân</label><b>Cần phát hành chứng thư trước 16:00, kiểm tra lại người nhận bàn giao.</b></div>
+                </div>
+              </div>
+
+              <div class="section">
+                <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+                  <h3>Thông tin GCN trích xuất từ AI</h3>
+                  <span class="caption" style="margin:0;">Đang thu gọn</span>
+                </div>
+              </div>
+
+              <div class="section recent">
+                <div class="section-title"><h3>Hồ sơ gần nhất</h3></div>
+                <table>
+                  <colgroup><col style="width:110px"><col><col style="width:130px"><col style="width:110px"></colgroup>
+                  <thead><tr><th>Số HĐ</th><th>Khách hàng</th><th>Nguồn</th><th>Phí</th></tr></thead>
+                  <tbody>
+                    <tr><td><b>N04-1055</b></td><td>Công ty TNHH ABC</td><td>VCB Gia Lai</td><td>25.000.000</td></tr>
+                    <tr><td><b>N03-1071</b></td><td>Nguyễn Văn Minh</td><td>BIDV Quy Nhơn</td><td>18.500.000</td></tr>
+                    <tr><td><b>D11-0023</b></td><td>CTCP Đầu tư XYZ</td><td>Vietinbank</td><td>31.200.000</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="actions">
+              <div class="button">Lưu SQLite</div>
+              <div class="button primary">Xuất Excel</div>
+              <div class="button">Gửi mail</div>
+              <div class="button">Gửi Web</div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
