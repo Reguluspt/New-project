@@ -219,7 +219,7 @@ async def fetch_record_data(record_id: int | str) -> dict[str, str] | None:
 # Browser login & navigation
 # ---------------------------------------------------------------------------
 
-async def start_browser_and_login(browser_context):
+async def start_browser_and_login(browser_context, page=None):
     """Mở trang INTERNAL_WEB_URL, đăng nhập và điều hướng đến form
     *Gửi Yêu Cầu Thẩm Định*.
 
@@ -254,7 +254,8 @@ async def start_browser_and_login(browser_context):
     if not settings.web_username or not settings.web_password:
         raise RuntimeError("Thiếu biến môi trường WEB_USERNAME hoặc WEB_PASSWORD.")
 
-    page = await browser_context.new_page()
+    if page is None:
+        page = await browser_context.new_page()
     page.set_default_navigation_timeout(DEFAULT_NAVIGATION_TIMEOUT)
     page.set_default_timeout(DEFAULT_ACTION_TIMEOUT)
 
@@ -1388,7 +1389,8 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
 
                 try:
                     # --- 1. Mở trang và Đăng nhập ---
-                    page = await start_browser_and_login(context)
+                    page = await context.new_page()
+                    page = await start_browser_and_login(context, page=page)
                     
                     # --- 2. Điền thông tin ---
                     await fill_basic_info(page, sub_record)

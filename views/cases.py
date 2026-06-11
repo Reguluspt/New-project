@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 
+from src.app_config import ROOT
 from src.contracts import short_contract_number
 from src.database_manager import load_record_candidates
 from src.record_case_sync import sync_records_to_cases
@@ -13,6 +15,78 @@ from views import case_documents, case_revenue, case_table
 
 
 
+
+
+def _web_error_dir() -> Path:
+    return ROOT / "logs" / "errors"
+
+
+def _web_error_files(error_dir: Path, record_filter: str = "") -> list[Path]:
+    if not error_dir.exists():
+        return []
+
+    record_filter = record_filter.strip().lstrip("#")
+    files = [
+        path
+        for path in error_dir.iterdir()
+        if path.is_file()
+        and path.name.startswith("error_web_entry_")
+        and path.suffix.lower() in {".png", ".html"}
+    ]
+    if record_filter:
+        needle = f"error_web_entry_{record_filter}"
+        files = [path for path in files if path.name.startswith(needle)]
+
+    return sorted(files, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+def _render_web_error_artifacts() -> None:
+    error_dir = _web_error_dir()
+
+    with st.expander("Ảnh lỗi nhập Web", expanded=False):
+        st.caption(f"Thư mục lỗi: {error_dir}")
+        col_filter, col_limit = st.columns([0.72, 0.28])
+        with col_filter:
+            record_filter = st.text_input(
+                "Lọc theo mã hồ sơ",
+                placeholder="Ví dụ: 2274",
+                key="web_error_record_filter",
+            )
+        with col_limit:
+            limit = st.number_input(
+                "Số file hiển thị",
+                min_value=3,
+                max_value=50,
+                value=12,
+                step=3,
+                key="web_error_file_limit",
+            )
+
+        files = _web_error_files(error_dir, record_filter)
+        if not files:
+            st.info("Chưa tìm thấy ảnh hoặc HTML lỗi nhập Web phù hợp.")
+            return
+
+        shown_files = files[: int(limit)]
+        st.caption(f"Tìm thấy {len(files)} file, đang hiển thị {len(shown_files)} file mới nhất.")
+        for path in shown_files:
+            modified_text = datetime.fromtimestamp(path.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S")
+            st.markdown(f"**{path.name}** · {modified_text}")
+            if path.suffix.lower() == ".png":
+                st.image(str(path), use_container_width=True)
+                label = "Tải ảnh lỗi"
+                mime = "image/png"
+            else:
+                label = "Tải HTML lỗi"
+                mime = "text/html"
+
+            st.download_button(
+                label,
+                data=path.read_bytes(),
+                file_name=path.name,
+                mime=mime,
+                key=f"download_web_error_{path.name}",
+            )
 
 
 def render(
@@ -103,6 +177,8 @@ def render(
                 )
             else:
                 st.caption("Chưa có hồ sơ nào trong bảng records.")
+
+        _render_web_error_artifacts()
 
     with tab_revenue:
         case_revenue.render(db_path)
