@@ -57,7 +57,7 @@ def _render_web_error_artifacts() -> None:
                 "Số file hiển thị",
                 min_value=3,
                 max_value=50,
-                value=12,
+                value=6,
                 step=3,
                 key="web_error_file_limit",
             )
@@ -73,7 +73,8 @@ def _render_web_error_artifacts() -> None:
             modified_text = datetime.fromtimestamp(path.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S")
             st.markdown(f"**{path.name}** · {modified_text}")
             if path.suffix.lower() == ".png":
-                st.image(str(path), use_container_width=True)
+                if st.checkbox("Xem ảnh", key=f"preview_web_error_{path.name}"):
+                    st.image(str(path), use_container_width=True)
                 label = "Tải ảnh lỗi"
                 mime = "image/png"
             else:

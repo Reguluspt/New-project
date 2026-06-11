@@ -29,6 +29,242 @@ WEB_STATUS_TABLE_POLL_INTERVAL = 500
 WEB_SUBMIT_API_PATH = "/submit-yeu-cau-tham-dinh"
 
 
+async def _wait_until_dom_ready(page, *, timeout: int = 10_000) -> None:
+    try:
+        await page.wait_for_load_state("domcontentloaded", timeout=timeout)
+    except Exception:
+        logger.debug("Trang chua dat domcontentloaded sau %sms, tiep tuc xu ly.", timeout)
+
+
+async def _fill_login_credentials(page, *, username: str, password: str) -> None:
+    result = await page.evaluate(
+        """({ username, password }) => {
+            const normalize = (value) => (value || "")
+                .replace(/\\u0110/g, "D")
+                .replace(/\\u0111/g, "d")
+                .normalize("NFD")
+                .replace(/[\\u0300-\\u036f]/g, "")
+                .toLowerCase();
+            const isVisible = (el) => {
+                const box = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+            };
+            const setValue = (el, value) => {
+                const setter = Object.getOwnPropertyDescriptor(el.constructor.prototype, "value")?.set;
+                if (setter) {
+                    setter.call(el, value);
+                } else {
+                    el.value = value;
+                }
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+                el.dispatchEvent(new Event("change", { bubbles: true }));
+            };
+            const describe = (el) => [
+                el.tagName,
+                el.type,
+                el.name,
+                el.id,
+                el.placeholder,
+                el.autocomplete,
+            ].filter(Boolean).join("|");
+            const inputs = Array.from(document.querySelectorAll("input"))
+                .filter((el) => !el.disabled && !el.readOnly && isVisible(el));
+            const passwordInput = inputs.find((el) => normalize(el.type) === "password");
+            if (!passwordInput) {
+                return { filledUsername: false, filledPassword: false, reason: "password_not_found" };
+            }
+            const passwordIndex = inputs.indexOf(passwordInput);
+            const usernameInput = inputs.find((el, index) => {
+                if (el === passwordInput || index > passwordIndex) {
+                    return false;
+                }
+                const haystack = normalize([
+                    el.type,
+                    el.name,
+                    el.id,
+                    el.placeholder,
+                    el.autocomplete,
+                    el.getAttribute("aria-label"),
+                ].filter(Boolean).join(" "));
+                return (
+                    ["", "text", "email", "search", "tel"].includes(normalize(el.type)) ||
+                    haystack.includes("user") ||
+                    haystack.includes("email") ||
+                    haystack.includes("login") ||
+                    haystack.includes("account") ||
+                    haystack.includes("tai khoan") ||
+                    haystack.includes("ten dang nhap")
+                );
+            }) || inputs.find((el, index) => el !== passwordInput && index < passwordIndex);
+            if (!usernameInput) {
+                return { filledUsername: false, filledPassword: false, reason: "username_not_found" };
+            }
+            setValue(usernameInput, username);
+            setValue(passwordInput, password);
+            return {
+                filledUsername: usernameInput.value === username,
+                filledPassword: passwordInput.value === password,
+                usernameInput: describe(usernameInput),
+                passwordInput: describe(passwordInput),
+            };
+        }""",
+        {"username": username, "password": password},
+    )
+    if not result.get("filledUsername") or not result.get("filledPassword"):
+        raise RuntimeError(f"Không điền được thông tin đăng nhập: {result}")
+    logger.info(
+        "Da dien thong tin dang nhap vao form: username=%s, password=%s",
+        result.get("usernameInput"),
+        result.get("passwordInput"),
+    )
+
+
+async def _visible_login_prompt_count(page) -> int:
+    login_nav = page.locator("#login-nav").first
+    if await login_nav.count() > 0 and await login_nav.is_visible():
+        return 1
+
+    return int(
+        await page.evaluate(
+            """() => {
+                const normalize = (value) => (value || "")
+                    .replace(/\\u0110/g, "D")
+                    .replace(/\\u0111/g, "d")
+                    .normalize("NFD")
+                    .replace(/[\\u0300-\\u036f]/g, "")
+                    .toLowerCase();
+                const isVisible = (el) => {
+                    const box = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+                };
+                return Array.from(document.querySelectorAll("button, a, [role='button']"))
+                    .filter((el) => {
+                        if (el.id === "login-nav") {
+                            return isVisible(el);
+                        }
+                        const text = normalize(el.textContent);
+                        return isVisible(el) && (
+                            text === "dang nhap" ||
+                            text === "login" ||
+                            text === "log in" ||
+                            text === "sign in"
+                        );
+                    }).length;
+            }"""
+        )
+    )
+
+
+async def _click_visible_login_prompt(page) -> bool:
+    login_prompt = page.locator(
+        "#login-nav, "
+        "button:has-text('Đăng Nhập'), "
+        "button:has-text('Đăng nhập'), "
+        "button:has-text('Login'), "
+        "button:has-text('Log in'), "
+        "button:has-text('Sign in'), "
+        "a:has-text('Đăng Nhập'), "
+        "a:has-text('Đăng nhập'), "
+        "a:has-text('Login'), "
+        "a:has-text('Log in'), "
+        "a:has-text('Sign in'), "
+        "[role='button']:has-text('Đăng Nhập'), "
+        "[role='button']:has-text('Đăng nhập'), "
+        "[role='button']:has-text('Login'), "
+        "[role='button']:has-text('Log in'), "
+        "[role='button']:has-text('Sign in')"
+    ).first
+    if await login_prompt.count() > 0:
+        await login_prompt.scroll_into_view_if_needed()
+        await login_prompt.click(timeout=10_000, force=True)
+        return True
+
+    return bool(
+        await page.evaluate(
+            """() => {
+                const normalize = (value) => (value || "")
+                    .replace(/\\u0110/g, "D")
+                    .replace(/\\u0111/g, "d")
+                    .normalize("NFD")
+                    .replace(/[\\u0300-\\u036f]/g, "")
+                    .toLowerCase();
+                const isVisible = (el) => {
+                    const box = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+                };
+                const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
+                const login = candidates.find((el) => {
+                    const text = normalize(el.textContent).trim();
+                    return isVisible(el) && ["dang nhap", "login", "log in", "sign in"].includes(text);
+                });
+                if (!login) {
+                    return false;
+                }
+                login.click();
+                return true;
+            }"""
+        )
+    )
+
+
+async def _wait_for_login_success(page, *, timeout_ms: int = 30_000) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout_ms / 1000
+    while asyncio.get_running_loop().time() < deadline:
+        password_count = await page.locator("input[type='password']").count()
+        login_prompt_count = await _visible_login_prompt_count(page)
+        if password_count == 0 and login_prompt_count == 0:
+            logger.info("Xac nhan dang nhap thanh cong, URL hien tai: %s", page.url)
+            return
+        await page.wait_for_timeout(500)
+
+    raise RuntimeError(
+        "Đăng nhập chưa thành công: trang vẫn hiển thị nút Đăng Nhập/Login "
+        f"hoặc còn ô mật khẩu. URL hiện tại: {page.url}"
+    )
+
+
+async def _recover_from_callback_url(page) -> None:
+    if "#/callback" not in page.url:
+        return
+
+    logger.info("Trang dang dung o callback sau dang nhap, refresh lai de vao ung dung.")
+    await page.reload(wait_until="domcontentloaded")
+    await _wait_until_dom_ready(page)
+    await page.wait_for_timeout(2_000)
+
+
+async def _click_yctd_navigation(page) -> bool:
+    yctd_link = page.locator(
+        "a:has-text('YCTD'), "
+        "a:has-text('Yêu cầu thẩm định'), "
+        "a:has-text('Appraisal request'), "
+        "a:has-text('Valuation request'), "
+        "a:has-text('Request appraisal'), "
+        "button:has-text('YCTD'), "
+        "button:has-text('Gửi Yêu Cầu Thẩm Định'), "
+        "button:has-text('Yêu cầu thẩm định'), "
+        "button:has-text('Appraisal request'), "
+        "button:has-text('Valuation request'), "
+        "[role='button']:has-text('YCTD'), "
+        "[role='button']:has-text('Gửi Yêu Cầu Thẩm Định'), "
+        "[role='button']:has-text('Yêu cầu thẩm định'), "
+        "[role='button']:has-text('Appraisal request'), "
+        "[role='button']:has-text('Valuation request'), "
+        "a[href*='form-customer'], "
+        "a[href*='yctd'], "
+        "a[href*='YCTD'], "
+        "a[href*='tham-dinh']"
+    ).first
+    if await yctd_link.count() == 0:
+        return False
+    await yctd_link.click()
+    await _wait_until_dom_ready(page)
+    return True
+
+
 WEB_ENTRY_REQUIRED_FIELDS = [
     ("contract_number", "Số hợp đồng", ("contract_number",)),
     ("customer_info", "Tên khách hàng", ("customer_info", "customer_name")),
@@ -101,6 +337,15 @@ def _asset_web_value(raw_asset_type: str) -> str:
     if asset_type == _normalize_text("Máy móc thiết bị"):
         return "Máy móc thiết bị"
     return ""
+
+
+def _asset_web_values(raw_asset_type: str) -> tuple[str, str]:
+    asset_type = _normalize_text(raw_asset_type)
+    if any(token in asset_type for token in ("bds", "bat dong san")):
+        return "Bất động sản", "Bất động sản đặc thù"
+    if "may moc" in asset_type or "thiet bi" in asset_type:
+        return "Máy móc thiết bị", "Máy móc thiết bị"
+    return "", ""
 
 
 def _bank_web_value(raw_source: str) -> str:
@@ -261,57 +506,31 @@ async def start_browser_and_login(browser_context, page=None):
 
     # ---- 1. Truy cập trang chủ / trang đăng nhập ----
     logger.info("Đang truy cập %s ...", settings.internal_web_url)
-    await page.goto(settings.internal_web_url, wait_until="networkidle")
+    await page.goto(settings.internal_web_url, wait_until="domcontentloaded")
 
     # Trang chu chi hien nut "Dang Nhap"; form password nam o trang SSO sau khi click.
     password_input = page.locator("input[type='password']")
     if await password_input.count() == 0:
-        clicked_login_text = await page.evaluate(
-            """() => {
-                const normalize = (value) => (value || "")
-                    .replace(/\\u0110/g, "D")
-                    .replace(/\\u0111/g, "d")
-                    .normalize("NFD")
-                    .replace(/[\\u0300-\\u036f]/g, "")
-                    .toLowerCase();
-                const isVisible = (el) => {
-                    const box = el.getBoundingClientRect();
-                    const style = window.getComputedStyle(el);
-                    return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none";
-                };
-                const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
-                const login = candidates.find((el) => normalize(el.textContent).includes("dang nhap") && isVisible(el));
-                if (!login) {
-                    return null;
-                }
-                login.click();
-                return login.textContent || "";
-            }"""
-        )
-        if clicked_login_text:
-            logger.info("Da nhan nut dang nhap: %s", clicked_login_text.strip())
+        clicked_login = await _click_visible_login_prompt(page)
+        if clicked_login:
+            logger.info("Da bam nut dang nhap.")
             await page.wait_for_timeout(1000)
+            await _wait_until_dom_ready(page)
             try:
-                await page.wait_for_load_state("networkidle")
+                await page.wait_for_selector("input[type='password']", timeout=10_000)
             except Exception:
-                logger.debug("Trang dang nhap chua networkidle sau khi click, tiep tuc kiem tra form.")
+                logger.debug("Chua thay o password sau khi bam Login, tiep tuc kiem tra trang hien tai.")
 
     # ---- 2. Đăng nhập nếu thấy form login ----
     password_input = page.locator("input[type='password']")
     if await password_input.count() > 0:
         logger.info("Phát hiện trang đăng nhập, đang điền thông tin...")
 
-        # Tìm ô username: ưu tiên input[name] phổ biến, fallback sang ô text
-        # đầu tiên trước ô password.
-        username_input = page.locator(
-            "input[name='username'], "
-            "input[name='userName'], "
-            "input[name='email'], "
-            "input[name='login'], "
-            "input[type='text']"
-        ).first
-        await username_input.fill(settings.web_username)
-        await password_input.first.fill(settings.web_password)
+        await _fill_login_credentials(
+            page,
+            username=settings.web_username,
+            password=settings.web_password,
+        )
 
         # Nhấn nút đăng nhập
         submit_btn = page.locator(
@@ -324,47 +543,58 @@ async def start_browser_and_login(browser_context, page=None):
         await submit_btn.click()
 
         # Chờ trang chuyển hướng sau đăng nhập
-        await page.wait_for_load_state("networkidle")
-        logger.info("Đăng nhập thành công, URL hiện tại: %s", page.url)
+        await _wait_until_dom_ready(page)
+        await _wait_for_login_success(page)
     else:
-        logger.info("Không thấy form đăng nhập — có thể đã đăng nhập sẵn.")
+        login_prompt_count = await _visible_login_prompt_count(page)
+        if login_prompt_count > 0:
+            raise RuntimeError(
+                "Chưa đăng nhập: trang vẫn hiển thị nút Đăng Nhập/Login nhưng không mở được form mật khẩu."
+            )
+        logger.info("Không thấy form đăng nhập và không còn nút đăng nhập — có thể đã đăng nhập sẵn.")
+
+    await _recover_from_callback_url(page)
 
     # ---- 3. Điều hướng đến trang Gửi Yêu Cầu Thẩm Định (YCTD) ----
     # Trên thanh navigation của CEN VALUE có mục "YCTD".
-    yctd_link = page.locator(
-        "a:has-text('YCTD'), "
-        "a:has-text('Yêu cầu thẩm định'), "
-        "a[href*='yctd'], "
-        "a[href*='YCTD'], "
-        "a[href*='tham-dinh']"
-    ).first
-
-    if await yctd_link.count() > 0:
+    if await _click_yctd_navigation(page):
         logger.info("Đang điều hướng đến trang Gửi Yêu Cầu Thẩm Định...")
-        await yctd_link.click()
-        await page.wait_for_load_state("networkidle")
     else:
         logger.warning(
             "Không tìm thấy liên kết YCTD trên thanh điều hướng. "
             "Trang hiện tại có thể đã là trang YCTD."
         )
 
+    if "#/callback" in page.url:
+        await _recover_from_callback_url(page)
+        await _click_yctd_navigation(page)
+
     # ---- 4. Chọn tab "Thẩm định tài sản" nếu có ----
     tab_tham_dinh = page.locator(
         "a:has-text('Thẩm định tài sản'), "
-        "[role='tab']:has-text('Thẩm định tài sản')"
+        "a:has-text('Asset appraisal'), "
+        "a:has-text('Asset valuation'), "
+        "[role='tab']:has-text('Thẩm định tài sản'), "
+        "[role='tab']:has-text('Asset appraisal'), "
+        "[role='tab']:has-text('Asset valuation')"
     ).first
     if await tab_tham_dinh.count() > 0:
         await tab_tham_dinh.click()
-        await page.wait_for_load_state("networkidle")
+        await _wait_until_dom_ready(page)
         logger.info("Đã chọn tab 'Thẩm định tài sản'.")
 
     # ---- 5. Xác nhận đã đến đúng trang ----
     heading = page.locator(
         "text='GỬI YÊU CẦU THẨM ĐỊNH', "
         "text='Gửi Yêu Cầu Thẩm Định', "
+        "text='Appraisal Request', "
+        "text='Valuation Request', "
         "h1:has-text('thẩm định'), "
+        "h1:has-text('appraisal'), "
+        "h1:has-text('valuation'), "
         "h2:has-text('thẩm định'), "
+        "h2:has-text('appraisal'), "
+        "h2:has-text('valuation'), "
         ".page-title:has-text('thẩm định')"
     ).first
     if await heading.count() > 0:
@@ -375,6 +605,11 @@ async def start_browser_and_login(browser_context, page=None):
             "URL hiện tại: %s — vui lòng kiểm tra thủ công.",
             page.url,
         )
+
+    try:
+        await page.wait_for_selector("#input-tenKhachHang", timeout=30_000)
+    except Exception as exc:
+        raise RuntimeError(f"Không mở được form Gửi Yêu Cầu Thẩm Định sau đăng nhập. URL hiện tại: {page.url}") from exc
 
     return page
 
@@ -511,6 +746,75 @@ async def _select_ng_dropdown_by_label(page, label: str, value: str) -> bool:
     await page.wait_for_timeout(500)
     logger.info("Dropdown '%s' typed '%s' and pressed Enter", label, value)
     return True
+
+
+async def _select_ng_dropdown_by_selector(page, selector: str, value: str, *, label: str) -> bool:
+    if not value:
+        return False
+
+    dropdown = page.locator(selector).first
+    try:
+        await dropdown.wait_for(state="visible", timeout=10_000)
+        await page.wait_for_function(
+            """(selector) => {
+                const el = document.querySelector(selector);
+                return el && !el.className.includes("ng-select-disabled") && el.getAttribute("aria-disabled") !== "true";
+            }""",
+            arg=selector,
+            timeout=10_000,
+        )
+        await dropdown.scroll_into_view_if_needed()
+        await dropdown.click(timeout=5_000, force=True)
+        await page.wait_for_timeout(500)
+        normalized_value = _normalize_text(value)
+        options = await _visible_ng_options(page)
+        for index, option_text in options:
+            normalized_option = _normalize_text(option_text)
+            if normalized_option == normalized_value or normalized_value in normalized_option:
+                await page.locator(".ng-option").nth(index).click()
+                await page.wait_for_timeout(500)
+                logger.info("Dropdown '%s' -> '%s' qua selector %s", label, option_text, selector)
+                return True
+
+        await page.keyboard.press("Control+A")
+        await page.keyboard.press("Backspace")
+        await page.keyboard.type(value, delay=50)
+        await page.wait_for_timeout(1_000)
+        options = await _visible_ng_options(page)
+        for index, option_text in options:
+            normalized_option = _normalize_text(option_text)
+            if normalized_option == normalized_value or normalized_value in normalized_option:
+                await page.locator(".ng-option").nth(index).click()
+                await page.wait_for_timeout(500)
+                logger.info("Dropdown '%s' -> '%s' qua selector %s", label, option_text, selector)
+                return True
+        await page.keyboard.press("Enter")
+        await page.wait_for_timeout(500)
+        selected_text = (await dropdown.inner_text()).strip()
+        if _normalize_text(value) in _normalize_text(selected_text):
+            logger.info("Dropdown '%s' typed '%s' and selected via Enter", label, value)
+            return True
+    except Exception as exc:
+        logger.warning("Dropdown '%s': khong chon duoc '%s' qua selector %s: %s", label, value, selector, exc)
+
+    return False
+
+
+async def _ng_dropdown_text(page, selector: str) -> str:
+    try:
+        return (await page.locator(selector).first.inner_text(timeout=1_000)).strip()
+    except Exception:
+        return ""
+
+
+async def _ng_dropdown_is_disabled(page, selector: str) -> bool:
+    try:
+        dropdown = page.locator(selector).first
+        return bool(await dropdown.evaluate(
+            """(el) => el.className.includes("ng-select-disabled") || el.getAttribute("aria-disabled") === "true" """
+        ))
+    except Exception:
+        return False
 
 
 async def _select_ng_dropdown_matching_text(page, label: str, source_text: str) -> bool:
@@ -704,7 +1008,15 @@ async def fill_basic_info(page, data: Mapping[str, str]) -> None:
         branch_val = branch_val[3:].strip()
     if not branch_val:
         branch_val = "Đà Nẵng"
-    await _select_dropdown(page, "Chi nhánh thẩm định", branch_val)
+    branch_selected = await _select_ng_dropdown_by_selector(
+        page,
+        "#input-chiNhanh",
+        branch_val,
+        label="Chi nhánh thẩm định",
+    ) or await _select_dropdown(page, "Chi nhánh thẩm định", branch_val)
+    branch_text = _normalize_text(await _ng_dropdown_text(page, "#input-chiNhanh"))
+    if not branch_selected or _normalize_text(branch_val) not in branch_text:
+        raise RuntimeError(f"Không chọn được Chi nhánh thẩm định trên Web: {branch_val}")
     logger.info("Chọn Chi nhánh thẩm định: %s", branch_val)
 
     # Chọn Văn Phòng (Dynamic mapping)
@@ -713,7 +1025,15 @@ async def fill_basic_info(page, data: Mapping[str, str]) -> None:
         office_val = office_val[3:].strip()
     if not office_val:
         office_val = "Đà Nẵng"
-    await _select_dropdown(page, "Chọn Văn Phòng", office_val)
+    office_selected = await _select_ng_dropdown_by_selector(
+        page,
+        "#input-vanPhong",
+        office_val,
+        label="Chọn Văn Phòng",
+    ) or await _select_dropdown(page, "Chọn Văn Phòng", office_val)
+    office_text = _normalize_text(await _ng_dropdown_text(page, "#input-vanPhong"))
+    if not office_selected or _normalize_text(office_val) not in office_text:
+        raise RuntimeError(f"Không chọn được Văn phòng thẩm định trên Web: {office_val}")
     logger.info("Chọn Văn Phòng: %s", office_val)
 
     # Ghi chú: Bỏ qua (Skip)
@@ -865,11 +1185,30 @@ async def fill_asset_info(page, data: Mapping[str, str]) -> None:
 
     # Loại tài sản & Nhóm tài sản (Dynamic mapping)
     asset_type = str(data.get("asset_type") or "").strip()
-    target_type = _asset_web_value(asset_type)
-    
+    target_type, target_group = _asset_web_values(asset_type)
+
     if target_type:
-        await _select_dropdown(page, "Loại tài sản", target_type)
-        await _select_dropdown(page, "Nhóm tài sản", target_type)
+        if await _ng_dropdown_is_disabled(page, "#input-loaiTaiSanDesk"):
+            logger.info("Bo qua Loai tai san vi web dang disable truong #input-loaiTaiSanDesk.")
+        else:
+            type_selected = await _select_ng_dropdown_by_selector(
+                page,
+                "#input-loaiTaiSanDesk",
+                target_type,
+                label="Loại tài sản",
+            )
+            if not type_selected:
+                raise RuntimeError(f"Không chọn được Loại tài sản trên Web: {target_type} (dữ liệu app: {asset_type})")
+
+        group_selected = await _select_ng_dropdown_by_selector(
+            page,
+            "#input-nhomTaiSan",
+            target_group,
+            label="Nhóm tài sản",
+        )
+        group_text = _normalize_text(await _ng_dropdown_text(page, "#input-nhomTaiSan"))
+        if not group_selected or _normalize_text(target_group) not in group_text:
+            raise RuntimeError(f"Không chọn được Nhóm tài sản trên Web: {target_group} (dữ liệu app: {asset_type})")
     await _hide_handover_authorization_fields(page)
 
 

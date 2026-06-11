@@ -45,6 +45,24 @@ def _ensure_output_dir_state() -> Path:
     return Path(str(st.session_state["case_output_dir_input"]).strip() or str(CASE_FILES_DIR))
 
 
+def _short_error_message(exc: Exception, *, max_chars: int = 280) -> str:
+    message = str(exc).strip()
+    first_line = next((line.strip() for line in message.splitlines() if line.strip()), "")
+    if not first_line:
+        first_line = type(exc).__name__
+    if len(first_line) > max_chars:
+        return f"{first_line[:max_chars].rstrip()}..."
+    return first_line
+
+
+def _render_web_action_error(exc: Exception) -> None:
+    st.error(f"Nhập Web thất bại: {_short_error_message(exc)}")
+    detail = str(exc).strip()
+    if detail:
+        with st.expander("Chi tiết lỗi kỹ thuật", expanded=False):
+            st.code(detail, language="text")
+
+
 def _selected_case_folder(base_dir: Path, *, selected_id: int, case: dict[str, object]) -> Path:
     return case_folder(
         base_dir,
@@ -628,7 +646,7 @@ def handle_quick_action(
                     result = asyncio.run(run_company_web_entry(export_case, web_url=""))
                 st.success(result)
             except Exception as exc:
-                st.error(f"Nhập Web thất bại: {exc}")
+                _render_web_action_error(exc)
 
     elif action_type == "export":
         customer_type = (refreshed_case.get("customer_type") or "individual") if refreshed_case else "individual"
@@ -808,7 +826,7 @@ def render(
                     result = asyncio.run(run_company_web_entry(export_case, web_url=""))
                 st.success(result)
             except Exception as exc:
-                st.error(f"Nhập Web thất bại: {exc}")
+                _render_web_action_error(exc)
 
     if preview_individual_clicked:
         error = document_action_error(
