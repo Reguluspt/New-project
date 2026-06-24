@@ -1,0 +1,6 @@
+@echo off
+echo Starting Flask API on port 5000...
+start "Flask API" cmd /k "cd /d e:\New project && .venv\Scripts\python -m api.run"
+echo Starting React dev server on port 5173...
+start "React Dev" cmd /k "cd /d e:\New project\web && npm run dev"
+echo Both servers starting. API: http://localhost:5000, Web: http://localhost:5173

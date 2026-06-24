@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System dependencies (for python-docx, Pillow, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY api/ ./api/
+COPY src/ ./src/
+COPY data/ ./data/
+COPY samples/ ./samples/
+
+# Copy environment template (override with real secrets at runtime)
+COPY API.env .
+
+ENV FLASK_PORT=5000
+ENV FLASK_HOST=0.0.0.0
+ENV FLASK_DEBUG=false
+ENV PYTHONIOENCODING=utf-8
+
+EXPOSE 5000
+
+CMD ["python", "-m", "api.run", "--port", "5000", "--host", "0.0.0.0"]

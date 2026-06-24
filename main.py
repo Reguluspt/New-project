@@ -53,21 +53,11 @@ async def run_subprocess(name: str, args: list[str]) -> None:
                 await process.wait()
 
 
-async def run_streamlit() -> None:
-    port = os.getenv("STREAMLIT_PORT", "8501")
+async def run_flask() -> None:
+    port = os.getenv("FLASK_PORT", "5000")
     await run_subprocess(
-        "streamlit",
-        [
-            sys.executable,
-            "-m",
-            "streamlit",
-            "run",
-            str(PROJECT_ROOT / "app.py"),
-            "--server.port",
-            port,
-            "--server.address",
-            os.getenv("STREAMLIT_ADDRESS", "0.0.0.0"),
-        ],
+        "flask",
+        [sys.executable, "-m", "api.run", "--port", port],
     )
 
 
@@ -99,7 +89,7 @@ async def main() -> None:
     load_shared_env()
     log_records_db_path("main", os.environ["RECORDS_DB_PATH"])
     tasks = [
-        asyncio.create_task(run_streamlit(), name="streamlit"),
+        asyncio.create_task(run_flask(), name="flask"),
         asyncio.create_task(run_telegram_webhook(), name="telegram"),
         asyncio.create_task(run_mail_listener(), name="mail_listener"),
     ]

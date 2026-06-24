@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 import email
+import html
 import json
 import os
 import re
@@ -43,7 +44,11 @@ from .database_manager import (
 )
 from .mail_renderer import mail_data_from_record, render_appraisal_email
 from .mail_service import GmailSmtpSettings, _dedupe_emails, _parse_email_list, attach_inline_logo, load_gmail_smtp_settings
-from .professional_forwarding import professional_forward_enabled, professional_recipient_from_record
+from .professional_forwarding import (
+    professional_forward_enabled,
+    professional_recipient_from_record,
+    professional_recipient_greeting,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -83,6 +88,30 @@ class CertificateExtraction(BaseModel):
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
+CERTIFICATE_NUMBER_PATTERN = re.compile(
+    r"(?:số\s*(?:chứng\s*thư|ct)|so\s*(?:chung\s*thu|ct))\s*[:\-]?\s*"
+    r"(?P<certificate>[A-Za-z0-9][A-Za-z0-9./-]{4,})",
+    re.IGNORECASE,
+)
+
+
+def extract_certificate_number_locally(email_text: str) -> CertificateExtraction:
+    match = CERTIFICATE_NUMBER_PATTERN.search(email_text or "")
+    if not match:
+        return CertificateExtraction()
+    return CertificateExtraction(
+        certificate_number=match.group("certificate").rstrip(".,;:!?)]"),
+        confidence=1.0,
+    )
+
+
+@dataclass(frozen=True)
+class IncomingAttachment:
+    filename: str
+    content_type: str
+    content: bytes
+
+
 @dataclass(frozen=True)
 class IncomingEmail:
     uid: str
@@ -99,6 +128,8 @@ class IncomingEmail:
     thread_index: str
     text: str
     raw: bytes
+    html: str = ""
+    attachments: tuple[IncomingAttachment, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -438,15 +469,41 @@ def _decode_header_value(value: object) -> str:
 
 
 def parse_incoming_email(raw: bytes, *, uid: str = "", thread_id: str = "") -> IncomingEmail:
+    import base64 as _base64
     message = email.message_from_bytes(raw)
     text_parts: list[str] = []
     html_parts: list[str] = []
+    attachments: list[IncomingAttachment] = []
+    # Map content-id -> (mime_type, base64_data)
+    inline_images: dict[str, tuple[str, str]] = {}
+
     if message.is_multipart():
         for part in message.walk():
-            disposition = str(part.get("Content-Disposition") or "").lower()
-            if "attachment" in disposition:
-                continue
             content_type = part.get_content_type()
+            disposition = str(part.get("Content-Disposition") or "").lower()
+            content_id = str(part.get("Content-ID") or "").strip().strip("<>")
+
+            # Collect inline images referenced by CID
+            if content_type.startswith("image/") and content_id:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    b64 = _base64.b64encode(payload).decode("ascii")
+                    inline_images[content_id] = (content_type, b64)
+                continue
+
+            filename = _decode_header_value(part.get_filename())
+            if "attachment" in disposition or filename:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    attachments.append(
+                        IncomingAttachment(
+                            filename=filename or f"attachment-{len(attachments) + 1}",
+                            content_type=content_type or "application/octet-stream",
+                            content=payload,
+                        )
+                    )
+                continue
+
             if content_type == "text/plain":
                 text_parts.append(_decode_part(part))
             elif content_type == "text/html":
@@ -457,9 +514,16 @@ def parse_incoming_email(raw: bytes, *, uid: str = "", thread_id: str = "") -> I
         else:
             text_parts.append(_decode_part(message))
 
+    # Build combined HTML, replacing cid: references with data URIs
+    raw_html = "\n".join(html_parts)
+    if raw_html and inline_images:
+        for cid, (mime_type, b64) in inline_images.items():
+            data_uri = f"data:{mime_type};base64,{b64}"
+            raw_html = raw_html.replace(f"cid:{cid}", data_uri)
+
     text = "\n".join(part.strip() for part in text_parts if part.strip())
-    if not text and html_parts:
-        text = strip_html("\n".join(html_parts))
+    if not text and raw_html:
+        text = strip_html(raw_html)
 
     from_header = str(message.get("From") or "")
     reply_to_header = str(message.get("Reply-To") or "")
@@ -480,6 +544,8 @@ def parse_incoming_email(raw: bytes, *, uid: str = "", thread_id: str = "") -> I
         thread_index=_decode_header_value(message.get("Thread-Index")),
         text=text,
         raw=raw,
+        html=raw_html,
+        attachments=tuple(attachments),
     )
 
 
@@ -766,6 +832,28 @@ def _is_from_admin(incoming: IncomingEmail, settings: MailListenerSettings) -> b
     return incoming.from_email.lower() in admins
 
 
+def _original_reply_html(incoming: IncomingEmail) -> str:
+    original_html = incoming.html.strip()
+    if not original_html:
+        original_html = html.escape(incoming.text.strip() or "(Email Hành chính không có nội dung.)").replace("\n", "<br>")
+    return (
+        '<hr style="margin:24px 0;border:0;border-top:1px solid #d9d9d9">'
+        '<p><strong>Nội dung phản hồi từ Hành chính</strong></p>'
+        f'<div style="border-left:3px solid #d9d9d9;padding-left:16px">{original_html}</div>'
+    )
+
+
+def _attach_incoming_attachments(message: EmailMessage, incoming: IncomingEmail) -> None:
+    for attachment in incoming.attachments:
+        maintype, _, subtype = attachment.content_type.partition("/")
+        message.add_attachment(
+            attachment.content,
+            maintype=maintype or "application",
+            subtype=subtype or "octet-stream",
+            filename=attachment.filename,
+        )
+
+
 def build_professional_forward_message(
     *,
     incoming: IncomingEmail,
@@ -777,16 +865,15 @@ def build_professional_forward_message(
     professional_email = professional_recipient_from_record(record, settings.professional_dept_email)
     if not professional_email:
         raise RuntimeError("Thiếu PROFESSIONAL_DEPT_EMAIL để chuyển tiếp cho bộ phận nghiệp vụ.")
-    record_with_certificate = dict(record)
-    record_with_certificate["contract_number"] = certificate_number
-    mail_data = mail_data_from_record(record_with_certificate).model_copy(
+    greeting_name = professional_recipient_greeting(professional_email)
+    mail_data = mail_data_from_record(dict(record)).model_copy(
         update={
-            "greeting_name": "Kiệt",
+            "greeting_name": greeting_name,
             "contract_id": certificate_number,
             "intro_text": "Em phân chuyên viên định giá tài sản theo thông tin bên dưới giúp anh nhé, cảm ơn em!",
         }
     )
-    html = render_appraisal_email(mail_data)
+    html_body = render_appraisal_email(mail_data) + _original_reply_html(incoming)
     to_email, cc_list = _reply_all_with_professional_recipients(
         incoming,
         smtp_settings=smtp_settings,
@@ -807,9 +894,10 @@ def build_professional_forward_message(
         message["Thread-Topic"] = incoming.thread_topic
     if incoming.thread_index:
         message["Thread-Index"] = incoming.thread_index
-    message.set_content("Email này cần trình đọc HTML để xem bảng thông tin hồ sơ.")
-    message.add_alternative(html, subtype="html")
+    message.set_content("Email này cần trình đọc HTML để xem thông tin hồ sơ và phản hồi từ Hành chính.")
+    message.add_alternative(html_body, subtype="html")
     attach_inline_logo(message)
+    _attach_incoming_attachments(message, incoming)
     return message
 
 
@@ -824,29 +912,22 @@ async def send_professional_forward(
     from .oauth2_service import get_enabled_oauth_provider, send_email_via_oauth2
 
     provider = get_enabled_oauth_provider()
+    message = build_professional_forward_message(
+        incoming=incoming,
+        record=record,
+        certificate_number=certificate_number,
+        smtp_settings=smtp_settings,
+        settings=settings,
+    )
+    to_email = str(message.get("To") or "")
+    cc_list = [
+        email_address
+        for _name, email_address in getaddresses([str(message.get("Cc") or "")])
+        if email_address
+    ]
+    subject = str(message.get("Subject") or "")
 
     if provider:
-        professional_email = professional_recipient_from_record(record, settings.professional_dept_email)
-        if not professional_email:
-            raise RuntimeError("Thiếu PROFESSIONAL_DEPT_EMAIL để chuyển tiếp cho bộ phận nghiệp vụ.")
-        record_with_certificate = dict(record)
-        record_with_certificate["contract_number"] = certificate_number
-        mail_data = mail_data_from_record(record_with_certificate).model_copy(
-            update={
-                "greeting_name": "Kiệt",
-                "contract_id": certificate_number,
-                "intro_text": "Em phân chuyên viên định giá tài sản theo thông tin bên dưới giúp anh nhé, cảm ơn em!",
-            }
-        )
-        html = render_appraisal_email(mail_data)
-        to_email, cc_list = _reply_all_with_professional_recipients(
-            incoming,
-            smtp_settings=smtp_settings,
-            professional_email=professional_email,
-            monitor_cc=settings.monitor_cc_list or [],
-        )
-        subject = _reply_subject(incoming.subject)
-        
         try:
             gmail_thread_id = incoming.thread_id or None
             append_listener_log(
@@ -875,13 +956,14 @@ async def send_professional_forward(
                 from_email=smtp_settings.mail_from or smtp_settings.username,
                 to_email=to_email,
                 subject=subject,
-                html_body=html,
+                html_body="",
                 cc_emails=cc_list,
                 reply_to_msg_id=incoming.message_id,
                 references=incoming.references,
                 thread_id=gmail_thread_id,
                 thread_topic=incoming.thread_topic,
                 thread_index=incoming.thread_index,
+                mime_message=message,
             )
             append_listener_log(
                 "professional_reply_all_sent",
@@ -907,13 +989,6 @@ async def send_professional_forward(
             )
             raise RuntimeError(f"Gửi chuyển tiếp qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
 
-    message = build_professional_forward_message(
-        incoming=incoming,
-        record=record,
-        certificate_number=certificate_number,
-        smtp_settings=smtp_settings,
-        settings=settings,
-    )
     recipients = [
         email_address
         for _name, email_address in getaddresses([message.get("To", ""), message.get("Cc", "")])
@@ -929,11 +1004,72 @@ async def send_professional_forward(
     await asyncio.to_thread(_send_sync)
 
 
-async def notify_telegram(settings: MailListenerSettings, text: str) -> None:
+async def notify_telegram(settings: MailListenerSettings, text: str, parse_mode: str | None = None) -> None:
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
         return
     bot = Bot(settings.telegram_bot_token)
-    await bot.send_message(chat_id=settings.telegram_chat_id, text=text)
+    await bot.send_message(chat_id=settings.telegram_chat_id, text=text, parse_mode=parse_mode)
+
+
+async def notify_telegram_photo(settings: MailListenerSettings, photo_bytes: bytes, caption: str, parse_mode: str | None = None) -> None:
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        return
+    import io
+    bot = Bot(settings.telegram_bot_token)
+    bio = io.BytesIO(photo_bytes)
+    bio.name = "reply.png"
+    await bot.send_photo(chat_id=settings.telegram_chat_id, photo=bio, caption=caption, parse_mode=parse_mode)
+
+
+async def render_html_to_image(html_content: str) -> bytes:
+    from playwright.async_api import async_playwright
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        try:
+            page = await browser.new_page(viewport={"width": 800, "height": 600})
+            wrapped_html = f"""
+            <html>
+            <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    margin: 20px;
+                    padding: 0;
+                    background-color: #ffffff;
+                    color: #333333;
+                    font-size: 14px;
+                }}
+                table {{
+                    border-collapse: collapse;
+                    width: 100%;
+                    margin: 15px 0;
+                }}
+                th, td {{
+                    border: 1px solid #dddddd;
+                    text-align: left;
+                    padding: 8px;
+                }}
+                th {{
+                    background-color: #f2f2f2;
+                }}
+                img {{
+                    max-width: 100%;
+                    height: auto;
+                }}
+            </style>
+            </head>
+            <body>
+                {html_content}
+            </body>
+            </html>
+            """
+            await page.set_content(wrapped_html)
+            await page.wait_for_timeout(1000)
+            screenshot = await page.screenshot(full_page=True)
+            return screenshot
+        finally:
+            await browser.close()
 
 
 async def process_sobo_reply(incoming: IncomingEmail, *, settings: MailListenerSettings) -> bool:
@@ -968,7 +1104,8 @@ async def process_sobo_reply(incoming: IncomingEmail, *, settings: MailListenerS
     await update_sobo_record_status(
         settings.records_db_path,
         sobo_record["id"],
-        status="RESPONDED"
+        status="RESPONDED",
+        response_content=incoming.html.strip() if incoming.html.strip() else incoming.text.strip()
     )
 
     asset_info = ""
@@ -977,19 +1114,41 @@ async def process_sobo_reply(incoming: IncomingEmail, *, settings: MailListenerS
     else:
         asset_info = f"Thửa đất: {sobo_record.get('so_thua')}, tờ: {sobo_record.get('so_to')}; tại địa chỉ {sobo_record.get('dia_chi')}"
 
-    email_text_summary = incoming.text.strip()
-    if len(email_text_summary) > 300:
-        email_text_summary = email_text_summary[:300] + "..."
+    has_rich_content = False
+    if incoming.html:
+        lower_html = incoming.html.lower()
+        if "<table" in lower_html or "<img" in lower_html or "<tr" in lower_html:
+            has_rich_content = True
 
-    msg_text = (
-        "🔔 *Thông báo phản hồi Sơ bộ* 🔔\n\n"
-        f"📍 *Tài sản:* {asset_info}\n"
-        f"👤 *Nguồn khách hàng:* {sobo_record.get('source')}\n"
-        f"✉️ *Đã phản hồi bởi:* {incoming.from_email}\n\n"
-        f"💬 *Nội dung phản hồi:* \n_{email_text_summary}_"
-    )
-    
-    await notify_telegram(settings, msg_text)
+    sent_rich = False
+    if has_rich_content:
+        try:
+            logger.info("Email reply has rich content. Rendering HTML to image using Playwright...")
+            photo_bytes = await render_html_to_image(incoming.html)
+            caption = (
+                "🔔 *Thông báo phản hồi Sơ bộ (Bảng biểu/Hình ảnh)* 🔔\n\n"
+                f"📍 *Tài sản:* {asset_info}\n"
+                f"👤 *Nguồn khách hàng:* {sobo_record.get('source')}\n"
+                f"✉️ *Đã phản hồi bởi:* {incoming.from_email}"
+            )
+            await notify_telegram_photo(settings, photo_bytes, caption, parse_mode="Markdown")
+            sent_rich = True
+        except Exception as e:
+            logger.error(f"Failed to render HTML email to image: {e}. Falling back to plain text.")
+
+    if not sent_rich:
+        email_text_summary = incoming.text.strip()
+        if len(email_text_summary) > 300:
+            email_text_summary = email_text_summary[:300] + "..."
+
+        msg_text = (
+            "🔔 *Thông báo phản hồi Sơ bộ* 🔔\n\n"
+            f"📍 *Tài sản:* {asset_info}\n"
+            f"👤 *Nguồn khách hàng:* {sobo_record.get('source')}\n"
+            f"✉️ *Đã phản hồi bởi:* {incoming.from_email}\n\n"
+            f"💬 *Nội dung phản hồi:* \n_{email_text_summary}_"
+        )
+        await notify_telegram(settings, msg_text, parse_mode="Markdown")
     
     append_listener_log(
         "sobo_responded",
@@ -1021,31 +1180,33 @@ async def process_certificate_reply(incoming: IncomingEmail, *, settings: MailLi
         )
         return None
 
-    try:
-        extraction = analyze_certificate_with_gemini(
-            incoming.text,
-            api_key=settings.gemini_api_key,
-            model=settings.gemini_model,
-        )
-    except Exception as exc:
-        append_listener_log(
-            "failed",
-            uid=incoming.uid,
-            subject=incoming.subject,
-            from_email=incoming.from_email,
-            reason="certificate_extract_exception",
-            error_type=type(exc).__name__,
-            error=str(exc),
-        )
-        await write_listener_db_log(
-            settings.records_db_path,
-            event="certificate_extract_failed",
-            incoming=incoming,
-            reason="exception",
-            raw_email_text=incoming.text,
-            details={"error_type": type(exc).__name__, "error": str(exc)},
-        )
-        return None
+    extraction = extract_certificate_number_locally(incoming.text)
+    if not extraction.certificate_number:
+        try:
+            extraction = analyze_certificate_with_gemini(
+                incoming.text,
+                api_key=settings.gemini_api_key,
+                model=settings.gemini_model,
+            )
+        except Exception as exc:
+            append_listener_log(
+                "failed",
+                uid=incoming.uid,
+                subject=incoming.subject,
+                from_email=incoming.from_email,
+                reason="certificate_extract_exception",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            await write_listener_db_log(
+                settings.records_db_path,
+                event="certificate_extract_failed",
+                incoming=incoming,
+                reason="exception",
+                raw_email_text=incoming.text,
+                details={"error_type": type(exc).__name__, "error": str(exc)},
+            )
+            return None
     certificate_number = extraction.certificate_number.strip()
     if not certificate_number:
         append_listener_log(
@@ -1685,7 +1846,7 @@ async def sync_sobo_emails_from_mailbox(db_path: str | Path | None = None) -> in
                 
                 if parent_record:
                     if parent_record.get("status") == "PENDING":
-                        await update_sobo_record_status(db_path, parent_record["id"], "RESPONDED", responded_at=date_iso)
+                        await update_sobo_record_status(db_path, parent_record["id"], "RESPONDED", responded_at=date_iso, response_content=item.get("body", ""))
                         synced_count += 1
                 else:
                     exists = False

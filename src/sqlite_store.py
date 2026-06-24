@@ -342,8 +342,31 @@ def delete_organization(db_path: str | Path, org_id: int) -> None:
         conn.execute("DELETE FROM organizations WHERE id = ?", (org_id,))
 
 
+def format_contract_number(value: str) -> str:
+    if not value:
+        return value
+    val = value.strip()
+    now = datetime.now()
+    current_year = now.strftime("%Y")
+    current_month = now.strftime("%m")
+    
+    if re.match(r"^\d{4}$", val):
+        return f"010/{current_year}/N{current_month}-{val}/DN"
+    if re.match(r"^\.\d{4}$", val):
+        return f"010/{current_year}/N{current_month}.{val[1:]}/DN"
+        
+    # Handle semi-short format e.g. "N05-0806", "N05.0806", "N05-0851/DN"
+    match = re.match(r"^N(\d{2})([-.]\d{4})(/DN)?$", val, re.IGNORECASE)
+    if match:
+        month, suffix, _ = match.groups()
+        return f"010/{current_year}/N{month}{suffix}/DN"
+        
+    return value
+
+
 def _normalize_case(values: dict[str, Any]) -> dict[str, Any]:
     normalized = {field: values.get(field, "") for field in CASE_FIELDS}
+    normalized["contract_number"] = format_contract_number(str(normalized.get("contract_number") or "").strip())
     normalized["customer_type"] = normalized.get("customer_type") or infer_customer_type(normalized.get("customer_info", ""))
     normalized["case_status"] = str(normalized.get("case_status") or DEFAULT_CASE_STATUS).strip() or DEFAULT_CASE_STATUS
     normalized["cancel_reason"] = str(normalized.get("cancel_reason") or "").strip()
@@ -556,6 +579,7 @@ def distinct_case_values(db_path: str | Path, field: str) -> list[str]:
         "source",
         "business_staff",
         "asset_type",
+        "valuation_branch",
     }
     if field not in allowed:
         raise ValueError(f"Unsupported distinct field: {field}")

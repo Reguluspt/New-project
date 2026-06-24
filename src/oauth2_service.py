@@ -502,10 +502,11 @@ async def send_email_via_oauth2(
     thread_id: str | None = None,
     thread_topic: str | None = None,
     thread_index: str | None = None,
+    mime_message: EmailMessage | None = None,
 ) -> str:
     """Gửi email thông qua API REST của Google Workspace hoặc Outlook sử dụng OAuth2."""
     if provider == "outlook" and is_outlook_smtp_enabled():
-        message = _build_mime_message(
+        message = mime_message or _build_mime_message(
             get_outlook_sender_email(),
             to_email,
             subject,
@@ -516,12 +517,18 @@ async def send_email_via_oauth2(
             thread_topic,
             thread_index,
         )
+        sender_email = get_outlook_sender_email()
+        if sender_email:
+            if message.get("From"):
+                message.replace_header("From", sender_email)
+            else:
+                message["From"] = sender_email
         return await send_outlook_message_via_smtp_oauth2(message)
 
     access_token = await get_valid_access_token_async(provider)
 
     if provider == "google":
-        msg = _build_mime_message(
+        msg = mime_message or _build_mime_message(
             from_email,
             to_email,
             subject,
@@ -552,6 +559,29 @@ async def send_email_via_oauth2(
 
     elif provider == "outlook":
         outlook_sender_email = get_outlook_sender_email()
+        if mime_message is not None:
+            if outlook_sender_email:
+                if mime_message.get("From"):
+                    mime_message.replace_header("From", outlook_sender_email)
+                else:
+                    mime_message["From"] = outlook_sender_email
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "text/plain",
+                }
+                response = await client.post(
+                    "https://graph.microsoft.com/v1.0/me/sendMail",
+                    headers=headers,
+                    content=base64.b64encode(mime_message.as_bytes()).decode("ascii"),
+                )
+                if response.status_code not in [200, 202]:
+                    detail = _graph_error_detail(response)
+                    if response.status_code == 401:
+                        detail = f"{detail}; {_access_token_claim_summary(access_token)}"
+                    raise RuntimeError(f"Gửi mail qua Microsoft Graph API thất bại: {detail}")
+                return response.headers.get("client-request-id", "outlook-msg-sent")
+
         # Build recipient JSON payload
         to_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in to_email.split(",") if addr.strip()]
         cc_recipients = []

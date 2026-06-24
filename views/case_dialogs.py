@@ -299,13 +299,14 @@ def open_case_edit_dialog(db_path: Path, case_id: int) -> None:
         with action_cols[2]:
             quick_export_clicked = st.button("Xuất nhanh hồ sơ", width="stretch", key=f"btn_quick_export_{suffix}")
 
+    from src.sqlite_store import format_contract_number
     edited_values = {
         "customer_type": "organization" if is_org else "individual",
         "case_status": case_status,
         "cancel_reason": "",
         "execution_month": execution_month,
         "payment_status": payment_status,
-        "contract_number": contract_number,
+        "contract_number": format_contract_number(contract_number),
         "contract_date": contract_date,
         "certificate_date": certificate_date,
         "customer_info": customer_info_org if is_org else customer_info_ind,

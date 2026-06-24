@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from docx import Document
@@ -13,11 +14,57 @@ from src.template_manager import (
     read_docx_text,
     read_template_history,
     restore_template_from_snapshot,
+    load_template_config,
+    save_template_config,
     update_template_blocks,
 )
 
 
 class TemplateHistoryTests(unittest.TestCase):
+    def test_template_config_paths_are_portable_between_project_roots(self) -> None:
+        project_root = Path(__file__).resolve().parent.parent
+        defaults = {
+            "excel_template_path": str(project_root / "samples" / "form_nhap_lieu.xlsx"),
+            "individual_template_dir": str(project_root / "samples" / "templates" / "individual"),
+            "organization_template_dir": str(project_root / "samples" / "templates" / "organization"),
+            "template_editor_name": "Tester",
+            "locked_templates": [],
+            "template_labels": {},
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "template_config.json"
+            save_template_config(config_path, defaults)
+            stored = json.loads(config_path.read_text(encoding="utf-8"))
+            loaded = load_template_config(config_path, defaults)
+
+        self.assertEqual(stored["excel_template_path"], "samples/form_nhap_lieu.xlsx")
+        self.assertEqual(stored["individual_template_dir"], "samples/templates/individual")
+        self.assertEqual(
+            stored["organization_template_dir"],
+            "samples/templates/organization",
+        )
+        self.assertEqual(
+            loaded["excel_template_path"],
+            str(project_root / "samples" / "form_nhap_lieu.xlsx"),
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "legacy_template_config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "excel_template_path": r"C:\\legacy\\app\\samples\\form_nhap_lieu.xlsx",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            healed = load_template_config(config_path, defaults)
+
+        self.assertEqual(
+            healed["excel_template_path"],
+            str(project_root / "samples" / "form_nhap_lieu.xlsx"),
+        )
+
     def test_restore_template_from_snapshot_restores_docx_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

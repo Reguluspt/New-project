@@ -946,6 +946,11 @@ def format_record_summary(record_id: int, values: dict[str, str]) -> str:
     for index, (field, label) in enumerate(editable_record_fields(values), start=1):
         value = _display_record_value(field, values.get(field) or "")
         lines.append(f"{index}. {label}: {value}")
+    
+    web_case_id = str(values.get("web_case_id") or "").strip()
+    if web_case_id:
+        lines.append(f"🆔 **ID Web:**\n{web_case_id}")
+        
     lines.append(f"Trạng thái: {PENDING_STATUS}")
     return "\n".join(lines)
 
@@ -1868,7 +1873,48 @@ async def _run_web_automation_task(
         result = await run_company_web_entry(record, web_url=settings.company_web_url)
         await application.bot.send_message(chat_id=chat_id, text=f"Nhập Web Công ty thành công: {result}")
     except Exception as exc:
-        await application.bot.send_message(chat_id=chat_id, text=f"Nhập Web Công ty thất bại: {exc}")
+        exc_str = str(exc)
+        
+        # Ghi log chi tiết lỗi kỹ thuật (bao gồm traceback) vào log file của server
+        logger.error("Lỗi chi tiết khi nhập Web (cho kỹ thuật viên): \n%s", exc_str)
+        
+        # Phân tích thông tin chẩn đoán từ AI nếu có
+        if "Chẩn đoán bởi AI:" in exc_str:
+            diag_lines = []
+            missing_fields_str = ""
+            for line in exc_str.split("\n"):
+                if "Chẩn đoán bởi AI:" in line or "Trạng thái:" in line or "Chi tiết:" in line:
+                    diag_lines.append(line.strip())
+                elif "Thiếu trường bắt buộc:" in line:
+                    missing_fields_str = line.replace("- ⚠️ **Thiếu trường bắt buộc:**", "").replace("Thiếu trường bắt buộc:", "").strip()
+            
+            diag_summary = "\n".join(diag_lines)
+            
+            # Tạo thông báo lỗi ngắn gọn, thân thiện với người dùng không rành công nghệ
+            msg_text = (
+                f"❌ **Nhập Web Công ty thất bại cho hồ sơ #{record_id}**\n\n"
+                f"{diag_summary}\n"
+            )
+            if missing_fields_str:
+                msg_text += f"⚠️ **Thiếu trường thông tin bắt buộc:** {missing_fields_str}\n\n"
+            msg_text += "Vui lòng nhấn nút dưới đây để bổ sung thông tin hoặc thử lại."
+            
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("📝 Bổ sung thông tin", callback_data=f"fill_missing:{record_id}"),
+                    InlineKeyboardButton("🔄 Nhập lại lên Web", callback_data=f"{WEB_AUTOMATION_CALLBACK_PREFIX}:{record_id}")
+                ]
+            ])
+            await application.bot.send_message(chat_id=chat_id, text=msg_text, reply_markup=keyboard, parse_mode="Markdown")
+        else:
+            # Đối với các lỗi không có chẩn đoán AI, rút gọn hiển thị lỗi thân thiện
+            friendly_err = exc_str.split("Chi tiết:")[0].split("Traceback")[0].strip()
+            msg_text = (
+                f"❌ **Nhập Web Công ty thất bại cho hồ sơ #{record_id}**\n\n"
+                f"Lỗi: {friendly_err}\n\n"
+                "Chi tiết lỗi kỹ thuật đã được hệ thống lưu lại. Vui lòng liên hệ kỹ thuật viên nếu cần hỗ trợ."
+            )
+            await application.bot.send_message(chat_id=chat_id, text=msg_text)
 
 
 async def handle_post_confirm_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1942,6 +1988,48 @@ async def handle_post_confirm_action(update: Update, context: ContextTypes.DEFAU
         await query.edit_message_text("Du lieu thao tac khong hop le.")
         return
 
+    if action == "fill_missing":
+        # Bắt đầu luồng hội thoại nhập thiếu thông tin
+        values = await get_record(settings.records_db_path, record_id)
+        _set_conversation_record(
+            context,
+            record_id=record_id,
+            db_path=settings.records_db_path,
+            values=values,
+        )
+        record = _get_conversation_record(context)
+        if record is not None:
+            # Xác định các trường bị thiếu qua AI/người dùng
+            record["manual_entry"] = False
+            # Lọc các trường bắt buộc của Cenvalue bị thiếu trong record hiện tại
+            required_cenvalue = [
+                ("customer_info", "Tên khách hàng"),
+                ("customer_phone", "Số điện thoại khách hàng"),
+                ("customer_address", "Địa chỉ khách hàng"),
+                ("asset_description", "Tài sản thẩm định giá"),
+                ("valuation_purpose", "Mục đích thẩm định"),
+                ("asset_type", "Loại tài sản"),
+                ("source", "Nguồn/đối tác"),
+                ("valuation_fee_number", "Phí thẩm định"),
+                ("advance_payment", "Tạm ứng"),
+                ("valuation_staff", "Chuyên viên nghiệp vụ"),
+            ]
+            missing_queue = [(f, l) for f, l in required_cenvalue if not str(values.get(f, "")).strip()]
+            if not missing_queue:
+                # Nếu không xác định được cụ thể, hỏi theo luồng mặc định
+                missing_queue = build_form_field_queue(values)
+                missing_queue = [f for f in missing_queue if not str(values.get(f[0], "")).strip()]
+            
+            record["form_fields"] = missing_queue
+            record["missing_fields"] = []
+            
+        await query.message.reply_text(
+            f"Bắt đầu bổ sung thông tin cho hồ sơ #{record_id}..."
+        )
+        # Chuyển trạng thái hội thoại sang ASK_MISSING_FIELD
+        await _ask_next_missing_field(update, context)
+        return ASK_MISSING_FIELD
+
     if action == SEND_MAIL_CALLBACK_PREFIX:
         await _ask_professional_forward_choice(query, record_id=record_id, action=SEND_MAIL_CALLBACK_PREFIX)
         return
@@ -2002,6 +2090,7 @@ def build_telegram_application(token: str) -> Application:
             CommandHandler("new", start_manual_entry),
             MessageHandler(filters.PHOTO, handle_photo_message),
             MessageHandler(filters.Document.PDF, handle_pdf_document),
+            CallbackQueryHandler(handle_post_confirm_action, pattern="^fill_missing:\\d+$"),
         ],
         states={
             ASK_MISSING_FIELD: [
@@ -2037,7 +2126,7 @@ def build_telegram_application(token: str) -> Application:
             handle_post_confirm_action,
             pattern=(
                 f"^({SEND_MAIL_CALLBACK_PREFIX}|{WEB_AUTOMATION_CALLBACK_PREFIX}|{BOTH_AUTOMATION_CALLBACK_PREFIX}|"
-                f"{DONE_AUTOMATION_CALLBACK_PREFIX}):\\d+$|"
+                f"{DONE_AUTOMATION_CALLBACK_PREFIX}|fill_missing):\\d+$|"
                 f"^{MAIL_FORWARD_CHOICE_CALLBACK_PREFIX}:({SEND_MAIL_CALLBACK_PREFIX}|{BOTH_AUTOMATION_CALLBACK_PREFIX}):\\d+:(kiet|anhvu|none|cancel)$"
             ),
         )

@@ -18,6 +18,7 @@ from src.mail_listener import (
     _contract_id_for_update,
     build_professional_forward_message,
     build_reply_message,
+    extract_certificate_number_locally,
     ensure_processed_email_table,
     _extract_imap_ids,
     load_mail_listener_settings,
@@ -35,6 +36,8 @@ from src.database_manager import (
     ensure_mail_workflow_schema,
     find_record_by_thread_reference,
     find_recent_record_by_subject,
+    update_certificate_forwarded,
+    update_certificate_received,
 )
 from src.mail_service import GmailSmtpSettings
 
@@ -66,11 +69,25 @@ def _raw_admin_reply() -> bytes:
     message["References"] = "<outbound-1@example.com>"
     message["Thread-Topic"] = "[XIN SỐ] - VCB Gia Lai"
     message["Thread-Index"] = "AdzExampleThreadIndex"
-    message.set_content("Số chứng thư: CT-2026-0007")
+    message.set_content("Số chứng thư: CT-2026-0007\nGhi chú Hành chính: ưu tiên xử lý trong ngày.")
+    message.add_attachment(
+        b"certificate attachment",
+        maintype="application",
+        subtype="pdf",
+        filename="chung-thu.pdf",
+    )
     return message.as_bytes()
 
 
 class MailListenerTests(unittest.IsolatedAsyncioTestCase):
+    def test_extract_certificate_number_locally_reads_labeled_value(self) -> None:
+        extraction = extract_certificate_number_locally(
+            "Em gửi anh số chứng thư: 010/2026/N05-0879/DN."
+        )
+
+        self.assertEqual(extraction.certificate_number, "010/2026/N05-0879/DN")
+        self.assertEqual(extraction.confidence, 1.0)
+
     def test_load_mail_listener_settings_uses_shared_records_db_env(self) -> None:
         with patch.dict(
             "os.environ",
@@ -219,6 +236,7 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
                 "customer_info": "Nguyễn Thị Loan",
                 "asset_description": "Thửa đất số Lô 25B2",
                 "valuation_fee_number": "3000000",
+                "professional_recipient_email": "anhvtn6@cenvalue.vn",
             },
             certificate_number="CT-2026-0007",
             smtp_settings=GmailSmtpSettings(
@@ -233,7 +251,7 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
             settings=settings,
         )
 
-        self.assertEqual(message["To"], "pro@example.com")
+        self.assertEqual(message["To"], "anhvtn6@cenvalue.vn")
         self.assertEqual(message["Cc"], "admin@example.com, manager@example.com, control@example.com")
         self.assertEqual(message["In-Reply-To"], "<reply-1@example.com>")
         self.assertIn("<reply-1@example.com>", message["References"])
@@ -242,10 +260,95 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
         html = _html_part(message)
         self.assertIn("CT-2026-0007", html)
         self.assertNotIn("N04-0007", html)
+        self.assertIn("Chị Ánh", html)
         self.assertIn("Em phân chuyên viên định giá tài sản", html)
-        self.assertNotIn("Số chứng thư", html)
+        self.assertIn("ưu tiên xử lý trong ngày", html)
+        self.assertIn("THÔNG TIN HỒ SƠ", html)
+        attachments = list(message.iter_attachments())
+        self.assertEqual(attachments[0].get_filename(), "chung-thu.pdf")
+        self.assertEqual(attachments[0].get_payload(decode=True), b"certificate attachment")
+        self.assertIn("Số chứng thư", html)
         self.assertIn("cid:logo_cenvalue", html)
         self.assertIn("Content-ID: <logo_cenvalue>", message.as_string())
+
+    def test_build_professional_forward_message_preserves_full_certificate_number(self) -> None:
+        incoming = parse_incoming_email(_raw_admin_reply(), uid="22")
+        settings = MailListenerSettings(
+            imap_host="imap.gmail.com",
+            imap_port=993,
+            imap_username="sender@gmail.com",
+            imap_password="app-password",
+            mailbox="INBOX",
+            records_db_path="tmp/records.db",
+            gemini_api_key="gemini",
+            gemini_model="gemini-test",
+            telegram_bot_token="token",
+            telegram_chat_id="123",
+            auto_reply_cc=[],
+            admin_email="admin@example.com",
+            professional_dept_email="pro@example.com",
+            monitor_cc_list=[],
+        )
+        message = build_professional_forward_message(
+            incoming=incoming,
+            record={"id": "5", "contract_number": "010/2026/N06-0106/DN"},
+            certificate_number="010/2024/D10-0105",
+            smtp_settings=GmailSmtpSettings(
+                host="smtp.gmail.com",
+                port=587,
+                username="sender@gmail.com",
+                password="app-password",
+                mail_from="Sender <sender@gmail.com>",
+                mail_to="",
+                mail_cc=[],
+            ),
+            settings=settings,
+        )
+
+        html = _html_part(message)
+        self.assertIn("010/2024/D10-0105", html)
+        self.assertNotIn("010/2026/N06-010/2024/D10-0105/DN", html)
+        self.assertIn("THÔNG TIN HỒ SƠ", html)
+
+    async def test_certificate_updates_preserve_contract_number(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            db_path = str(Path(tmpdir) / "records.db")
+            async with aiosqlite.connect(db_path) as db:
+                await db.execute(
+                    """
+                    CREATE TABLE records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        contract_number TEXT NOT NULL DEFAULT '',
+                        status TEXT NOT NULL DEFAULT 'PENDING'
+                    )
+                    """
+                )
+                await db.commit()
+            await ensure_mail_workflow_schema(db_path)
+            async with aiosqlite.connect(db_path) as db:
+                await db.execute(
+                    "INSERT INTO records (contract_number) VALUES (?)",
+                    ("010/2026/N06-0106/DN",),
+                )
+                await db.commit()
+
+            await update_certificate_forwarded(
+                db_path,
+                1,
+                certificate_number="010/2024/D10-0105",
+            )
+            await update_certificate_received(
+                db_path,
+                1,
+                certificate_number="010/2024/D10-0105",
+            )
+
+            async with aiosqlite.connect(db_path) as db:
+                row = await (await db.execute(
+                    "SELECT certificate_number, contract_number FROM records WHERE id = 1"
+                )).fetchone()
+
+        self.assertEqual(row, ("010/2024/D10-0105", "010/2026/N06-0106/DN"))
 
     async def test_update_matched_record_sets_contract_and_ready_status(self) -> None:
         with TemporaryDirectory() as tmpdir:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import unittest
+from email import message_from_bytes
 from email.message import EmailMessage
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -86,6 +87,39 @@ class OAuth2EmailLogoTests(unittest.IsolatedAsyncioTestCase):
 
         payload = client.post.await_args.kwargs["json"]
         self.assertNotIn("from", payload["message"])
+
+    async def test_outlook_graph_sends_supplied_mime_message_with_attachments(self) -> None:
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.post = AsyncMock(return_value=Mock(status_code=202, headers={}))
+        message = EmailMessage()
+        message["From"] = "Sender <sender@example.com>"
+        message["To"] = "to@example.com"
+        message["Subject"] = "Re: Hồ sơ"
+        message.set_content("Nội dung gốc")
+        message.add_attachment(b"original attachment", maintype="application", subtype="pdf", filename="chung-thu.pdf")
+
+        with (
+            patch("src.oauth2_service.get_valid_access_token_async", AsyncMock(return_value="token")),
+            patch("src.oauth2_service.get_outlook_sender_email", return_value="sender@example.com"),
+            patch("src.oauth2_service.is_outlook_smtp_enabled", return_value=False),
+            patch("src.oauth2_service.httpx.AsyncClient", return_value=client),
+        ):
+            await send_email_via_oauth2(
+                "outlook",
+                "sender@example.com",
+                "to@example.com",
+                "Re: Hồ sơ",
+                "",
+                mime_message=message,
+            )
+
+        request = client.post.await_args
+        self.assertEqual(request.kwargs["headers"]["Content-Type"], "text/plain")
+        raw_message = message_from_bytes(base64.b64decode(request.kwargs["content"]))
+        attachment = next(part for part in raw_message.walk() if part.get_filename() == "chung-thu.pdf")
+        self.assertEqual(attachment.get_payload(decode=True), b"original attachment")
 
     async def test_outlook_uses_smtp_oauth_when_alias_transport_is_connected(self) -> None:
         with (

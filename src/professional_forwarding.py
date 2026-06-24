@@ -7,7 +7,17 @@ DEFAULT_PROFESSIONAL_RECIPIENT = "Kietna@cenvalue.vn"
 PROFESSIONAL_RECIPIENT_OPTIONS = {
     "kiet": DEFAULT_PROFESSIONAL_RECIPIENT,
     "anhvu": "anhvtn6@cenvalue.vn",
+    "truongpnt": "truongpnt@cenvalue.vn",
 }
+
+
+def professional_recipient_greeting(value: object) -> str:
+    recipient = normalize_professional_recipient(value)
+    if recipient.casefold() == PROFESSIONAL_RECIPIENT_OPTIONS["anhvu"].casefold():
+        return "Chị Ánh"
+    if recipient.casefold() == PROFESSIONAL_RECIPIENT_OPTIONS["truongpnt"].casefold():
+        return "Truong"
+    return "Kiệt"
 
 
 def professional_forward_enabled(record: Mapping[str, Any]) -> bool:

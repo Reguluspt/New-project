@@ -80,6 +80,8 @@ def resolve_records_db_path(db_path: str | Path | None = None) -> str:
         else os.getenv("RECORDS_DB_PATH", os.getenv("TELEGRAM_RECORDS_DB", str(DEFAULT_RECORDS_DB))).strip()
     )
     raw_path = os.path.expanduser(raw_path or str(DEFAULT_RECORDS_DB))
+    if os.name == "posix" and re.match(r"^[A-Za-z]:[\\/]", raw_path):
+        raw_path = str(DEFAULT_RECORDS_DB)
     if not os.path.isabs(raw_path):
         raw_path = os.path.join(str(PROJECT_ROOT), raw_path)
     return os.path.abspath(raw_path)
@@ -724,12 +726,11 @@ async def update_certificate_forwarded(
             """
             UPDATE records
             SET certificate_number = ?,
-                contract_number = ?,
                 status = ?,
                 professional_sent_at = ?
             WHERE id = ?
             """,
-            (certificate_number, certificate_number, SENT_TO_PROFESSIONAL_STATUS, _now_iso(), int(record_id)),
+            (certificate_number, SENT_TO_PROFESSIONAL_STATUS, _now_iso(), int(record_id)),
         )
         await db.commit()
 
@@ -747,11 +748,10 @@ async def update_certificate_received(
             """
             UPDATE records
             SET certificate_number = ?,
-                contract_number = ?,
                 status = ?
             WHERE id = ?
             """,
-            (certificate_number, certificate_number, CERTIFICATE_RECEIVED_STATUS, int(record_id)),
+            (certificate_number, CERTIFICATE_RECEIVED_STATUS, int(record_id)),
         )
         await db.commit()
 
@@ -790,13 +790,16 @@ async def ensure_sobo_schema(db_path: str | Path) -> None:
             "  status TEXT NOT NULL DEFAULT 'PENDING',"
             "  note TEXT,"
             "  equipment_name TEXT,"
-            "  attachment_paths TEXT"
+            "  attachment_paths TEXT,"
+            "  response_content TEXT"
             ")"
         )
         cursor = await db.execute("PRAGMA table_info(sobo_records)")
         columns = {str(row[1]) for row in await cursor.fetchall()}
         if "attachment_paths" not in columns:
             await db.execute("ALTER TABLE sobo_records ADD COLUMN attachment_paths TEXT")
+        if "response_content" not in columns:
+            await db.execute("ALTER TABLE sobo_records ADD COLUMN response_content TEXT")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_sobo_outbound_msg_id ON sobo_records(outbound_message_id)")
         await db.commit()
 
@@ -807,7 +810,7 @@ async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int
     fields = [
         "created_at", "asset_type", "asset_sub_type", "source", "so_thua", "so_to", "dia_chi",
         "link", "email_recipient", "outbound_subject", "outbound_message_id",
-        "outbound_sent_at", "responded_at", "status", "note", "equipment_name", "attachment_paths"
+        "outbound_sent_at", "responded_at", "status", "note", "equipment_name", "attachment_paths", "response_content"
     ]
     columns = ", ".join(fields)
     placeholders = ", ".join(f":{f}" for f in fields)
@@ -829,16 +832,29 @@ async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int
         return int(cursor.lastrowid)
 
 
-async def update_sobo_record_status(db_path: str | Path, record_id: int, status: str, responded_at: str | None = None) -> None:
+async def update_sobo_record_status(
+    db_path: str | Path, 
+    record_id: int, 
+    status: str, 
+    responded_at: str | None = None,
+    response_content: str | None = None
+) -> None:
     db_path = resolve_records_db_path(db_path)
     await ensure_sobo_schema(db_path)
     if not responded_at and status == "RESPONDED":
         responded_at = datetime.now().isoformat()
+    
     async with aiosqlite.connect(db_path, timeout=30) as db:
-        await db.execute(
-            "UPDATE sobo_records SET status = ?, responded_at = ? WHERE id = ?",
-            (status, responded_at, int(record_id))
-        )
+        if response_content is not None:
+            await db.execute(
+                "UPDATE sobo_records SET status = ?, responded_at = ?, response_content = ? WHERE id = ?",
+                (status, responded_at, response_content, int(record_id))
+            )
+        else:
+            await db.execute(
+                "UPDATE sobo_records SET status = ?, responded_at = ? WHERE id = ?",
+                (status, responded_at, int(record_id))
+            )
         await db.commit()
 
 

@@ -100,6 +100,32 @@ def load_dropdown_options(template_path: str | Path, sheet_name: str = "Up Hs") 
     validations = list(worksheet.data_validations.dataValidation) if worksheet.data_validations else []
 
     for field_name, cell_ref in EXCEL_DROPDOWN_CELLS.items():
+        if field_name == "valuation_purpose":
+            field_options = []
+            for r in range(2, worksheet.max_row + 1):
+                val = worksheet.cell(row=r, column=7).value  # Column G
+                if val is not None:
+                    val_str = str(val).strip()
+                    # Skip empty, #REF!, and numeric garbage
+                    if val_str and val_str not in ("#REF!", "") and not val_str.replace(".", "", 1).isdigit():
+                        if val_str.lower() != "mục đích thẩm định":
+                            field_options.append(val_str)
+            options[field_name] = field_options
+            continue
+
+        if field_name == "asset_type":
+            field_options = []
+            for r in range(2, worksheet.max_row + 1):
+                val = worksheet.cell(row=r, column=9).value  # Column I
+                if val is not None:
+                    val_str = str(val).strip()
+                    # Skip empty, #REF!, and numeric garbage
+                    if val_str and val_str not in ("#REF!", ""):
+                        if val_str.lower() not in ("loại tài sản", "loại ts"):
+                            field_options.append(val_str)
+            options[field_name] = field_options
+            continue
+
         field_options: list[str] = []
         for validation in validations:
             if validation.type != "list" or cell_ref not in validation.sqref:

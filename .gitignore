@@ -17,3 +17,26 @@ logs/
 *.jsonl
 data/case_table_config.json
 scratch_debug.py
+
+# React / Node
+web/node_modules/
+web/dist/
+web/.env.local
+
+# Python
+.venv/
+*.pyc
+dist/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Flask sessions / upload cache
+data/uploads/
+flask_stdout.log
+flask_stderr.log

@@ -21,8 +21,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 logger = logging.getLogger(__name__)
 
 # Timeout mặc định cho các thao tác Playwright (ms)
-DEFAULT_NAVIGATION_TIMEOUT = 30_000
-DEFAULT_ACTION_TIMEOUT = 10_000
+DEFAULT_NAVIGATION_TIMEOUT = 45_000
+DEFAULT_ACTION_TIMEOUT = 25_000
 WEB_SUBMIT_TIMEOUT = 120_000
 WEB_STATUS_TABLE_TIMEOUT = 120_000
 WEB_STATUS_TABLE_POLL_INTERVAL = 500
@@ -307,8 +307,10 @@ def _purpose_web_value(raw_purpose: str) -> str:
         return "Khác"
     if "xu ly tai san dam bao" in purpose:
         return "Thanh lý, phát mãi tài sản"
-    if "vietcombank" in purpose:
+    if "vietcombank" in purpose or "vcb" in purpose:
         return "Tham khảo vay vốn tại Vietcombank"
+    if "chinh sach" in purpose or "vbsp" in purpose:
+        return "Thẩm định vay vốn ngân hàng"
     loan_banks = [
         "sacombank",
         "bidv",
@@ -325,7 +327,7 @@ def _purpose_web_value(raw_purpose: str) -> str:
         "mb bank",
         "mbbank",
     ]
-    if "the chap vay von" in purpose and any(bank in purpose for bank in loan_banks):
+    if any(bank in purpose for bank in loan_banks) or "vay von" in purpose or "the chap" in purpose:
         return "Thẩm định vay vốn ngân hàng"
     return "Khác"
 
@@ -341,6 +343,8 @@ def _asset_web_value(raw_asset_type: str) -> str:
 
 def _asset_web_values(raw_asset_type: str) -> tuple[str, str]:
     asset_type = _normalize_text(raw_asset_type)
+    if "dac thu" in asset_type:
+        return "Bất động sản đặc thù", "Bất động sản đặc thù"
     if any(token in asset_type for token in ("bds", "bat dong san")):
         return "Bất động sản", "Bất động sản đặc thù"
     if "may moc" in asset_type or "thiet bi" in asset_type:
@@ -555,19 +559,23 @@ async def start_browser_and_login(browser_context, page=None):
 
     await _recover_from_callback_url(page)
 
-    # ---- 3. Điều hướng đến trang Gửi Yêu Cầu Thẩm Định (YCTD) ----
-    # Trên thanh navigation của CEN VALUE có mục "YCTD".
-    if await _click_yctd_navigation(page):
-        logger.info("Đang điều hướng đến trang Gửi Yêu Cầu Thẩm Định...")
-    else:
-        logger.warning(
-            "Không tìm thấy liên kết YCTD trên thanh điều hướng. "
-            "Trang hiện tại có thể đã là trang YCTD."
-        )
+    # ---- 3. Điều hướng trực tiếp đến trang Gửi Yêu Cầu Thẩm Định (YCTD) ----
+    yctd_url = settings.internal_web_url.rstrip("/") + "/#/form-customer"
+    logger.info("Đang điều hướng trực tiếp đến trang YCTD: %s", yctd_url)
+    try:
+        await page.goto(yctd_url, wait_until="networkidle", timeout=30_000)
+    except Exception:
+        logger.warning("Không thể đợi networkidle khi chuyển sang trang YCTD, tiếp tục bằng domcontentloaded")
+        await page.goto(yctd_url, wait_until="domcontentloaded", timeout=20_000)
+
+    await _wait_until_dom_ready(page)
+    await page.wait_for_timeout(2_000)
 
     if "#/callback" in page.url:
         await _recover_from_callback_url(page)
-        await _click_yctd_navigation(page)
+        logger.info("Đang quay lại trang YCTD sau khi giải quyết callback: %s", yctd_url)
+        await page.goto(yctd_url, wait_until="domcontentloaded")
+        await page.wait_for_timeout(2_000)
 
     # ---- 4. Chọn tab "Thẩm định tài sản" nếu có ----
     tab_tham_dinh = page.locator(
@@ -1559,6 +1567,101 @@ async def save_web_case_id_to_case(record: Mapping[str, str], web_case_ids: list
     await asyncio.to_thread(update_case, db_path, int(raw_case_id), {"web_case_id": "\n".join(unique_ids)})
 
 
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+class WebErrorDiagnosis(BaseModel):
+    status: str = Field(description="Phân loại lỗi: SERVER_ERROR, POPUP_BLOCKED, LOADING_HANG, VALIDATION_ERROR, UNKNOWN")
+    description: str = Field(description="Mô tả chi tiết nguyên nhân lỗi bằng tiếng Việt")
+    missing_fields: List[str] = Field(description="Danh sách các trường bắt buộc bị phát hiện chưa điền/chọn trên giao diện web (nếu có)")
+    recovery_action: str = Field(description="Đề xuất hành động khắc phục: REFRESH, CLOSE_MODAL, RE_LOGIN, NONE")
+    recovery_selector: Optional[str] = Field(description="CSS selector của nút bấm cần click nếu hành động là CLOSE_MODAL")
+
+async def analyze_web_error_with_gemini(
+    screenshot_path: Path,
+    html_path: Path,
+    error_message: str
+) -> WebErrorDiagnosis | None:
+    try:
+        from google import genai
+        from google.genai import types
+        
+        api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            logger.warning("Không tìm thấy GEMINI_API_KEY. Bỏ qua phân tích AI.")
+            return None
+            
+        client = genai.Client(api_key=api_key)
+        
+        # Read screenshot bytes
+        if not screenshot_path.exists():
+            logger.warning("Không tìm thấy ảnh chụp lỗi: %s", screenshot_path)
+            return None
+            
+        image_part = types.Part.from_bytes(
+            data=screenshot_path.read_bytes(),
+            mime_type="image/png"
+        )
+        
+        # Read first 10000 characters of HTML to avoid token overflow
+        html_text = ""
+        if html_path.exists():
+            html_text = html_path.read_text(encoding="utf-8")[:10000]
+            
+        prompt = f"""
+        Bạn là một chuyên gia giám sát tự động hóa trình duyệt. Hãy phân tích ảnh chụp màn hình lỗi và một phần mã nguồn HTML dưới đây để chẩn đoán sự cố khi tự động điền form "Gửi Yêu Cầu Thẩm Định" trên web Cenvalue.
+        
+        Lỗi hệ thống ghi nhận: {error_message}
+        
+        Một phần HTML trang web:
+        {html_text}
+        
+        Danh sách các trường bắt buộc phải nhập trên form Cenvalue:
+        1. Họ tên (Họ tên khách hàng)
+        2. Số điện thoại
+        3. Email
+        4. Địa chỉ
+        5. Kiểu thẩm định (Thẩm định giá / Định giá sơ bộ)
+        6. Chi nhánh thẩm định
+        7. Chọn Văn Phòng
+        8. Tỉnh/ thành phố
+        9. Tài sản thẩm định
+        10. Mục đích thẩm định
+        11. Loại tài sản
+        12. Nhóm tài sản
+        13. Nguồn/đối tác
+        14. Tài liệu/Pháp lý (File upload)
+        15. Ngân Hàng
+        16. Số hợp đồng
+        17. Phí thẩm định
+        18. Phí tạm ứng cần thu
+        
+        Hãy xác định xem có bất kỳ trường bắt buộc nào ở trên bị thiếu/không được điền hoặc chọn hay không.
+        Hãy trả về chẩn đoán lỗi chi tiết theo cấu trúc JSON định nghĩa sẵn.
+        """
+        
+        # Run models.generate_content in to_thread because the SDK might block
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=[image_part, prompt],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=WebErrorDiagnosis,
+                temperature=0.1
+            )
+        )
+        
+        # Parse output JSON into WebErrorDiagnosis
+        import json
+        data = json.loads(response.text)
+        return WebErrorDiagnosis(**data)
+        
+    except Exception as exc:
+        logger.error("Lỗi khi phân tích lỗi bằng Gemini: %s", exc)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Playwright helpers (kept from original implementation)
 # ---------------------------------------------------------------------------
@@ -1726,50 +1829,122 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
                     if sub_record.get(common_field):
                         sub_record[common_field] = sub_record[common_field].replace("\n", ", ")
 
-                try:
-                    # --- 1. Mở trang và Đăng nhập ---
-                    page = await context.new_page()
-                    page = await start_browser_and_login(context, page=page)
-                    
-                    # --- 2. Điền thông tin ---
-                    await fill_basic_info(page, sub_record)
-                    await fill_asset_info(page, sub_record)
-                    
-                    # --- 3. Tài liệu, Tín dụng & Gửi ---
-                    res = await fill_credit_and_submit(page, sub_record)
-                    web_case_id = await find_created_web_case_id(page, sub_record)
-                    web_case_label = _web_case_asset_label(i, sub_record, web_case_id)
-                    web_case_ids.append(web_case_label)
-                    results_msg.append(f"- Tài sản {i + 1}: {res} | ID Web: {web_case_label}")
-                except Exception as exc:
-                    import traceback
-                    tb_str = traceback.format_exc()
-                    err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id} (Tài sản {i + 1}/{N}): {type(exc).__name__}: {exc}\nChi tiết:\n{tb_str}"
-                    logger.error(err_msg)
-                    
-                    if page:
-                        try:
-                            error_dir = PROJECT_ROOT / "logs" / "errors"
-                            error_dir.mkdir(parents=True, exist_ok=True)
-                            import time
-                            timestamp = int(time.time())
-                            error_artifacts = await _capture_web_entry_error_artifacts(
-                                page,
-                                error_dir,
-                                record_id=record_id,
-                                asset_index=i + 1,
-                                timestamp=timestamp,
+                retries = 0
+                max_retries = 1
+                while retries <= max_retries:
+                    try:
+                        # Log chi tiết các giá trị điền form trước khi chạy để kiểm tra
+                        log_dir = PROJECT_ROOT / "logs"
+                        log_dir.mkdir(parents=True, exist_ok=True)
+                        import datetime
+                        run_log_path = log_dir / "web_entry_runs.log"
+                        with open(run_log_path, "a", encoding="utf-8") as f_log:
+                            f_log.write(
+                                f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                                f"Hồ sơ #{record_id} (Tài sản {i + 1}/{N}):\n"
+                                f"  - Loại tài sản (SQLite): '{sub_record.get('asset_type')}' => Web sẽ điền: Loại='{_asset_web_values(str(sub_record.get('asset_type')))[0]}', Nhóm='{_asset_web_values(str(sub_record.get('asset_type')))[1]}'\n"
+                                f"  - Mục đích thẩm định (SQLite): '{sub_record.get('valuation_purpose')}' => Web sẽ điền: '{_purpose_web_value(str(sub_record.get('valuation_purpose')))}'\n"
+                                f"  - Chi nhánh: '{sub_record.get('valuation_branch') or sub_record.get('branch')}' | Văn phòng: '{sub_record.get('office')}'\n"
+                                f"  - Khách hàng: '{sub_record.get('customer_info')}' | Địa chỉ: '{sub_record.get('customer_address')}'\n"
+                                f"  - Tài sản chi tiết: '{sub_record.get('asset_description')}'\n"
+                                f"--------------------------------------------------------------------------------\n"
                             )
-                            logger.info("Đã lưu artifact lỗi tại: %s", ", ".join(str(path) for path in error_artifacts))
-                            err_msg += "\nArtifact lỗi: " + ", ".join(path.name for path in error_artifacts)
-                        except Exception as ss_exc:
-                            logger.error("Không thể chụp ảnh màn hình: %s", ss_exc)
+                        # --- 1. Mở trang và Đăng nhập ---
+                        if retries > 0:
+                            logger.info("Thử lại lần %d cho tài sản %d/%d của hồ sơ #%s", retries, i + 1, N, record_id)
+                            if page:
+                                try:
+                                    await page.close()
+                                except Exception:
+                                    pass
+                        
+                        page = await context.new_page()
+                        page = await start_browser_and_login(context, page=page)
+                        
+                        # --- 2. Điền thông tin ---
+                        await fill_basic_info(page, sub_record)
+                        await fill_asset_info(page, sub_record)
+                        
+                        # --- 3. Tài liệu, Tín dụng & Gửi ---
+                        res = await fill_credit_and_submit(page, sub_record)
+                        web_case_id = await find_created_web_case_id(page, sub_record)
+                        web_case_label = _web_case_asset_label(i, sub_record, web_case_id)
+                        web_case_ids.append(web_case_label)
+                        results_msg.append(f"- Tài sản {i + 1}: {res} | ID Web: {web_case_label}")
+                        break  # Thành công -> thoát khỏi vòng lặp retry
+                        
+                    except Exception as exc:
+                        import traceback
+                        tb_str = traceback.format_exc()
+                        err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id} (Tài sản {i + 1}/{N}): {type(exc).__name__}: {exc}\nChi tiết:\n{tb_str}"
+                        logger.error(err_msg)
+                        
+                        error_artifacts = []
+                        if page:
+                            try:
+                                error_dir = PROJECT_ROOT / "logs" / "errors"
+                                error_dir.mkdir(parents=True, exist_ok=True)
+                                import time
+                                timestamp = int(time.time())
+                                error_artifacts = await _capture_web_entry_error_artifacts(
+                                    page,
+                                    error_dir,
+                                    record_id=record_id,
+                                    asset_index=i + 1,
+                                    timestamp=timestamp,
+                                )
+                                logger.info("Đã lưu artifact lỗi tại: %s", ", ".join(str(path) for path in error_artifacts))
+                                err_msg += "\nArtifact lỗi: " + ", ".join(path.name for path in error_artifacts)
+                            except Exception as ss_exc:
+                                logger.error("Không thể chụp ảnh màn hình: %s", ss_exc)
+                        
+                        # Tìm ảnh current chụp trạng thái lỗi hiện tại và file HTML
+                        screenshot_file = None
+                        html_file = None
+                        for art in error_artifacts:
+                            if art.name.endswith("current.png"):
+                                screenshot_file = art
+                            elif art.name.endswith(".html"):
+                                html_file = art
+                                
+                        diagnosis = None
+                        if screenshot_file and html_file:
+                            logger.info("Đang gọi AI phân tích lỗi...")
+                            diagnosis = await analyze_web_error_with_gemini(screenshot_file, html_file, str(exc))
                             
-                    await notify_telegram(err_msg)
-                    raise RuntimeError(err_msg) from exc
-                finally:
-                    if page:
-                        await page.close()
+                        if diagnosis:
+                            logger.info("AI chẩn đoán lỗi: %s (Hành động: %s)", diagnosis.description, diagnosis.recovery_action)
+                            err_msg += f"\n\n🤖 **Chẩn đoán bởi AI:**\n- Trạng thái: {diagnosis.status}\n- Chi tiết: {diagnosis.description}"
+                            if diagnosis.missing_fields:
+                                err_msg += f"\n- ⚠️ **Thiếu trường bắt buộc:** {', '.join(diagnosis.missing_fields)}"
+                                # Nếu thiếu trường bắt buộc, không cần thử lại
+                                await notify_telegram(err_msg)
+                                raise RuntimeError(err_msg) from exc
+                                
+                            # Xử lý tự phục hồi
+                            if diagnosis.recovery_action in ("REFRESH", "CLOSE_MODAL") and retries < max_retries:
+                                retries += 1
+                                logger.info("Tiến hành tự phục hồi qua đề xuất AI: %s", diagnosis.recovery_action)
+                                if diagnosis.recovery_action == "CLOSE_MODAL" and diagnosis.recovery_selector and page:
+                                    try:
+                                        logger.info("Đóng popup bằng selector: %s", diagnosis.recovery_selector)
+                                        await page.locator(diagnosis.recovery_selector).first.click(timeout=3000)
+                                        # Không close page, tăng retries và chạy tiếp mà không load lại toàn trang
+                                        continue
+                                    except Exception as close_exc:
+                                        logger.warning("Không thể click đóng popup bằng selector gợi ý: %s", close_exc)
+                                continue
+                                
+                        # Nếu không thể khôi phục hoặc đã hết lượt thử lại
+                        await notify_telegram(err_msg)
+                        raise RuntimeError(err_msg) from exc
+                    finally:
+                        if page:
+                            try:
+                                await page.close()
+                                page = None
+                            except Exception:
+                                pass
 
             # --- 4. Cập nhật DB & Báo cáo thành công (Chỉ khi tất cả đều thành công) ---
             from .database_manager import update_record_status

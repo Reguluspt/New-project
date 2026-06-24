@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./samples:/app/samples
+    env_file: API.env
+    environment:
+      - FLASK_DEBUG=false
+      - FLASK_PORT=5000
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.web
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  telegram:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: python -m uvicorn src.telegram_server:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    env_file: API.env
+    restart: unless-stopped

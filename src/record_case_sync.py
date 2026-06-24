@@ -55,16 +55,19 @@ def _case_id_for_record(conn: sqlite3.Connection, record: dict[str, str]) -> int
 
     contract_number = str(record.get("contract_number") or "").strip()
     if contract_number:
+        from .sqlite_store import format_contract_number
+        norm_contract = format_contract_number(contract_number)
+        
         row = conn.execute(
             """
             SELECT id
             FROM cases
             WHERE telegram_record_id IS NULL
-              AND TRIM(COALESCE(contract_number, '')) = ?
+              AND (TRIM(COALESCE(contract_number, '')) = ? OR TRIM(COALESCE(contract_number, '')) = ?)
             ORDER BY id DESC
             LIMIT 1
             """,
-            (contract_number,),
+            (contract_number, norm_contract),
         ).fetchone()
         if row:
             return int(row[0])
@@ -72,16 +75,16 @@ def _case_id_for_record(conn: sqlite3.Connection, record: dict[str, str]) -> int
             """
             SELECT id
             FROM cases
-            WHERE TRIM(COALESCE(contract_number, '')) = ?
+            WHERE (TRIM(COALESCE(contract_number, '')) = ? OR TRIM(COALESCE(contract_number, '')) = ?)
             ORDER BY id DESC
             LIMIT 1
             """,
-            (contract_number,),
+            (contract_number, norm_contract),
         ).fetchone()
         if row:
             return int(row[0])
         record_short_contract = short_contract_number(contract_number, fallback=contract_number)
-        if record_short_contract and record_short_contract != contract_number:
+        if record_short_contract:
             for candidate in conn.execute(
                 """
                 SELECT id, contract_number

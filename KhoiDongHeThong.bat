@@ -9,8 +9,7 @@ cd /d "%ROOT%" || (
     exit /b 1
 )
 
-if "%STREAMLIT_PORT%"=="" set "STREAMLIT_PORT=8501"
-if "%STREAMLIT_ADDRESS%"=="" set "STREAMLIT_ADDRESS=0.0.0.0"
+if "%FLASK_PORT%"=="" set "FLASK_PORT=5000"
 set "PYTHONIOENCODING=utf-8"
 set "PYTHON_EXE=%ROOT%.venv\Scripts\python.exe"
 
@@ -36,40 +35,41 @@ if errorlevel 1 (
     exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$root=(Resolve-Path '.').Path; $existing=Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*-m streamlit run app.py*' -and $_.CommandLine -like ('*' + $root + '*') } | Select-Object -First 1; if ($existing) { Set-Content -Path (Join-Path $root 'streamlit.pid') -Value $existing.ProcessId -Encoding ASCII; exit 0 }; exit 1" >nul 2>nul
+rem Kiem tra neu Flask da chay
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$root=(Resolve-Path '.').Path; $existing=Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*api.run*' -and $_.CommandLine -like ('*' + $root + '*') } | Select-Object -First 1; if ($existing) { Set-Content -Path (Join-Path $root 'flask.pid') -Value $existing.ProcessId -Encoding ASCII; exit 0 }; exit 1" >nul 2>nul
 if not errorlevel 1 (
     set "OLD_PID="
-    for /f "usebackq delims=" %%P in ("%ROOT%streamlit.pid") do set "OLD_PID=%%P"
-    echo He thong dang chay san voi PID Streamlit: !OLD_PID!
-    echo Mo trinh duyet: http://localhost:%STREAMLIT_PORT%
-    start "" "http://localhost:%STREAMLIT_PORT%"
+    for /f "usebackq delims=" %%P in ("%ROOT%flask.pid") do set "OLD_PID=%%P"
+    echo He thong dang chay san voi PID Flask: !OLD_PID!
+    echo Mo trinh duyet: http://localhost:%FLASK_PORT%
+    start "" "http://localhost:%FLASK_PORT%"
     pause
     exit /b 0
 )
 
 echo Dang khoi dong he thong...
-echo - Ung dung Streamlit: http://localhost:%STREAMLIT_PORT%
-echo - Telegram webhook, mail listener va ngrok se chay ngam neu duoc bat trong cau hinh.
+echo - Flask API: http://localhost:%FLASK_PORT%
+echo - Telegram webhook, mail listener va ngrok se chay ngam neu duoc bat.
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$root=(Resolve-Path '.').Path; $python=$env:PYTHON_EXE; $stdout=Join-Path $root 'streamlit_stdout.log'; $stderr=Join-Path $root 'streamlit_stderr.log'; $pidPath=Join-Path $root 'streamlit.pid'; $args=@('-m','streamlit','run','app.py','--server.port',$env:STREAMLIT_PORT,'--server.address',$env:STREAMLIT_ADDRESS); $p=Start-Process -FilePath $python -ArgumentList $args -WorkingDirectory $root -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru; Set-Content -Path $pidPath -Value $p.Id -Encoding ASCII; Write-Host $p.Id"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$root=(Resolve-Path '.').Path; $python=$env:PYTHON_EXE; $stdout=Join-Path $root 'flask_stdout.log'; $stderr=Join-Path $root 'flask_stderr.log'; $pidPath=Join-Path $root 'flask.pid'; $args=@('-m','api.run','--port',$env:FLASK_PORT); $p=Start-Process -FilePath $python -ArgumentList $args -WorkingDirectory $root -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru; Set-Content -Path $pidPath -Value $p.Id -Encoding ASCII; Write-Host $p.Id"
 if errorlevel 1 (
     echo Khoi dong that bai. Kiem tra log:
-    echo %ROOT%streamlit_stderr.log
+    echo %ROOT%flask_stderr.log
     pause
     exit /b 1
 )
 
 timeout /t 3 /nobreak >nul
-start "" "http://localhost:%STREAMLIT_PORT%"
+start "" "http://localhost:%FLASK_PORT%"
 
 echo Da khoi dong he thong.
-echo PID Streamlit: 
-type "%ROOT%streamlit.pid"
+echo PID Flask:
+type "%ROOT%flask.pid"
 echo.
-echo Log Streamlit:
-echo %ROOT%streamlit_stdout.log
-echo %ROOT%streamlit_stderr.log
+echo Log Flask:
+echo %ROOT%flask_stdout.log
+echo %ROOT%flask_stderr.log
 echo.
 echo PID cac tien trinh ngam neu duoc bat:
 if exist "%ROOT%telegram.pid" (

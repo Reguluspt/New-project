@@ -222,17 +222,18 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
     mail_from = _clean_header(settings.mail_from or settings.username)
 
     # --- BẮT ĐẦU TÍCH HỢP OAUTH2 ---
-    from .oauth2_service import get_enabled_oauth_provider, send_email_via_oauth2
+    from .oauth2_service import is_oauth_enabled, get_enabled_oauth_provider, send_email_via_oauth2, get_outlook_sender_email
 
-    provider = get_enabled_oauth_provider()
-        
-    if provider:
+    is_outlook = is_oauth_enabled("outlook") or is_oauth_enabled("outlook_smtp") or (get_enabled_oauth_provider() == "outlook")
+    if is_outlook:
+        provider = "outlook"
         html = render_appraisal_email(mail_data)
         try:
-            print(f"Sending appraisal email using OAuth2 API for provider: {provider}")
+            outlook_from = get_outlook_sender_email() or "truongpnt2@outlook.com.vn"
+            print(f"Sending appraisal email using Outlook OAuth2 API from {outlook_from}")
             oauth_msg_id = await send_email_via_oauth2(
                 provider=provider,
-                from_email=mail_from,
+                from_email=outlook_from,
                 to_email=to_email,
                 subject=subject,
                 html_body=html,
@@ -245,7 +246,7 @@ async def send_appraisal_email(data_dict: Mapping[str, Any]) -> MailSendResult:
                 await save_outbound_message(db_path, record_id, message_id=oauth_msg_id, subject=subject)
             return MailSendResult(to_email=to_email, subject=subject, cc_emails=cc_emails, message_id=oauth_msg_id)
         except Exception as exc:
-            raise RuntimeError(f"Gửi mail qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
+            raise RuntimeError(f"Gửi mail qua OUTLOOK OAuth2 thất bại: {exc}") from exc
     # --- KẾT THÚC TÍCH HỢP OAUTH2 ---
 
     message_id = make_msgid(domain="gmail.com")

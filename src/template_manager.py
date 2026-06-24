@@ -129,6 +129,11 @@ TEMPLATE_REQUIREMENTS = {
         },
     },
 }
+TEMPLATE_PATH_KEYS = {
+    "excel_template_path",
+    "individual_template_dir",
+    "organization_template_dir",
+}
 
 
 def iter_paragraph_nodes(document: Document):
@@ -186,6 +191,47 @@ def normalize_template_path(path: str | Path) -> str:
     return str(Path(path).resolve()).lower()
 
 
+def _resolve_template_config_path(value: str, root_dir: Path, default: str) -> str:
+    """Resolve a saved template path relative to the project root."""
+    raw = value.strip()
+    if not raw:
+        return default
+
+    unified = raw.replace("\\", "/")
+    is_windows_absolute = bool(re.match(r"^[A-Za-z]:/", unified))
+    if not is_windows_absolute:
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            return str((root_dir / candidate).resolve())
+        return str(candidate)
+
+    parts = [part for part in unified.split("/") if part]
+    for marker in ("samples", "data", "outputs", "exports"):
+        if marker in parts:
+            recovered = root_dir.joinpath(*parts[parts.index(marker):])
+            if recovered.exists():
+                return str(recovered)
+    return default
+
+
+def _portable_template_config_value(value: str, root_dir: Path) -> str:
+    """Store project-internal template paths relative to the project root."""
+    unified = value.strip().replace("\\", "/")
+    if not unified:
+        return ""
+    is_windows_absolute = bool(re.match(r"^[A-Za-z]:/", unified))
+    if is_windows_absolute and os.name != "nt":
+        return unified
+
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        return candidate.as_posix()
+    try:
+        return candidate.resolve().relative_to(root_dir.resolve()).as_posix()
+    except ValueError:
+        return str(candidate)
+
+
 def get_template_label(path: str | Path, labels: dict[str, str]) -> str:
     return str(labels.get(normalize_template_path(path), "draft")).strip() or "draft"
 
@@ -216,28 +262,12 @@ def load_template_config(config_path: str | Path, defaults: dict[str, Any]) -> d
         elif isinstance(merged[key], dict) and isinstance(value, dict):
             merged[key] = {str(k): str(v) for k, v in value.items()}
         elif isinstance(merged[key], str) and isinstance(value, str):
-            val_str = str(value)
-            if "\\" in val_str or "/" in val_str or ":" in val_str:
-                val_path = Path(val_str)
-                # Check if it doesn't exist, or looks like a Windows path on Linux
-                is_cross_os = ":" in val_str and os.name == "posix"
-                if is_cross_os or not val_path.exists():
-                    unified = val_str.replace("\\", "/")
-                    parts = unified.split("/")
-                    healed = False
-                    for marker in ["samples", "data", "outputs", "exports"]:
-                        if marker in parts:
-                            idx = parts.index(marker)
-                            rel_path = "/".join(parts[idx:])
-                            healed_path = root_dir / rel_path
-                            if healed_path.exists():
-                                val_str = str(healed_path)
-                                healed = True
-                                break
-                    if not healed and is_cross_os:
-                        # Fallback to default if cross-OS absolute path cannot be healed
-                        val_str = str(defaults.get(key, ""))
-            merged[key] = val_str
+            if key in TEMPLATE_PATH_KEYS:
+                merged[key] = _resolve_template_config_path(
+                    str(value), root_dir, str(defaults.get(key, ""))
+                )
+            else:
+                merged[key] = str(value)
     return merged
 
 
@@ -250,6 +280,10 @@ def save_template_config(config_path: str | Path, config: dict[str, Any]) -> Non
             payload[key] = [str(item) for item in value]
         elif isinstance(value, dict):
             payload[key] = {str(k): str(v) for k, v in value.items()}
+        elif key in TEMPLATE_PATH_KEYS:
+            payload[key] = _portable_template_config_value(
+                str(value), Path(__file__).resolve().parent.parent
+            )
         else:
             payload[key] = str(value)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

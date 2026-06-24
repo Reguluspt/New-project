@@ -252,13 +252,14 @@ def render(
                 authorization_note = st.text_area("Căn cứ/giấy ủy quyền đại diện", height=70, key="entry_authorization_note")
 
     # --- Xác định loại khách hàng và gộp thông tin ---
+    from src.sqlite_store import format_contract_number
     if customer_info_org:
         customer_type = "organization"
         customer_info = customer_info_org
         customer_address = customer_address_org
         customer_phone = ""
         customer_citizen_id = ""
-        contract_number = contract_number_org
+        contract_number = format_contract_number(contract_number_org)
         contract_date = contract_date_org
     else:
         customer_type = "individual"
@@ -266,7 +267,7 @@ def render(
         customer_address = customer_address_ind
         customer_phone = customer_phone_ind
         customer_citizen_id = customer_citizen_id_ind
-        contract_number = contract_number_ind
+        contract_number = format_contract_number(contract_number_ind)
         contract_date = contract_date_ind
 
     # --- Thông tin Nghiệp vụ ---

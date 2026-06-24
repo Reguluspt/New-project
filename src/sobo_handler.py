@@ -42,7 +42,11 @@ def _subject_with_sobo_record_id(subject: str, record_id: int) -> str:
     SOBO_DOC_MULTI_CHOICE,
     SOBO_NOTE,
     SOBO_MACHINERY_DOC_CHOICE,
-) = range(20, 33)
+    SOBO_MANUAL_THUA,
+    SOBO_MANUAL_TO,
+    SOBO_MANUAL_DIA_CHI,
+    SOBO_MANUAL_MULTI_CHOICE,
+) = range(20, 37)
 
 # Danh sách Mapping
 SOBO_MAPPING = {
@@ -157,7 +161,8 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
                 f"Tài sản {idx}:\n"
                 f"- Số thửa đất: {asset.get('so_thua', '')}\n"
                 f"- Số tờ bản đồ: {asset.get('so_to', '')}\n"
-                f"- Địa chỉ tài sản: {asset.get('dia_chi', '')}\n\n"
+                f"- Địa chỉ tài sản: {asset.get('dia_chi', '')}\n"
+                f"- Định vị tài sản: {asset.get('link', '') or 'Không có'}\n\n"
             )
             
         body = (
@@ -165,8 +170,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
             "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
             f"- Nguồn khách hàng: {source}\n"
-            f"- Loại tài sản: {SOBO_ASSET_TYPE}\n"
-            f"- Định vị tài sản: {link}\n\n"
+            f"- Loại tài sản: {SOBO_ASSET_TYPE}\n\n"
             f"DANH SÁCH CHI TIẾT TÀI SẢN:\n"
             f"{assets_text}"
             f"- Ghi chú: {note_display}\n\n"
@@ -185,11 +189,19 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             safe_asset_thua = html.escape(asset.get("so_thua", ""))
             safe_asset_to = html.escape(asset.get("so_to", ""))
             safe_asset_dia_chi = html.escape(asset.get("dia_chi", ""))
+            asset_link = asset.get("link", "") or "Không có"
+            
+            if asset_link.startswith("http"):
+                safe_asset_link_html = f'<a href="{html.escape(asset_link, quote=True)}" style="color:#008B95;font-weight:bold;text-decoration:none;">Xem vị trí</a>'
+            else:
+                safe_asset_link_html = html.escape(asset_link)
+                
             table_rows_html += f"""
               <tr><td colspan="2" style="padding:10px 16px;border-top:1px solid #cae4e5;background:#fdfbf7;color:#024743;font-weight:bold;">Tài sản {idx}</td></tr>
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Số thửa đất</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_asset_thua}</strong></td></tr>
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Số tờ bản đồ</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;"><strong>{safe_asset_to}</strong></td></tr>
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Địa chỉ tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_dia_chi}</td></tr>
+              <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Định vị tài sản</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_asset_link_html}</td></tr>
             """
             
         detail_table_html = f"""
@@ -203,6 +215,8 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Ghi chú</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_note}</td></tr>
             </table>
         """
+        
+        maps_block_html = ""
     else:
         body = (
             "Kính gửi Anh/Chị,\n\n"
@@ -238,6 +252,20 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
               <tr><td style="padding:10px 16px;border-top:1px solid #edf2f8;color:#024743;font-weight:bold;">Ghi chú</td><td style="padding:10px 16px;border-top:1px solid #edf2f8;">{safe_note}</td></tr>
             </table>
         """
+        
+        maps_block_html = f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e2e8f0;background:#fdfbf7;border-radius:7px;">
+              <tr>
+                <td style="padding:14px 16px;">
+                  <strong style="display:block;font-size:14px;color:#024743;">Định vị tài sản</strong>
+                  <span style="font-size:13px;color:#64748b;">Đường dẫn Google Maps từ quy trình /sobo</span>
+                </td>
+                <td align="right" style="padding:14px 16px;">
+                  <a href="{safe_href}" style="display:inline-block;padding:10px 14px;border-radius:6px;background:#008B95;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;">Xem vị trí tài sản</a>
+                </td>
+              </tr>
+            </table>
+        """
 
     body_html = f"""
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAF6F0;margin:0;padding:20px 0;font-family:'Montserrat',Arial,sans-serif;color:#11284d;">
@@ -263,17 +291,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             <p style="margin:0 0 18px;font-weight:500;">Kính gửi Anh/Chị,</p>
             <p style="margin:0 0 22px;">Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:</p>
             {detail_table_html}
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e2e8f0;background:#fdfbf7;border-radius:7px;">
-              <tr>
-                <td style="padding:14px 16px;">
-                  <strong style="display:block;font-size:14px;color:#024743;">Định vị tài sản</strong>
-                  <span style="font-size:13px;color:#64748b;">Đường dẫn Google Maps từ quy trình /sobo</span>
-                </td>
-                <td align="right" style="padding:14px 16px;">
-                  <a href="{safe_href}" style="display:inline-block;padding:10px 14px;border-radius:6px;background:#008B95;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;">Xem vị trí tài sản</a>
-                </td>
-              </tr>
-            </table>
+            {maps_block_html}
             <p style="margin:0 0 18px;">Kính nhờ Anh/Chị hỗ trợ sơ bộ tài sản nêu trên và phản hồi để Phòng Kinh Doanh tiếp tục làm việc với khách hàng.</p>
             <p style="margin:0 0 24px;">Trân trọng cảm ơn Anh/Chị.</p>
             <div style="padding-top:20px;border-top:1px solid #e2e8f0;font-size:13px;line-height:1.5;color:#45566f;">
@@ -393,13 +411,31 @@ def build_re_sub_type_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
     ])
 
-
 def build_multi_doc_choice_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Quét tài sản tiếp theo", callback_data="sobo_multi_next")],
         [InlineKeyboardButton("✅ Kết thúc quét", callback_data="sobo_multi_done")],
         [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
     ])
+
+
+def build_sobo_checklist_keyboard(assets_list: list) -> InlineKeyboardMarkup:
+    keyboard = []
+    for idx, asset in enumerate(assets_list):
+        selected = asset.setdefault('selected', True)
+        icon = "✅" if selected else "❌"
+        thua = asset.get('so_thua', '')
+        to = asset.get('so_to', '')
+        label = f"{icon} TS {idx+1}: Thửa {thua}, Tờ {to}"
+        if len(label) > 40:
+            label = label[:37] + "..."
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"sobo_multi_toggle_{idx}")])
+        
+    keyboard.append([
+        InlineKeyboardButton("➡️ Xác nhận", callback_data="sobo_multi_confirm"),
+        InlineKeyboardButton("🚫 Hủy bỏ", callback_data="sobo_cancel")
+    ])
+    return InlineKeyboardMarkup(keyboard)
 
 
 def build_machinery_doc_choice_keyboard() -> InlineKeyboardMarkup:
@@ -451,18 +487,23 @@ async def sobo_select_asset_type(update: Update, context: ContextTypes.DEFAULT_T
     )
     return SOBO_MACHINERY_DOC
 
-
 async def sobo_select_re_sub_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     sobo = context.user_data.setdefault('sobo', {})
+    
+    manual_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📝 Nhập thủ công ngay", callback_data="sobo_start_manual")],
+        [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")]
+    ])
     
     if query.data == "sobo_re_single":
         sobo['asset_sub_type'] = "single"
         await query.edit_message_text(
             "📄 Đã chọn Hồ sơ 1 tài sản.\n\n"
             "Vui lòng gửi Ảnh chụp hoặc File PDF Giấy chứng nhận quyền sử dụng đất "
-            "để tôi quét thông tin Tỉnh/Thành phố và Thửa đất."
+            "để tôi quét thông tin Tỉnh/Thành phố và Thửa đất. Bạn cũng có thể chọn nhập thủ công:",
+            reply_markup=manual_markup
         )
         return SOBO_DOC
         
@@ -473,14 +514,14 @@ async def sobo_select_re_sub_type(update: Update, context: ContextTypes.DEFAULT_
         sobo['attachment_names'] = []
         await query.edit_message_text(
             "📚 Đã chọn Hồ sơ nhiều tài sản.\n\n"
-            "Vui lòng gửi Ảnh chụp hoặc File PDF của **Tài sản thứ 1** để tôi quét thông tin:"
+            "Vui lòng gửi Ảnh chụp hoặc File PDF của **Tài sản thứ 1** để tôi quét thông tin. Bạn cũng có thể chọn nhập thủ công:",
+            reply_markup=manual_markup
         )
         return SOBO_DOC_MULTI
         
     await query.edit_message_text("❌ Lựa chọn không hợp lệ. Vui lòng bắt đầu lại bằng /sobo.")
     context.user_data.pop('sobo', None)
     return ConversationHandler.END
-
 import asyncio
 import fitz
 from telegram.ext import ConversationHandler
@@ -683,9 +724,17 @@ async def _process_sobo_extracted_file_multi(update: Update, context: ContextTyp
         return SOBO_DOC_MULTI_CHOICE
     except Exception as e:
         logger.error(f"Lỗi extract sơ bộ nhiều tài sản: {e}")
-        await update.message.reply_text("❌ Có lỗi xảy ra trong quá trình nhận diện AI. Vui lòng gửi lại GCN rõ nét hơn.")
+        reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📝 Nhập thủ công", callback_data="sobo_start_manual")],
+            [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")]
+        ])
+        await update.message.reply_text(
+            "❌ Có lỗi xảy ra trong quá trình nhận diện AI từ file của bạn.\n\n"
+            "Bạn có muốn chuyển sang chế độ **Nhập thủ công** không?",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
         return SOBO_DOC_MULTI
-
 
 async def sobo_multi_doc_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -707,7 +756,43 @@ async def sobo_multi_doc_choice(update: Update, context: ContextTypes.DEFAULT_TY
             await query.edit_message_text("❌ Lỗi: Bạn chưa quét tài sản nào. Vui lòng gửi file hoặc bấm hủy bỏ.")
             return SOBO_DOC_MULTI
             
-        first_asset = assets_list[0]
+        for asset in assets_list:
+            asset.setdefault('selected', True)
+            
+        await query.edit_message_text(
+            "📋 <b>CHỌN TÀI SẢN CẦN SƠ BỘ</b>\n\n"
+            "Vui lòng nhấn vào các nút bên dưới để bật/tắt (✅/❌).\n"
+            "Tài sản có dấu ❌ sẽ được loại bỏ hoàn toàn.\n\n"
+            "Nhấn <b>Xác nhận</b> khi đã chọn xong:",
+            reply_markup=build_sobo_checklist_keyboard(assets_list),
+            parse_mode="HTML"
+        )
+        return SOBO_DOC_MULTI_CHOICE
+        
+    elif query.data.startswith("sobo_multi_toggle_"):
+        idx = int(query.data.split("_")[-1])
+        if 0 <= idx < len(assets_list):
+            assets_list[idx]['selected'] = not assets_list[idx].setdefault('selected', True)
+            
+        await query.edit_message_text(
+            "📋 <b>CHỌN TÀI SẢN CẦN SƠ BỘ</b>\n\n"
+            "Vui lòng nhấn vào các nút bên dưới để bật/tắt (✅/❌).\n"
+            "Tài sản có dấu ❌ sẽ được loại bỏ hoàn toàn.\n\n"
+            "Nhấn <b>Xác nhận</b> khi đã chọn xong:",
+            reply_markup=build_sobo_checklist_keyboard(assets_list),
+            parse_mode="HTML"
+        )
+        return SOBO_DOC_MULTI_CHOICE
+        
+    elif query.data == "sobo_multi_confirm":
+        selected_assets = [a for a in assets_list if a.get('selected', True)]
+        if not selected_assets:
+            await query.answer("❌ Lỗi: Bạn phải chọn ít nhất 1 tài sản!", show_alert=True)
+            return SOBO_DOC_MULTI_CHOICE
+            
+        sobo['assets_list'] = selected_assets
+        
+        first_asset = selected_assets[0]
         suggested_email = find_department_email(first_asset.get('dia_chi', ''))
         sobo['suggested_email'] = suggested_email
         sobo.pop('email', None)
@@ -719,7 +804,7 @@ async def sobo_multi_doc_choice(update: Update, context: ContextTypes.DEFAULT_TY
             email_info = "⚠️ Không thể tự động nhận diện Tỉnh/Thành phố từ tài sản 1."
             
         await query.edit_message_text(
-            f"📋 Đã kết thúc quét. Tổng số tài sản đã nhận: **{len(assets_list)}**.\n\n"
+            f"📋 Đã chốt danh sách: **{len(selected_assets)}** tài sản.\n\n"
             f"{email_info}\n\n"
             f"📧 Vui lòng chọn **email nhận sơ bộ** từ danh sách dưới đây:",
             reply_markup=build_department_email_keyboard(suggested_email),
@@ -1020,10 +1105,17 @@ async def _process_sobo_extracted_file(update: Update, context: ContextTypes.DEF
         return SOBO_DOC
     except Exception as e:
         logger.error(f"Lỗi extract sơ bộ: {e}")
-        await update.message.reply_text("❌ Có lỗi xảy ra trong quá trình nhận diện AI. Vui lòng gửi lại GCN rõ nét hơn.")
+        reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📝 Nhập thủ công", callback_data="sobo_start_manual")],
+            [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")]
+        ])
+        await update.message.reply_text(
+            "❌ Có lỗi xảy ra trong quá trình nhận diện AI từ file của bạn.\n\n"
+            "Bạn có muốn chuyển sang chế độ **Nhập thủ công** không?",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
         return SOBO_DOC
-
-
 async def sobo_select_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1043,10 +1135,27 @@ async def sobo_select_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Nếu không có ghi chú, vui lòng nhập: Không có"
         )
         return SOBO_NOTE
+    sobo = context.user_data['sobo']
+    if sobo.get('asset_sub_type') == "multi":
+        sobo['current_loc_idx'] = 0
+        assets_list = sobo.get('assets_list', [])
+        if assets_list:
+            asset = assets_list[0]
+            desc = f"Thửa {asset.get('so_thua', '')}, Tờ {asset.get('so_to', '')} - {asset.get('dia_chi', '')}"
+            await query.edit_message_text(
+                f"✅ Đã chọn email nhận sơ bộ: {email}\n\n"
+                f"📍 <b>[1/{len(assets_list)}]</b> Vui lòng gửi Link định vị Google Maps cho <b>Tài sản 1</b>:\n"
+                f"<i>({desc})</i>",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⏭️ Không có / Bỏ qua", callback_data="sobo_link_skip")]]),
+                parse_mode="HTML"
+            )
+            return SOBO_LOC
 
     await query.edit_message_text(
         f"✅ Đã chọn email nhận sơ bộ: {email}\n\n"
-        "📍 Tiếp theo, vui lòng gửi Link định vị tài sản (Google Maps):"
+        "📍 Tiếp theo, vui lòng gửi Link định vị tài sản (Google Maps):",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⏭️ Không có / Bỏ qua", callback_data="sobo_link_skip")]]),
+        parse_mode="HTML"
     )
     return SOBO_LOC
 
@@ -1056,15 +1165,212 @@ async def sobo_require_email_selection(update: Update, context: ContextTypes.DEF
     return SOBO_DOC
 
 
+async def _sobo_prompt_next_link(update: Update, context: ContextTypes.DEFAULT_TYPE, is_callback=False):
+    sobo = context.user_data['sobo']
+    idx = sobo.get('current_loc_idx', 0)
+    assets_list = sobo.get('assets_list', [])
+    
+    if idx < len(assets_list):
+        asset = assets_list[idx]
+        desc = f"Thửa {asset.get('so_thua', '')}, Tờ {asset.get('so_to', '')} - {asset.get('dia_chi', '')}"
+        text = (
+            f"📍 <b>[{idx+1}/{len(assets_list)}]</b> Vui lòng gửi Link định vị Google Maps cho <b>Tài sản {idx+1}</b>:\n"
+            f"<i>({desc})</i>"
+        )
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⏭️ Không có / Bỏ qua", callback_data="sobo_link_skip")]])
+        if is_callback:
+            await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="HTML")
+        else:
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
+        return SOBO_LOC
+    else:
+        text = (
+            "👤 Vui lòng nhập **Nguồn khách hàng** (Ví dụ: VCB Gia Lai, KH Cá nhân...)\n"
+            "Điều này sẽ được ghi vào Tiêu đề Email."
+        )
+        if is_callback:
+            await update.callback_query.edit_message_text(text, parse_mode="Markdown")
+        else:
+            await update.message.reply_text(text, parse_mode="Markdown")
+        return SOBO_SOURCE
+
+
 async def sobo_receive_loc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loc_link = update.message.text
-    context.user_data['sobo']['link'] = loc_link
+    sobo = context.user_data.setdefault('sobo', {})
+    
+    if sobo.get('asset_sub_type') == "multi":
+        assets_list = sobo.get('assets_list', [])
+        idx = sobo.get('current_loc_idx', 0)
+        if idx < len(assets_list):
+            assets_list[idx]['link'] = loc_link
+            sobo['current_loc_idx'] = idx + 1
+        return await _sobo_prompt_next_link(update, context, is_callback=False)
+    else:
+        sobo['link'] = loc_link
+        await update.message.reply_text(
+            "👤 Vui lòng nhập **Nguồn khách hàng** (Ví dụ: VCB Gia Lai, KH Cá nhân...)\n"
+            "Điều này sẽ được ghi vào Tiêu đề Email.",
+            parse_mode="Markdown"
+        )
+        return SOBO_SOURCE
+
+
+async def sobo_link_skip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    sobo = context.user_data.setdefault('sobo', {})
+    if sobo.get('asset_sub_type') == "multi":
+        assets_list = sobo.get('assets_list', [])
+        idx = sobo.get('current_loc_idx', 0)
+        if idx < len(assets_list):
+            assets_list[idx]['link'] = "Không có"
+            sobo['current_loc_idx'] = idx + 1
+        return await _sobo_prompt_next_link(update, context, is_callback=True)
+    else:
+        sobo['link'] = "Không có"
+        await query.edit_message_text(
+            "👤 Vui lòng nhập **Nguồn khách hàng** (Ví dụ: VCB Gia Lai, KH Cá nhân...)\n"
+            "Điều này sẽ được ghi vào Tiêu đề Email.",
+            parse_mode="Markdown"
+        )
+        return SOBO_SOURCE
+
+
+async def sobo_start_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    sobo = context.user_data.setdefault('sobo', {})
+    sobo['manual_entry'] = True
+    
+    if sobo.get('asset_sub_type') == "multi":
+        idx = len(sobo.setdefault('assets_list', [])) + 1
+        prompt = f"✍️ Bắt đầu nhập thủ công cho <b>Tài sản thứ {idx}</b>:\n\n💬 Vui lòng nhập **Số thửa đất** (Nếu không có, nhập 'Không'):"
+    else:
+        prompt = "✍️ Chuyển sang chế độ nhập thủ công:\n\n💬 Vui lòng nhập **Số thửa đất** (Nếu không có, nhập 'Không'):"
+        
+    await query.edit_message_text(prompt, parse_mode="HTML")
+    return SOBO_MANUAL_THUA
+
+
+async def sobo_manual_thua(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    thua = update.message.text.strip()
+    sobo = context.user_data.setdefault('sobo', {})
+    sobo['temp_so_thua'] = thua
     
     await update.message.reply_text(
-        "👤 Vui lòng nhập **Nguồn khách hàng** (Ví dụ: VCB Gia Lai, KH Cá nhân...)\n"
-        "Điều này sẽ được ghi vào Tiêu đề Email."
+        "💬 Vui lòng nhập **Số tờ bản đồ** (Nếu không có, nhập 'Không'):",
+        parse_mode="Markdown"
     )
-    return SOBO_SOURCE
+    return SOBO_MANUAL_TO
+
+
+async def sobo_manual_to(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    to_val = update.message.text.strip()
+    sobo = context.user_data.setdefault('sobo', {})
+    sobo['temp_so_to'] = to_val
+    
+    await update.message.reply_text(
+        "💬 Vui lòng nhập **Địa chỉ tài sản**:",
+        parse_mode="Markdown"
+    )
+    return SOBO_MANUAL_DIA_CHI
+
+
+async def sobo_manual_dia_chi(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    addr = update.message.text.strip()
+    sobo = context.user_data.setdefault('sobo', {})
+    
+    new_asset = {
+        'so_thua': sobo.pop('temp_so_thua', ''),
+        'so_to': sobo.pop('temp_so_to', ''),
+        'dia_chi': addr
+    }
+    
+    if sobo.get('asset_sub_type') == "multi":
+        assets_list = sobo.setdefault('assets_list', [])
+        assets_list.append(new_asset)
+        
+        reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Nhập tài sản tiếp theo", callback_data="sobo_manual_next")],
+            [InlineKeyboardButton("✅ Kết thúc nhập thủ công", callback_data="sobo_manual_done")],
+            [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")]
+        ])
+        
+        await update.message.reply_text(
+            f"✅ Đã lưu thông tin Táii sản {len(assets_list)}:\n"
+            f"- Thửa: {new_asset['so_thua']}\n"
+            f"- Tờ: {new_asset['so_to']}\n"
+            f"- Địa chỉ: {new_asset['dia_chi']}\n\n"
+            "Bạn có muốn nhập tiếp tài sản khác không?",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        return SOBO_MANUAL_MULTI_CHOICE
+    else:
+        sobo['so_thua'] = new_asset['so_thua']
+        sobo['so_to'] = new_asset['so_to']
+        sobo['dia_chi'] = new_asset['dia_chi']
+        
+        suggested_email = find_department_email(new_asset['dia_chi'])
+        sobo['suggested_email'] = suggested_email
+        sobo.pop('email', None)
+        
+        email_info = ""
+        if suggested_email:
+            email_info = f"✅ Đã nhận diện Tỉnh/Thành phố. Email gợi ý: **{suggested_email}**"
+        else:
+            email_info = "⚠️ Không thể tự động nhận diện Tỉnh/Thành phố."
+            
+        await update.message.reply_text(
+            f"✅ Đã lưu thông tin nhập thủ công:\n"
+            f"- Thửa: {sobo['so_thua']}\n"
+            f"- Tờ: {sobo['so_to']}\n"
+            f"- Địa chỉ: {sobo['dia_chi']}\n\n"
+            f"{email_info}\n\n"
+            f"📧 Vui lòng chọn **email nhận sơ bộ** từ danh sách dưới đây:",
+            reply_markup=build_department_email_keyboard(suggested_email),
+            parse_mode="Markdown"
+        )
+        return SOBO_DOC
+
+
+async def sobo_manual_multi_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    sobo = context.user_data.get('sobo', {})
+    assets_list = sobo.get('assets_list', [])
+    
+    if query.data == "sobo_manual_next":
+        idx = len(assets_list) + 1
+        await query.edit_message_text(
+            f"✍️ Nhập thủ công cho **Tài sản thứ {idx}**:\n\n"
+            "💬 Vui lòng nhập **Số thửa đất** (Nếu không có, nhập 'Không'):",
+            parse_mode="Markdown"
+        )
+        return SOBO_MANUAL_THUA
+        
+    elif query.data == "sobo_manual_done":
+        if not assets_list:
+            await query.edit_message_text("❌ Lỗi: Bạn chưa nhập tài sản nào. Vui lòng nhập hoặc bấm hủy bỏ.")
+            return SOBO_MANUAL_THUA
+            
+        for asset in assets_list:
+            asset.setdefault('selected', True)
+            
+        await query.edit_message_text(
+            "📋 <b>CHỌN TÀI SẢN CẦN SƠ BỘ</b>\n\n"
+            "Vui lòng nhấn vào các nút bên dưới để bật/tắt (✅/❌).\n"
+            "Tài sản có dấu ❌ sẽ được loại bỏ hoàn toàn.\n\n"
+            "Nhấn <b>Xác nhận</b> khi đã chọn xong:",
+            reply_markup=build_sobo_checklist_keyboard(assets_list),
+            parse_mode="HTML"
+        )
+        return SOBO_DOC_MULTI_CHOICE
+
 
 async def sobo_receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
     source = update.message.text.strip()
@@ -1113,6 +1419,8 @@ async def sobo_receive_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sobo['so_thua'] = " + ".join(unique_thuas) if unique_thuas else ""
             sobo['so_to'] = " + ".join(unique_tos) if unique_tos else ""
             sobo['dia_chi'] = max(addresses, key=len) if addresses else ""
+            links = [a.get('link', '') for a in assets_list if a.get('link')]
+            sobo['link'] = " | ".join(links) if links else ""
             attachment_preview = f"{len(sobo.get('file_paths', []))} file GCN"
         else:
             attachment_preview = "1 file GCN"
@@ -1240,21 +1548,24 @@ def get_sobo_conversation_handler() -> ConversationHandler:
             SOBO_DOC: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_doc),
                 CallbackQueryHandler(sobo_select_email, pattern="^sobo_email_"),
+                CallbackQueryHandler(sobo_start_manual, pattern="^sobo_start_manual$"),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_require_email_selection)
             ],
             SOBO_DOC_MULTI: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_doc_multi),
-                # File extraction runs in a background task, so the conversation remains in
-                # this state when the post-scan action buttons are displayed.
                 CallbackQueryHandler(sobo_multi_doc_choice, pattern="^sobo_multi_"),
+                CallbackQueryHandler(sobo_start_manual, pattern="^sobo_start_manual$"),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
             ],
             SOBO_DOC_MULTI_CHOICE: [
                 CallbackQueryHandler(sobo_multi_doc_choice, pattern="^sobo_multi_"),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
             ],
-            SOBO_LOC: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_loc)],
+            SOBO_LOC: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_loc),
+                CallbackQueryHandler(sobo_link_skip, pattern="^sobo_link_skip$"),
+            ],
             SOBO_SOURCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_source)],
             SOBO_NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_note)],
             SOBO_MACHINERY_DOC: [
@@ -1274,6 +1585,13 @@ def get_sobo_conversation_handler() -> ConversationHandler:
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
             ],
             SOBO_CONFIRM: [CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_")],
+            SOBO_MANUAL_THUA: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_manual_thua)],
+            SOBO_MANUAL_TO: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_manual_to)],
+            SOBO_MANUAL_DIA_CHI: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_manual_dia_chi)],
+            SOBO_MANUAL_MULTI_CHOICE: [
+                CallbackQueryHandler(sobo_manual_multi_choice, pattern="^sobo_manual_"),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+            ],
         },
         fallbacks=[CommandHandler('cancel', sobo_cancel_cmd)],
         per_message=False,

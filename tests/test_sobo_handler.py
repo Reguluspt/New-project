@@ -602,7 +602,6 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("asyncio.to_thread", AsyncMock(return_value=extraction2)):
             state = await _process_sobo_extracted_file_multi(update2, context, str(Path("gcn2.pdf")))
-
         self.assertEqual(state, SOBO_DOC_MULTI_CHOICE)
         self.assertEqual(len(context.user_data["sobo"]["assets_list"]), 2)
         self.assertEqual(context.user_data["sobo"]["assets_list"][1]["so_thua"], "235")
@@ -612,9 +611,18 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
         update_query_done.callback_query.answer = AsyncMock()
         update_query_done.callback_query.edit_message_text = AsyncMock()
         update_query_done.callback_query.data = "sobo_multi_done"
-
+    
         state_done = await sobo_multi_doc_choice(update_query_done, context)
-        self.assertEqual(state_done, SOBO_DOC)
+        self.assertEqual(state_done, SOBO_DOC_MULTI_CHOICE)
+
+        # Confirm selection
+        update_query_confirm = Mock()
+        update_query_confirm.callback_query.answer = AsyncMock()
+        update_query_confirm.callback_query.edit_message_text = AsyncMock()
+        update_query_confirm.callback_query.data = "sobo_multi_confirm"
+
+        state_confirm = await sobo_multi_doc_choice(update_query_confirm, context)
+        self.assertEqual(state_confirm, SOBO_DOC)
         self.assertEqual(context.user_data["sobo"]["suggested_email"], "Sobo.taynguyen@gmail.com")
 
     async def test_multi_asset_pdf_keeps_every_extracted_asset(self) -> None:

@@ -87,11 +87,10 @@ async def send_sobo_email_with_result(
     )
 
     sobo_config = get_sobo_email_config()
-    sobo_provider = os.getenv("SOBO_OAUTH_PROVIDER", "").strip().lower() or sobo_config["provider"]
-    if sobo_provider in {"google", "outlook"} and is_oauth_enabled(sobo_provider):
-        provider = sobo_provider
-    elif is_oauth_enabled("google"):
+    if is_oauth_enabled("google"):
         provider = "google"
+    elif is_oauth_enabled("outlook") or (get_enabled_oauth_provider() == "outlook"):
+        provider = "outlook"
     else:
         provider = get_enabled_oauth_provider()
         

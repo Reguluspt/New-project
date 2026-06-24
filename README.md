@@ -1,97 +1,180 @@
-# Tu dong hoa ho so tham dinh
+# Hệ Thống Thẩm Định Giá — Flask + React SPA
 
-MVP nay tap trung vao Buoc 1: doc PDF/anh Giay chung nhan quyen su dung dat bang AI online, cho nguoi dung kiem tra lai, sau do luu vao SQLite va xuat du lieu vao mau Excel `Form nhap lieu.xlsx`.
+Hệ thống quản lý hồ sơ thẩm định giá, chuyển đổi từ Streamlit sang kiến trúc **Flask REST API + React SPA** hiện đại.
 
-## Chuc nang hien co
+---
 
-- Upload PDF hoac anh GCN.
-- Goi Gemini API hoac OpenAI Responses API de trich xuat:
-  - So thua dat.
-  - So to ban do.
-  - Dia chi thua dat.
-  - Ten chu so huu cuoi cung.
-  - Dia chi chu so huu cuoi cung.
-  - So CCCD/CMND cua chu so huu cuoi cung.
-- Hien do tin cay va bang chung ngan de kiem tra.
-- Cho sua tay truoc khi xuat.
-- Ghi vao sheet `Up Hs` cua file mau Excel.
-- Luu ho so vao SQLite, mac dinh la `data/cases.db`.
-- Tim kiem, sua va xoa ho so da luu.
-- Import du lieu cu tu file Excel `Database.xlsx` vao SQLite.
-- Luu PDF/anh GCN goc vao thu muc rieng cua tung ho so.
-- Xuat bo ho so ca nhan tu SQLite: Hop dong, Phieu yeu cau, Bien ban nghiem thu.
-- Xuat bo ho so to chuc tu SQLite: Hop dong, Bien ban nghiem thu/thanh ly, De nghi thanh toan, Thu chao phi.
-- Xem truoc noi dung Word da render truoc khi xuat file that.
-- So sanh noi dung preview voi file Word da xuat de duyet lan cuoi.
-- Sau khi duyet, app co the xuat tu dong ca bo PDF tu cac file Word.
-- Co the dong goi ZIP ho so gom file goc, Word va PDF de gui noi bo/luu tru.
-- Mau Word da duoc chuan hoa sang placeholder `{{...}}`.
-- Co man hinh "Quan ly template" de sua duong dan template, xem placeholder, va bao loi thieu placeholder bat buoc.
-- Co placeholder editor ngay trong app de sua nhanh tung doan template co placeholder.
-- Co lich su chinh sua template de biet ai sua doan nao va luc nao.
-- Co khoa template production de chan sua nham mau dang dung that.
-- Co snapshot version va khoi phuc template truc tiep tu lich su.
-- Co nhan phien ban template `production`, `draft`, `testing`.
-- Co phan quyen local theo role cho sua template, restore template, va duyet PDF.
+## Kiến Trúc
 
-## Cai dat
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
+```
+┌─────────────────────────────────────────────────────────┐
+│                    React SPA (web/)                     │
+│   Vite + React 18 + Ant Design + React Query           │
+│   http://localhost:5173 (dev) / /  (production)        │
+└───────────────────┬─────────────────────────────────────┘
+                    │  /api/*
+┌───────────────────▼─────────────────────────────────────┐
+│               Flask API (api/)                          │
+│   Python + Flask Blueprints                             │
+│   http://localhost:5000                                 │
+└───────────────────┬─────────────────────────────────────┘
+                    │
+┌───────────────────▼─────────────────────────────────────┐
+│               Data Layer (src/)                         │
+│   sqlite_store.py · database_manager.py                │
+│   document_exporter.py · mail_service.py               │
+│   gemini_extractor.py · telegram_bot · ...             │
+└─────────────────────────────────────────────────────────┘
 ```
 
-Mo file `.env` va dien `OPENAI_API_KEY`.
-Neu dung Gemini, dien `GEMINI_API_KEY`. Mac dinh app chon model `gemini-2.5-flash`.
+---
 
-## Chay phan mem
+## Cài Đặt (Lần Đầu)
 
-```powershell
-.\.venv\Scripts\streamlit.exe run app.py
+### Yêu Cầu
+
+| Phần mềm | Phiên bản |
+|----------|-----------|
+| Python   | ≥ 3.11    |
+| Node.js  | ≥ 18      |
+| npm      | ≥ 9       |
+
+### Các Bước
+
+```bat
+# 1. Cài đặt toàn bộ
+CaiDat.bat
+
+# 2. Cấu hình API keys (Gemini, Telegram, OAuth, ...)
+# Sửa file API.env với thông tin của bạn
+
+# 3. Build giao diện React (lần đầu, hoặc khi có thay đổi frontend)
+build_production.bat
 ```
 
-Sau do mo dia chi Streamlit hien trong terminal, thuong la `http://localhost:8501`.
+---
 
-## Luu y bao mat
+## Chạy Ứng Dụng
 
-Khi bam quet AI, file GCN se duoc gui den nha cung cap AI da chon trong sidebar de xu ly hinh anh/PDF. Chi upload ho so khi cong ty cho phep dung AI online cho du lieu khach hang. Neu can che do noi bo/offline, can thay module `src/extractor.py`/`src/gemini_extractor.py` bang OCR local va model local.
+### Development (khuyến nghị khi phát triển)
 
-## SQLite database
+```powershell
+# Terminal 1: Flask API
+.venv\Scripts\python.exe -m api.run --debug
 
-SQLite la database chinh cua phan mem, nam mac dinh tai `data/cases.db`. Sidebar co nut "Import Excel vao SQLite" de chuyen du lieu cu tu `Database.xlsx`.
+# Terminal 2: React dev server (hot-reload)
+cd web
+npm run dev
+```
 
-Man hinh "Quan ly ho so" ho tro:
+Frontend: http://localhost:5173 → proxy đến Flask API tại :5000
 
-- Tim theo ten khach hang, so hop dong, CCCD, dia chi, tai san, ngan hang hoac ghi chu.
-- Chon mot ho so de sua.
-- Xoa ho so voi checkbox xac nhan.
-- Xem truoc noi dung bo Word truoc khi xuat.
-- So sanh preview voi file Word da xuat.
-- Xuat bo Word cho khach hang ca nhan va to chuc.
+### Production
 
-## Thu muc ho so
+```bat
+# Bước 1: Build React
+build_production.bat
 
-Khi luu ho so moi, app tao thu muc theo dang `data/case_files/<ID>_<So hop dong>/`.
+# Bước 2: Khởi động hệ thống
+KhoiDongHeThong.bat
+```
 
-- File GCN goc nam trong `originals/`.
-- Bo Word xuat ra nam trong `documents/`.
-- Mau Word ca nhan nam mac dinh tai `samples/templates/individual/`.
-- Mau Word to chuc nam mac dinh tai `samples/templates/organization/`.
-- Danh sach placeholder: `docs/word_placeholders.md`.
-- Cac mau can ghep muc dich + nguon nay dung `{{MUC_DICH_THAM_DINH_DAY_DU}}`.
+Flask phục vụ cả API (`/api/*`) và React static files (`/`) trên port 5000.
 
-Hai mau doanh nghiep goc dang o dinh dang `.doc` cu da duoc chuyen sang `.docx` trong thu muc `samples/templates/organization/` de app co the tu dong dien du lieu.
+---
 
-Mapping import tu Excel database cu:
+## Endpoints API
 
-- A: STT.
-- B: Khach hang.
-- C: Dia chi.
-- D: Tai san tham dinh.
-- E: Muc dich tham dinh.
-- F: Phi tham dinh.
-- G: So tien bang chu.
-- H: Ghi chu ca nhan.
-- I: Dien giai/So hop dong.
-- J: Ngan hang/Nguon.
+| Nhóm | Prefix | Chức năng |
+|------|--------|-----------|
+| Auth | `/api/auth/` | Đăng nhập, đăng xuất, thông tin user |
+| Dashboard | `/api/dashboard/` | KPI, thống kê, bộ lọc |
+| Hồ sơ | `/api/cases/` | CRUD hồ sơ thẩm định |
+| Văn bản | `/api/cases/:id/documents/` | Tạo, preview, download, email |
+| Nhập hồ sơ | `/api/entry/` | Upload file, OCR, lưu |
+| Sơ bộ | `/api/sobo/` | Yêu cầu thẩm định sơ bộ |
+| Tổ chức | `/api/organizations/` | CRUD tổ chức |
+| Chuyển phát | `/api/delivery/contacts/` | Danh bạ chuyển phát |
+| Templates | `/api/templates/` | Quản lý mẫu Word |
+| Cài đặt | `/api/settings/` | Cấu hình hệ thống, backup, OAuth |
+
+---
+
+## Testing
+
+```powershell
+# Chạy toàn bộ bộ test (39 integration tests)
+.venv\Scripts\python.exe -m pytest tests/test_api/ -v
+
+# Chạy một module cụ thể
+.venv\Scripts\python.exe -m pytest tests/test_api/test_cases.py -v
+```
+
+---
+
+## Docker Deployment
+
+```bash
+# Build và chạy toàn bộ stack
+docker-compose up --build
+
+# Chỉ API
+docker build -f Dockerfile.api -t thamdinh-api .
+docker run -p 5000:5000 --env-file API.env thamdinh-api
+
+# Web (Nginx + React)
+docker build -f web/Dockerfile.web -t thamdinh-web ./web
+docker run -p 80:80 thamdinh-web
+```
+
+---
+
+## Cấu Trúc Dự Án
+
+```
+New project/
+├── api/                    # Flask REST API
+│   ├── __init__.py         # App factory
+│   ├── run.py              # Entry point
+│   ├── config.py           # Configuration
+│   └── blueprints/         # Route handlers
+│       ├── auth.py
+│       ├── dashboard.py
+│       ├── cases.py
+│       ├── documents.py
+│       ├── entry.py
+│       ├── sobo.py
+│       ├── organizations.py
+│       ├── delivery.py
+│       ├── templates_bp.py
+│       └── settings_bp.py
+├── web/                    # React SPA
+│   ├── src/
+│   │   ├── pages/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   └── styles/
+│   ├── Dockerfile.web
+│   └── nginx.conf
+├── src/                    # Core business logic (không sửa đổi)
+├── tests/
+│   └── test_api/           # Integration tests
+├── data/                   # SQLite databases
+├── samples/                # Template files
+├── Dockerfile.api
+├── docker-compose.yml
+├── build_production.bat    # Build React cho production
+├── KhoiDongHeThong.bat     # Khởi động hệ thống
+├── CaiDat.bat              # Cài đặt lần đầu
+└── requirements.txt
+```
+
+---
+
+## Tài Khoản Mặc Định
+
+| Loại | Username | Mật khẩu |
+|------|----------|-----------|
+| Admin | `truongpnt` | *(xem API.env)* |
+
+> **Lưu ý bảo mật**: Đổi mật khẩu mặc định trước khi deploy production. Cấu hình trong `API.env`.
