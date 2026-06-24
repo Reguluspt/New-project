@@ -10,6 +10,10 @@ Actual routes:
   POST /api/settings/backup    → create backup
 """
 
+import json
+
+from api.blueprints import settings as settings_module
+
 
 def test_list_templates(auth_client):
     resp = auth_client.get("/api/templates")
@@ -38,6 +42,30 @@ def test_get_settings(auth_client):
     assert resp.status_code == 200
     data = resp.get_json()
     assert isinstance(data, dict)
+
+
+def test_update_ai_config_masks_key_and_clears_legacy_storage(auth_client, monkeypatch, tmp_path):
+    env_path = tmp_path / "API.env"
+    env_path.write_text("GEMINI_API_KEY=old-key\nGEMINI_MODEL=old-model\n", encoding="utf-8")
+    ai_config_path = tmp_path / "ai_config.json"
+    ai_config_path.write_text(
+        json.dumps({"providers": {"Gemini": {"api_key": "legacy-key"}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(settings_module, "API_ENV_PATH", env_path)
+    monkeypatch.setattr(settings_module, "AI_CONFIG_PATH", ai_config_path)
+    monkeypatch.setenv("GEMINI_API_KEY", "old-key")
+
+    response = auth_client.put(
+        "/api/settings/ai-config",
+        json={"gemini_api_key": "new-secret-key", "gemini_model": "gemini-test"},
+    )
+
+    assert response.status_code == 200
+    assert "new-secret-key" not in response.get_data(as_text=True)
+    assert response.get_json()["gemini"]["key_suffix"] == "••••-key"
+    assert "GEMINI_API_KEY=new-secret-key" in env_path.read_text(encoding="utf-8")
+    assert json.loads(ai_config_path.read_text(encoding="utf-8"))["providers"]["Gemini"]["api_key"] == ""
 
 
 def test_create_backup(auth_client):

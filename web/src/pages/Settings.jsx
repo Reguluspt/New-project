@@ -29,7 +29,8 @@ import {
   SaveOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  KeyOutlined
 } from '@ant-design/icons';
 import {
   getSettings,
@@ -38,6 +39,8 @@ import {
   exchangeOAuthCode,
   disconnectOAuth,
   updateOAuthConfig,
+  getAiConfig,
+  updateAiConfig,
   createBackup,
   downloadBackupUrl,
   restoreBackup
@@ -78,6 +81,7 @@ export default function Settings() {
   const [savingOutlook, setSavingOutlook] = useState(false);
   const [savingRedirect, setSavingRedirect] = useState(false);
   const [savingSobo, setSavingSobo] = useState(false);
+  const [savingAi, setSavingAi] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -86,13 +90,18 @@ export default function Settings() {
   const [outlookForm] = Form.useForm();
   const [redirectForm] = Form.useForm();
   const [soboForm] = Form.useForm();
+  const [aiForm] = Form.useForm();
+  const [aiConfig, setAiConfig] = useState({ configured: false, key_suffix: '', model: 'gemini-2.5-flash' });
 
   // Load settings from API
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const res = await getSettings();
+      const [res, aiRes] = await Promise.all([getSettings(), getAiConfig()]);
       setSettings(res.data);
+      const gemini = aiRes.data.gemini;
+      setAiConfig(gemini);
+      aiForm.setFieldsValue({ gemini_model: gemini.model });
       pathForm.setFieldsValue(res.data.paths);
       if (res.data.oauth) {
         redirectForm.setFieldsValue({
@@ -121,6 +130,23 @@ export default function Settings() {
       message.error('Không thể tải cấu hình hệ thống');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAiSave = async () => {
+    try {
+      const values = await aiForm.validateFields();
+      setSavingAi(true);
+      const res = await updateAiConfig(values);
+      setAiConfig(res.data.gemini);
+      aiForm.setFieldValue('gemini_api_key', '');
+      message.success('Đã lưu cấu hình Gemini API. Key không được trả về trình duyệt.');
+    } catch (err) {
+      if (err.name !== 'ValidationError') {
+        message.error('Lỗi khi lưu Gemini API: ' + (err.response?.data?.error || err.message));
+      }
+    } finally {
+      setSavingAi(false);
     }
   };
 
@@ -386,6 +412,51 @@ export default function Settings() {
                   </Button>
                 </Form.Item>
               </Form>
+            </div>
+          </Tabs.TabPane>
+
+          <Tabs.TabPane
+            tab={
+              <span>
+                <KeyOutlined /> AI API
+              </span>
+            }
+            key="ai-api"
+          >
+            <div style={{ maxWidth: 650, marginTop: 16 }}>
+              <Paragraph style={{ color: '#64748b', marginBottom: 24 }}>
+                Gemini API key được lưu trong API.env trên máy chủ. Hệ thống chỉ hiển thị trạng thái và 4 ký tự cuối, không trả lại key về trình duyệt.
+              </Paragraph>
+              <Card title="Gemini API" size="small" style={{ borderRadius: '8px' }}>
+                <Form form={aiForm} layout="vertical" onFinish={handleAiSave}>
+                  <Form.Item label="Trạng thái">
+                    {aiConfig.configured ? (
+                      <Tag color="success">Đã cấu hình {aiConfig.key_suffix}</Tag>
+                    ) : (
+                      <Tag color="warning">Chưa cấu hình</Tag>
+                    )}
+                  </Form.Item>
+                  <Form.Item
+                    name="gemini_api_key"
+                    label="Gemini API Key mới"
+                    extra="Để trống nếu chỉ thay đổi model. Nhập key mới để thay key hiện tại."
+                  >
+                    <Input.Password autoComplete="new-password" placeholder="AIza..." />
+                  </Form.Item>
+                  <Form.Item
+                    name="gemini_model"
+                    label="Gemini model"
+                    rules={[{ required: true, message: 'Vui lòng nhập Gemini model' }]}
+                  >
+                    <Input placeholder="gemini-2.5-flash" />
+                  </Form.Item>
+                  <Form.Item style={{ marginBottom: 0 }}>
+                    <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={savingAi}>
+                      Lưu cấu hình Gemini
+                    </Button>
+                  </Form.Item>
+                </Form>
+              </Card>
             </div>
           </Tabs.TabPane>
 

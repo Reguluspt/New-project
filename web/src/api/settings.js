@@ -26,6 +26,14 @@ export const updateOAuthConfig = (payload) => {
   return client.put('/settings/oauth-config', payload);
 };
 
+export const getAiConfig = () => {
+  return client.get('/settings/ai-config');
+};
+
+export const updateAiConfig = (payload) => {
+  return client.put('/settings/ai-config', payload);
+};
+
 export const createBackup = () => {
   return client.post('/settings/backup');
 };

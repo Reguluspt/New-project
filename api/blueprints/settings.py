@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify, current_app, send_file
-from api.middleware.auth import login_required
+from api.middleware.auth import admin_required, login_required
 from pathlib import Path
 import os
 import io
 import zipfile
 import asyncio
+import json
+import tempfile
 
 from src.app_config import TEMPLATE_CONFIG_PATH, DEFAULT_TEMPLATE_CONFIG
 from src.template_manager import load_template_config, save_template_config
@@ -14,6 +16,42 @@ from src.backup_service import create_backup
 settings_bp = Blueprint("settings", __name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+API_ENV_PATH = PROJECT_ROOT / "API.env"
+AI_CONFIG_PATH = PROJECT_ROOT / "data" / "ai_config.json"
+
+
+def _mask_secret(value: str) -> str:
+    return f"••••{value[-4:]}" if len(value) >= 4 else "••••"
+
+
+def _write_api_env_value(name: str, value: str) -> None:
+    lines = API_ENV_PATH.read_text(encoding="utf-8").splitlines() if API_ENV_PATH.exists() else []
+    prefix = f"{name}="
+    replacement = f"{prefix}{value}"
+    updated = [replacement if line.startswith(prefix) else line for line in lines]
+    if not any(line.startswith(prefix) for line in lines):
+        updated.append(replacement)
+
+    API_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=API_ENV_PATH.parent, delete=False) as temp_file:
+        temp_file.write("\n".join(updated) + "\n")
+        temp_path = Path(temp_file.name)
+    os.replace(temp_path, API_ENV_PATH)
+    os.chmod(API_ENV_PATH, 0o600)
+
+
+def _clear_saved_ai_keys() -> None:
+    if not AI_CONFIG_PATH.exists():
+        return
+    try:
+        config = json.loads(AI_CONFIG_PATH.read_text(encoding="utf-8"))
+        for provider in config.get("providers", {}).values():
+            if isinstance(provider, dict):
+                provider["api_key"] = ""
+        AI_CONFIG_PATH.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.chmod(AI_CONFIG_PATH, 0o600)
+    except (OSError, json.JSONDecodeError):
+        return
 
 def check_services_status():
     from src.background_services import _read_pid, _is_pid_running, DATA_DIR
@@ -95,6 +133,44 @@ def get_settings_endpoint():
         "services": services,
         "system": system
     })
+
+
+@settings_bp.route("/settings/ai-config", methods=["GET"])
+@admin_required
+def get_ai_config_endpoint():
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    return jsonify({
+        "gemini": {
+            "configured": bool(api_key),
+            "key_suffix": _mask_secret(api_key) if api_key else "",
+            "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        }
+    })
+
+
+@settings_bp.route("/settings/ai-config", methods=["PUT"])
+@admin_required
+def update_ai_config_endpoint():
+    data = request.get_json() or {}
+    api_key = str(data.get("gemini_api_key") or "").strip()
+    model = str(data.get("gemini_model") or "").strip()
+    configured_key = os.getenv("GEMINI_API_KEY", "").strip()
+
+    if not api_key and not configured_key:
+        return jsonify({"error": "Vui lòng nhập Gemini API Key."}), 400
+
+    try:
+        if api_key:
+            _write_api_env_value("GEMINI_API_KEY", api_key)
+            os.environ["GEMINI_API_KEY"] = api_key
+        if model:
+            _write_api_env_value("GEMINI_MODEL", model)
+            os.environ["GEMINI_MODEL"] = model
+        _clear_saved_ai_keys()
+    except OSError:
+        return jsonify({"error": "Không thể cập nhật API.env trên máy chủ."}), 500
+
+    return get_ai_config_endpoint()
 
 @settings_bp.route("/settings/paths", methods=["PUT"])
 @login_required
