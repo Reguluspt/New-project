@@ -34,6 +34,10 @@ export const updateAiConfig = (payload) => {
   return client.put('/settings/ai-config', payload);
 };
 
+export const restartAiServices = () => {
+  return client.post('/settings/ai-config/restart-services');
+};
+
 export const createBackup = () => {
   return client.post('/settings/backup');
 };

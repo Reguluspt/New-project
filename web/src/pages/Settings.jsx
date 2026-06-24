@@ -25,6 +25,7 @@ import {
   WindowsOutlined,
   CloudUploadOutlined,
   CloudDownloadOutlined,
+  ReloadOutlined,
   SlidersOutlined,
   SaveOutlined,
   CheckCircleOutlined,
@@ -41,6 +42,7 @@ import {
   updateOAuthConfig,
   getAiConfig,
   updateAiConfig,
+  restartAiServices,
   createBackup,
   downloadBackupUrl,
   restoreBackup
@@ -82,6 +84,7 @@ export default function Settings() {
   const [savingRedirect, setSavingRedirect] = useState(false);
   const [savingSobo, setSavingSobo] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
+  const [restartingAiServices, setRestartingAiServices] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -147,6 +150,18 @@ export default function Settings() {
       }
     } finally {
       setSavingAi(false);
+    }
+  };
+
+  const handleAiServicesRestart = async () => {
+    try {
+      setRestartingAiServices(true);
+      await restartAiServices();
+      message.success('Đã khởi động lại Telegram Bot và Mail Listener.');
+    } catch (err) {
+      message.error('Không thể khởi động lại dịch vụ AI: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setRestartingAiServices(false);
     }
   };
 
@@ -456,6 +471,20 @@ export default function Settings() {
                     </Button>
                   </Form.Item>
                 </Form>
+                <Space style={{ marginTop: 16 }} wrap>
+                  <Popconfirm
+                    title="Khởi động lại dịch vụ AI?"
+                    description="Telegram Bot và Mail Listener sẽ tạm dừng trong vài giây để nạp API key mới."
+                    onConfirm={handleAiServicesRestart}
+                    okText="Khởi động lại"
+                    cancelText="Hủy"
+                  >
+                    <Button icon={<ReloadOutlined />} loading={restartingAiServices}>
+                      Áp dụng & khởi động lại dịch vụ AI
+                    </Button>
+                  </Popconfirm>
+                  <Text type="secondary">Áp dụng cho Telegram Bot và Mail Listener.</Text>
+                </Space>
               </Card>
             </div>
           </Tabs.TabPane>

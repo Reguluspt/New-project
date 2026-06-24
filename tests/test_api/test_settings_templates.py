@@ -68,6 +68,23 @@ def test_update_ai_config_masks_key_and_clears_legacy_storage(auth_client, monke
     assert json.loads(ai_config_path.read_text(encoding="utf-8"))["providers"]["Gemini"]["api_key"] == ""
 
 
+def test_restart_ai_services_uses_fixed_allowlist(auth_client, monkeypatch):
+    commands = []
+
+    def fake_run(command, **kwargs):
+        commands.append((command, kwargs))
+
+    monkeypatch.setattr(settings_module.subprocess, "run", fake_run)
+
+    response = auth_client.post("/api/settings/ai-config/restart-services")
+
+    assert response.status_code == 200
+    assert [command for command, _ in commands] == [
+        ["systemctl", "restart", "telegram-bot.service"],
+        ["systemctl", "restart", "mail-listener.service"],
+    ]
+
+
 def test_create_backup(auth_client):
     """Trigger a backup creation; should return 200 or 201."""
     resp = auth_client.post("/api/settings/backup")

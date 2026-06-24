@@ -7,6 +7,7 @@ import zipfile
 import asyncio
 import json
 import tempfile
+import subprocess
 
 from src.app_config import TEMPLATE_CONFIG_PATH, DEFAULT_TEMPLATE_CONFIG
 from src.template_manager import load_template_config, save_template_config
@@ -18,6 +19,7 @@ settings_bp = Blueprint("settings", __name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 API_ENV_PATH = PROJECT_ROOT / "API.env"
 AI_CONFIG_PATH = PROJECT_ROOT / "data" / "ai_config.json"
+AI_SERVICE_NAMES = ("telegram-bot.service", "mail-listener.service")
 
 
 def _mask_secret(value: str) -> str:
@@ -171,6 +173,24 @@ def update_ai_config_endpoint():
         return jsonify({"error": "Không thể cập nhật API.env trên máy chủ."}), 500
 
     return get_ai_config_endpoint()
+
+
+@settings_bp.route("/settings/ai-config/restart-services", methods=["POST"])
+@admin_required
+def restart_ai_services_endpoint():
+    try:
+        for service_name in AI_SERVICE_NAMES:
+            subprocess.run(
+                ["systemctl", "restart", service_name],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+    except (OSError, subprocess.SubprocessError):
+        return jsonify({"error": "Không thể khởi động lại dịch vụ AI."}), 500
+
+    return jsonify({"services": list(AI_SERVICE_NAMES)})
 
 @settings_bp.route("/settings/paths", methods=["PUT"])
 @login_required
