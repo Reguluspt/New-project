@@ -1,12 +1,14 @@
 from flask import Blueprint, request, jsonify, make_response, current_app
 import jwt
 import datetime
+import os
 from src.auth import authenticate, _configured_guest_credentials
 
 auth_bp = Blueprint("auth", __name__)
 
 COOKIE_NAME = "thamdinh_auth"
 COOKIE_MAX_AGE = 30 * 24 * 60 * 60
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
 
 def get_user_role(username: str) -> str:
     guest_username, _ = _configured_guest_credentials()
@@ -47,7 +49,7 @@ def login():
             max_age=COOKIE_MAX_AGE,
             httponly=True,
             samesite="Lax",
-            secure=False
+            secure=COOKIE_SECURE
         )
         return response
 
@@ -62,7 +64,7 @@ def logout():
         expires=0,
         httponly=True,
         samesite="Lax",
-        secure=False
+        secure=COOKIE_SECURE
     )
     return response
 
