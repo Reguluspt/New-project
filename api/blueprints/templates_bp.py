@@ -159,3 +159,21 @@ def get_template_history(name):
         return jsonify(formatted_history)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@templates_bp.route("/templates/<name>/download", methods=["GET"])
+@login_required
+def download_template_file(name):
+    path = find_template_path(name)
+    if not path or not path.exists():
+        return jsonify({"error": "Không tìm thấy mẫu thiết kế để tải xuống"}), 404
+        
+    try:
+        return send_file(
+            path,
+            as_attachment=True,
+            download_name=name,
+            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+

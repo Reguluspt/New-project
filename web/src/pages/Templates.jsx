@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Typography, Table, Button, Space, message } from 'antd';
-import { FileWordOutlined, EyeOutlined } from '@ant-design/icons';
-import { getTemplates } from '../api/templates';
+import { FileWordOutlined, EyeOutlined, DownloadOutlined } from '@ant-design/icons';
+import { getTemplates, downloadTemplate } from '../api/templates';
 import TemplateEditor from '../components/templates/TemplateEditor';
 
 const { Title, Paragraph } = Typography;
@@ -28,6 +28,22 @@ export default function Templates() {
   useEffect(() => {
     fetchTemplates();
   }, [fetchTemplates]);
+
+  const handleDownload = async (name) => {
+    try {
+      const res = await downloadTemplate(name);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', name);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error(err);
+      message.error('Lỗi khi tải mẫu thiết kế xuống');
+    }
+  };
 
   const handleRowClick = (record) => {
     setSelectedTemplateName(record.name);
@@ -88,20 +104,33 @@ export default function Templates() {
     {
       title: 'Thao tác',
       key: 'actions',
-      width: 100,
+      width: 220,
       render: (_, record) => (
-        <Button
-          type="primary"
-          ghost
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={(e) => {
-            e.stopPropagation(); // prevent row click
-            handleRowClick(record);
-          }}
-        >
-          Chi tiết
-        </Button>
+        <Space size="middle">
+          <Button
+            type="primary"
+            ghost
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation(); // prevent row click
+              handleRowClick(record);
+            }}
+          >
+            Chi tiết
+          </Button>
+          <Button
+            type="default"
+            size="small"
+            icon={<DownloadOutlined />}
+            onClick={(e) => {
+              e.stopPropagation(); // prevent row click
+              handleDownload(record.name);
+            }}
+          >
+            Tải xuống
+          </Button>
+        </Space>
       )
     }
   ];

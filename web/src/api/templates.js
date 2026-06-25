@@ -19,3 +19,8 @@ export const uploadTemplateVersion = (name, formData) => {
 export const getTemplateHistory = (name) => {
   return client.get(`/templates/${name}/history`);
 };
+
+export const downloadTemplate = (name) => {
+  return client.get(`/templates/${name}/download`, { responseType: 'blob' });
+};
+
