@@ -1434,40 +1434,52 @@ def _extract_imap_ids(data: list[object]) -> list[str]:
 
 
 async def poll_unseen_once(settings: MailListenerSettings) -> int:
-    from .oauth2_service import get_enabled_oauth_provider, fetch_emails_via_oauth2
+    from .oauth2_service import is_oauth_enabled, fetch_emails_via_oauth2
 
-    provider = get_enabled_oauth_provider()
+    providers = []
+    if is_oauth_enabled("outlook"):
+        providers.append("outlook")
+    if is_oauth_enabled("google"):
+        providers.append("google")
 
-    if provider:
-        try:
-            print(f"Polling unseen emails via OAuth2 API for provider: {provider}")
-            oauth_emails = await fetch_emails_via_oauth2(provider, limit=15)
-            processed = 0
-            for item in oauth_emails:
-                raw = item["raw_bytes"]
-                uid = item["uid"]
-                thread_id = str(item.get("thread_id") or "")
-                incoming = parse_incoming_email(raw, uid=uid, thread_id=thread_id)
-                if await was_email_processed(settings.records_db_path, incoming, mailbox=provider):
-                    continue
-                if settings.subject_filter:
-                    haystack = f"{incoming.subject}\n{incoming.text}".casefold()
-                    if settings.subject_filter.casefold() not in haystack:
+    processed = 0
+    if providers:
+        for provider in providers:
+            try:
+                print(f"Polling unseen emails via OAuth2 API for provider: {provider}")
+                oauth_emails = await fetch_emails_via_oauth2(provider, limit=15)
+                for item in oauth_emails:
+                    raw = item["raw_bytes"]
+                    uid = item["uid"]
+                    thread_id = str(item.get("thread_id") or "")
+                    incoming = parse_incoming_email(raw, uid=uid, thread_id=thread_id)
+                    if await was_email_processed(settings.records_db_path, incoming, mailbox=provider):
                         continue
-                match = await process_incoming_email(raw, uid=uid, thread_id=thread_id, settings=settings)
-                result = "replied" if match is not None and (match.score > MATCH_THRESHOLD or match.reason == "certificate_reply") else "skipped"
-                await mark_email_processed(
-                    settings.records_db_path,
-                    incoming,
-                    mailbox=provider,
-                    result=result,
-                    record_id=match.record.get("id") if match is not None else None,
-                    score=round(match.score, 3) if match is not None else None,
+                    if settings.subject_filter:
+                        haystack = f"{incoming.subject}\n{incoming.text}".casefold()
+                        if settings.subject_filter.casefold() not in haystack:
+                            continue
+                    match = await process_incoming_email(raw, uid=uid, thread_id=thread_id, settings=settings)
+                    result = "replied" if match is not None and (match.score > MATCH_THRESHOLD or match.reason == "certificate_reply") else "skipped"
+                    await mark_email_processed(
+                        settings.records_db_path,
+                        incoming,
+                        mailbox=provider,
+                        result=result,
+                        record_id=match.record.get("id") if match is not None else None,
+                        score=round(match.score, 3) if match is not None else None,
+                    )
+                    processed += 1
+            except Exception as exc:
+                logger.error(f"Đọc hộp thư qua {provider.upper()} OAuth2 thất bại: {exc}")
+                append_listener_log(
+                    "failed",
+                    scope="poll",
+                    provider=provider,
+                    error_type=type(exc).__name__,
+                    error=f"Đọc hộp thư qua {provider.upper()} OAuth2 thất bại: {exc}"
                 )
-                processed += 1
-            return processed
-        except Exception as exc:
-            raise RuntimeError(f"Đọc hộp thư qua {provider.upper()} OAuth2 thất bại: {exc}") from exc
+        return processed
 
     client = aioimaplib.IMAP4_SSL(settings.imap_host, settings.imap_port)
     await client.wait_hello_from_server()
@@ -1673,23 +1685,28 @@ async def sync_sobo_emails_from_mailbox(db_path: str | Path | None = None) -> in
     
     raw_emails = []
     
-    from .oauth2_service import get_enabled_oauth_provider, fetch_emails_via_oauth2
-    provider = get_enabled_oauth_provider()
+    from .oauth2_service import is_oauth_enabled, fetch_emails_via_oauth2
+    providers = []
+    if is_oauth_enabled("outlook"):
+        providers.append("outlook")
+    if is_oauth_enabled("google"):
+        providers.append("google")
     
-    if provider:
-        try:
-            print(f"Syncing sobo emails via OAuth2 API for provider: {provider}", flush=True)
-            # Fetch up to 150 recent emails containing the sobo marker.
-            oauth_emails = await fetch_emails_via_oauth2(
-                provider,
-                query_contract="SƠ BỘ",
-                limit=150,
-                unread_only=False,
-            )
-            for item in oauth_emails:
-                raw_emails.append(item["raw_bytes"])
-        except Exception as exc:
-            logger.error(f"Lỗi fetch OAuth2 sobo sync: {exc}")
+    if providers:
+        for provider in providers:
+            try:
+                print(f"Syncing sobo emails via OAuth2 API for provider: {provider}", flush=True)
+                # Fetch up to 150 recent emails containing the sobo marker.
+                oauth_emails = await fetch_emails_via_oauth2(
+                    provider,
+                    query_contract="SƠ BỘ",
+                    limit=150,
+                    unread_only=False,
+                )
+                for item in oauth_emails:
+                    raw_emails.append(item["raw_bytes"])
+            except Exception as exc:
+                logger.error(f"Lỗi fetch OAuth2 sobo sync cho {provider.upper()}: {exc}")
     else:
         if not settings.imap_username or not settings.imap_password:
             logger.warning("Không có cấu hình IMAP/OAuth2 để đồng bộ email.")
