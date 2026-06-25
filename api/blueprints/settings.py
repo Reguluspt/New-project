@@ -141,11 +141,17 @@ def get_settings_endpoint():
 @admin_required
 def get_ai_config_endpoint():
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    backup_keys_str = os.getenv("GEMINI_BACKUP_KEYS", "").strip()
+    backup_keys = [k.strip() for k in backup_keys_str.split(",") if k.strip()]
+    masked_backup_keys = [_mask_secret(k) for k in backup_keys]
+
     return jsonify({
         "gemini": {
             "configured": bool(api_key),
             "key_suffix": _mask_secret(api_key) if api_key else "",
             "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            "backup_keys": masked_backup_keys,
+            "backup_configured": len(backup_keys) > 0
         }
     })
 
@@ -168,6 +174,34 @@ def update_ai_config_endpoint():
         if model:
             _write_api_env_value("GEMINI_MODEL", model)
             os.environ["GEMINI_MODEL"] = model
+
+        # Handle backup keys
+        if "gemini_backup_keys" in data:
+            backup_input = data["gemini_backup_keys"]
+            if isinstance(backup_input, list):
+                current_backup_keys_str = os.getenv("GEMINI_BACKUP_KEYS", "").strip()
+                current_backup_keys = [k.strip() for k in current_backup_keys_str.split(",") if k.strip()]
+                new_backup_keys = []
+                for item in backup_input:
+                    item = str(item).strip()
+                    if not item:
+                        continue
+                    if item.startswith("••••"):
+                        suffix = item[4:]
+                        found = None
+                        for k in current_backup_keys:
+                            if k.endswith(suffix):
+                                found = k
+                                break
+                        if found:
+                            new_backup_keys.append(found)
+                    else:
+                        new_backup_keys.append(item)
+
+                backup_keys_str = ",".join(new_backup_keys)
+                _write_api_env_value("GEMINI_BACKUP_KEYS", backup_keys_str)
+                os.environ["GEMINI_BACKUP_KEYS"] = backup_keys_str
+
         _clear_saved_ai_keys()
     except OSError:
         return jsonify({"error": "Không thể cập nhật API.env trên máy chủ."}), 500

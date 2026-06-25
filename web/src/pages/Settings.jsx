@@ -94,7 +94,9 @@ export default function Settings() {
   const [redirectForm] = Form.useForm();
   const [soboForm] = Form.useForm();
   const [aiForm] = Form.useForm();
-  const [aiConfig, setAiConfig] = useState({ configured: false, key_suffix: '', model: 'gemini-2.5-flash' });
+  const [aiConfig, setAiConfig] = useState({ configured: false, key_suffix: '', model: 'gemini-2.5-flash', backup_keys: [] });
+  const [backupKeys, setBackupKeys] = useState([]);
+  const [newBackupKey, setNewBackupKey] = useState('');
 
   // Load settings from API
   const fetchSettings = async () => {
@@ -104,6 +106,7 @@ export default function Settings() {
       setSettings(res.data);
       const gemini = aiRes.data.gemini;
       setAiConfig(gemini);
+      setBackupKeys(gemini.backup_keys || []);
       aiForm.setFieldsValue({ gemini_model: gemini.model });
       pathForm.setFieldsValue(res.data.paths);
       if (res.data.oauth) {
@@ -140,8 +143,12 @@ export default function Settings() {
     try {
       const values = await aiForm.validateFields();
       setSavingAi(true);
-      const res = await updateAiConfig(values);
+      const res = await updateAiConfig({
+        ...values,
+        gemini_backup_keys: backupKeys
+      });
       setAiConfig(res.data.gemini);
+      setBackupKeys(res.data.gemini.backup_keys || []);
       aiForm.setFieldValue('gemini_api_key', '');
       message.success('Đã lưu cấu hình Gemini API. Key không được trả về trình duyệt.');
     } catch (err) {
@@ -457,6 +464,54 @@ export default function Settings() {
                     extra="Để trống nếu chỉ thay đổi model. Nhập key mới để thay key hiện tại."
                   >
                     <Input.Password autoComplete="new-password" placeholder="AIza..." />
+                  </Form.Item>
+                  <Form.Item label="Các API Key dự phòng">
+                    <div style={{ marginBottom: 12 }}>
+                      {backupKeys.length === 0 ? (
+                        <Text type="secondary" style={{ fontSize: '13px' }}>Chưa cấu hình API key dự phòng nào.</Text>
+                      ) : (
+                        <Space wrap>
+                          {backupKeys.map((key, index) => (
+                            <Tag
+                              key={index}
+                              closable
+                              onClose={() => setBackupKeys(backupKeys.filter((_, i) => i !== index))}
+                              color="blue"
+                              style={{ padding: '4px 8px', fontSize: '13px', borderRadius: '4px' }}
+                            >
+                              {key}
+                            </Tag>
+                          ))}
+                        </Space>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <Input.Password
+                        placeholder="Nhập API Key dự phòng mới..."
+                        value={newBackupKey}
+                        onChange={(e) => setNewBackupKey(e.target.value)}
+                        onPressEnter={(e) => {
+                          e.preventDefault();
+                          if (newBackupKey.trim()) {
+                            setBackupKeys([...backupKeys, newBackupKey.trim()]);
+                            setNewBackupKey('');
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={() => {
+                          if (newBackupKey.trim()) {
+                            setBackupKeys([...backupKeys, newBackupKey.trim()]);
+                            setNewBackupKey('');
+                          }
+                        }}
+                      >
+                        Thêm
+                      </Button>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                      Ấn nút "Thêm" để đưa vào danh sách, sau đó nhấn "Lưu cấu hình Gemini" bên dưới để áp dụng.
+                    </div>
                   </Form.Item>
                   <Form.Item
                     name="gemini_model"

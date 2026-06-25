@@ -216,8 +216,8 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
         // Populate standard form fields
         customer_info: formValues.ten_chu_so_huu_cuoi_cung?.value || formValues.owner_name || '',
         customer_address: formValues.dia_chi_chu_so_huu_cuoi_cung?.value || formValues.owner_address || '',
-        asset_description: formValues.asset_description || (formValues.so_thua?.value 
-          ? `Thửa đất số ${formValues.so_thua.value}, tờ bản đồ số ${formValues.so_to?.value || ''}; tại địa chỉ ${formValues.dia_chi_thua_dat?.value || ''}`
+        asset_description: formValues.asset_description || (formValues.so_thua_dat?.value || formValues.so_thua
+          ? `Thửa đất số ${formValues.so_thua_dat?.value || formValues.so_thua}, tờ bản đồ số ${formValues.so_to_ban_do?.value || formValues.so_to || ''}; tại địa chỉ ${formValues.dia_chi_thua_dat?.value || formValues.land_address || ''}`
           : '')
       });
       

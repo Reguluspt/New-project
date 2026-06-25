@@ -1050,8 +1050,8 @@ async def _show_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def _download_telegram_file(file_ref: PhotoSize | Document, destination_path: str) -> None:
-    telegram_file = await file_ref.get_file()
-    await telegram_file.download_to_drive(custom_path=destination_path)
+    telegram_file = await file_ref.get_file(timeout=60)
+    await telegram_file.download_to_drive(custom_path=destination_path, timeout=60)
 
 
 async def process_land_certificate_file(

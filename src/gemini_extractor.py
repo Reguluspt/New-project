@@ -47,38 +47,59 @@ def extract_land_certificate_with_gemini(
     api_key: str,
     model: str,
 ) -> LandCertificateMultiExtraction:
+    import os
+    import logging
+    logger = logging.getLogger(__name__)
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(path)
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=model,
-        contents=[
-            _part_for_file(path),
-            (
-                "Hay dem va trich xuat tat ca tai san/GCN co trong tai lieu, khong chi lay tai san dau tien. "
-                "Neu mot file co nhieu thua dat hoac nhieu GCN, moi tai san la mot phan tu trong assets. "
-                "Tap trung vao so thua, so to ban do, dia chi thua dat, chu so huu cuoi cung, dia chi va CCCD/CMND cua nguoi do."
-            ),
-        ],
-        config=types.GenerateContentConfig(
-            system_instruction=EXTRACTION_INSTRUCTIONS,
-            response_mime_type="application/json",
-            response_json_schema=gemini_response_json_schema(),
-            temperature=0,
-        ),
-    )
+    keys_to_try = [api_key]
+    backup_keys_str = os.getenv("GEMINI_BACKUP_KEYS", "")
+    for k in backup_keys_str.split(","):
+        k = k.strip()
+        if k and k not in keys_to_try:
+            keys_to_try.append(k)
 
-    if isinstance(response.parsed, LandCertificateMultiExtraction):
-        return response.parsed
-    if isinstance(response.parsed, LandCertificateExtraction):
-        return LandCertificateMultiExtraction(assets=[response.parsed])
-    if isinstance(response.parsed, dict):
-        if "assets" in response.parsed:
-            return LandCertificateMultiExtraction.model_validate(response.parsed)
-        return LandCertificateMultiExtraction(assets=[LandCertificateExtraction.model_validate(response.parsed)])
-    return LandCertificateMultiExtraction.model_validate_json(response.text)
+    last_error = None
+    for idx, key in enumerate(keys_to_try):
+        try:
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(
+                model=model,
+                contents=[
+                    _part_for_file(path),
+                    (
+                        "Hay dem va trich xuat tat ca tai san/GCN co trong tai lieu, khong chi lay tai san dau tien. "
+                        "Neu mot file co nhieu thua dat hoac nhieu GCN, moi tai san la mot phan tu trong assets. "
+                        "Tap trung vao so thua, so to ban do, dia chi thua dat, chu so huu cuoi cung, dia chi va CCCD/CMND cua nguoi do."
+                    ),
+                ],
+                config=types.GenerateContentConfig(
+                    system_instruction=EXTRACTION_INSTRUCTIONS,
+                    response_mime_type="application/json",
+                    response_json_schema=gemini_response_json_schema(),
+                    temperature=0,
+                ),
+            )
+
+            if isinstance(response.parsed, LandCertificateMultiExtraction):
+                return response.parsed
+            if isinstance(response.parsed, LandCertificateExtraction):
+                return LandCertificateMultiExtraction(assets=[response.parsed])
+            if isinstance(response.parsed, dict):
+                if "assets" in response.parsed:
+                    return LandCertificateMultiExtraction.model_validate(response.parsed)
+                return LandCertificateMultiExtraction(assets=[LandCertificateExtraction.model_validate(response.parsed)])
+            return LandCertificateMultiExtraction.model_validate_json(response.text)
+        except Exception as e:
+            masked_key = f"••••{key[-4:]}" if len(key) >= 4 else "••••"
+            logger.warning("Lỗi trích xuất bằng Gemini API key %s (lần thử %d/%d): %s", masked_key, idx + 1, len(keys_to_try), e)
+            last_error = e
+
+    if last_error:
+        raise last_error
+    raise RuntimeError("Không thể trích xuất dữ liệu bằng bất kỳ API key nào.")
 
 
 def organization_gemini_response_json_schema() -> dict[str, Any]:
@@ -93,43 +114,64 @@ def extract_organization_from_contract_with_gemini(
     api_key: str,
     model: str,
 ) -> Any:
+    import os
+    import logging
+    logger = logging.getLogger(__name__)
     from .models import OrganizationExtraction
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(path)
 
-    client = genai.Client(api_key=api_key)
-    
-    contents = []
-    if path.suffix.lower() == ".docx":
+    keys_to_try = [api_key]
+    backup_keys_str = os.getenv("GEMINI_BACKUP_KEYS", "")
+    for k in backup_keys_str.split(","):
+        k = k.strip()
+        if k and k not in keys_to_try:
+            keys_to_try.append(k)
+
+    last_error = None
+    for idx, key in enumerate(keys_to_try):
         try:
-            import docx
-            doc = docx.Document(path)
-            text = "\n".join([para.text for para in doc.paragraphs])
-            contents.append(text)
+            client = genai.Client(api_key=key)
+
+            contents = []
+            if path.suffix.lower() == ".docx":
+                try:
+                    import docx
+                    doc = docx.Document(path)
+                    text = "\n".join([para.text for para in doc.paragraphs])
+                    contents.append(text)
+                except Exception as e:
+                    raise ValueError(f"Lỗi khi đọc file .docx: {e}")
+            else:
+                contents.append(_part_for_file(path))
+
+            contents.append(
+                "Hãy đọc file hợp đồng này và trích xuất thông tin của tổ chức (công ty, doanh nghiệp, ngân hàng...) "
+                "đóng vai trò là Bên A hoặc Bên B trong hợp đồng. Ưu tiên bên là khách hàng hoặc đối tác của công ty thẩm định giá. "
+                "Cần tìm Mã số thuế (nếu có), Tên đầy đủ, Địa chỉ trụ sở chính, và Người đại diện pháp luật cùng Chức vụ của họ."
+            )
+
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_json_schema=organization_gemini_response_json_schema(),
+                    temperature=0,
+                ),
+            )
+
+            if isinstance(response.parsed, OrganizationExtraction):
+                return response.parsed
+            if isinstance(response.parsed, dict):
+                return OrganizationExtraction.model_validate(response.parsed)
+            return OrganizationExtraction.model_validate_json(response.text)
         except Exception as e:
-            raise ValueError(f"Lỗi khi đọc file .docx: {e}")
-    else:
-        contents.append(_part_for_file(path))
+            masked_key = f"••••{key[-4:]}" if len(key) >= 4 else "••••"
+            logger.warning("Lỗi trích xuất tổ chức bằng Gemini API key %s (lần thử %d/%d): %s", masked_key, idx + 1, len(keys_to_try), e)
+            last_error = e
 
-    contents.append(
-        "Hãy đọc file hợp đồng này và trích xuất thông tin của tổ chức (công ty, doanh nghiệp, ngân hàng...) "
-        "đóng vai trò là Bên A hoặc Bên B trong hợp đồng. Ưu tiên bên là khách hàng hoặc đối tác của công ty thẩm định giá. "
-        "Cần tìm Mã số thuế (nếu có), Tên đầy đủ, Địa chỉ trụ sở chính, và Người đại diện pháp luật cùng Chức vụ của họ."
-    )
-
-    response = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_json_schema=organization_gemini_response_json_schema(),
-            temperature=0,
-        ),
-    )
-
-    if isinstance(response.parsed, OrganizationExtraction):
-        return response.parsed
-    if isinstance(response.parsed, dict):
-        return OrganizationExtraction.model_validate(response.parsed)
-    return OrganizationExtraction.model_validate_json(response.text)
+    if last_error:
+        raise last_error
+    raise RuntimeError("Không thể trích xuất tổ chức bằng bất kỳ API key nào.")
