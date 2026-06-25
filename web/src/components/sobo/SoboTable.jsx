@@ -394,7 +394,7 @@ export default function SoboTable({
         open={!!previewRecord}
         onCancel={() => setPreviewRecord(null)}
         footer={null}
-        width={780}
+        width={1100}
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <MailOutlined style={{ color: '#2563eb' }} />
