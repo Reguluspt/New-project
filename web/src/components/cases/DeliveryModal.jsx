@@ -51,7 +51,9 @@ export default function DeliveryModal({ open, onClose, caseId, onSuccess }) {
 
       if (sourceType === 'select') {
         const selectedContact = contacts.find(c => c.id === values.delivery_contact_id);
-        recipientText = selectedContact ? selectedContact.full_details : 'VP Gia Lai (mặc định)';
+        recipientText = selectedContact
+          ? selectedContact.full_details
+          : 'CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ - VP TẠI GIA LAI\nĐịa chỉ: 90/60/3 Trường Chinh, phường Pleiku, tỉnh Gia Lai\nĐiện thoại 0905226968';
       } else {
         recipientText = values.manual_details;
         // If manual and "save to contacts" is checked, we can create a contact.
@@ -60,21 +62,28 @@ export default function DeliveryModal({ open, onClose, caseId, onSuccess }) {
         // Our backend save_case_delivery handles delivery_contact_id.
       }
 
-      // 1. Save delivery details (contact + tracking number)
-      await saveDelivery(caseId, {
-        delivery_contact_id: selectedContactId,
-        tracking_number: values.tracking_number,
-        // Send manual details if manual
-        manual_short_name: values.manual_short_name,
-        manual_details: values.manual_details,
-        save_to_contacts: values.save_to_contacts
-      });
-
-      // 2. Send the certificate reply email
+      // 1. Send the certificate reply email. The backend only marks the case completed after this succeeds.
       const replyRes = await sendPhathanhReply(caseId, {
         certificate_number: values.certificate_number,
         recipient: recipientText
       });
+
+      // 2. Save delivery details after the mail is sent to avoid stale delivery data on send failure.
+      try {
+        await saveDelivery(caseId, {
+          delivery_contact_id: selectedContactId,
+          tracking_number: values.tracking_number,
+          manual_short_name: values.manual_short_name,
+          manual_details: values.manual_details,
+          save_to_contacts: values.save_to_contacts
+        });
+      } catch (saveErr) {
+        console.error(saveErr);
+        message.warning('Đã gửi mail phát hành nhưng lưu thông tin chuyển phát thất bại. Anh vui lòng kiểm tra lại hồ sơ.');
+        if (onSuccess) onSuccess();
+        onClose();
+        return;
+      }
 
       message.success(`Đã gửi mail phát hành chứng thư thành công tới ${replyRes.data?.to_email || 'người nhận'}!`);
       

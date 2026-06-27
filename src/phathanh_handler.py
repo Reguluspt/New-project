@@ -48,10 +48,11 @@ async def start_phathanh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def handle_contract_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     contract_query = update.message.text.strip()
     expanded = expand_contract_number(contract_query)
-    
+
     # 1. Tìm trong cases.db (Phần mềm)
     cases_db = os.getenv("TELEGRAM_CASES_DB", os.getenv("SQLITE_DATABASE", "data/cases.db"))
     record = await get_case_by_contract_number(cases_db, expanded)
+    record_source = "cases" if record else "records"
     
     # 2. Dự phòng tìm trong records.db (Bot)
     if not record:
@@ -64,6 +65,8 @@ async def handle_contract_input(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Lưu record vào context
     context.user_data["phathanh_record"] = record
+    context.user_data["phathanh_record_source"] = record_source
+    context.user_data["phathanh_cases_db"] = cases_db
     
     # Hiển thị thông tin xác nhận
     msg, keyboard = _build_customer_confirmation(record)
@@ -82,7 +85,7 @@ async def confirm_customer_callback(update: Update, context: ContextTypes.DEFAUL
             "Điện thoại 0905226968"
         )
         context.user_data["phathanh_recipient"] = default_recipient
-        
+
         msg = (
             "📌 **Bước 3: Thông tin người nhận hồ sơ**\n\n"
             "Người nhận mặc định:\n"
@@ -132,7 +135,7 @@ async def handle_recipient_search(update: Update, context: ContextTypes.DEFAULT_
     search_query = update.message.text.strip()
     records_db = os.getenv("RECORDS_DB_PATH", "data/telegram_records.db")
     matches = await search_delivery_contacts(records_db, search_query)
-    
+
     if not matches:
         await update.message.reply_text(f"❌ Không tìm thấy '{search_query}' trong danh bạ. Anh vui lòng nhập từ khóa khác:")
         return PHATHANH_CHOOSE_RECIPIENT
@@ -170,7 +173,7 @@ async def handle_recipient_selection(update: Update, context: ContextTypes.DEFAU
         # Nếu không nhập số, coi như tìm kiếm lại
         return await handle_recipient_search(update, context)
 
-async def finalize_phathanh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def _legacy_finalize_phathanh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     from .email_reply_service import find_latest_email_by_subject, send_phathanh_reply
     from .mail_service import load_gmail_smtp_settings
     from datetime import datetime, timedelta
@@ -246,8 +249,22 @@ async def finalize_phathanh(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         html_body = html_body.replace(placeholder, str(value))
         
     # 3. Gửi mail
-    settings = load_gmail_smtp_settings()
-    success = await send_phathanh_reply(original_mail, html_body, settings)
+    use_webmail = os.getenv("USE_WEBMAIL_AI", "false").strip().lower() in ("true", "1", "yes")
+
+    if use_webmail:
+        await msg_status.edit_text("🤖 Đang khởi chạy AI Agent để gửi mail qua Webmail...")
+        try:
+            from .email_reply_service import send_phathanh_email_via_browser_use
+            await send_phathanh_email_via_browser_use(record, html_body)
+            success = True
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"AI Webmail Agent failed: {e}")
+            await msg_status.edit_text(f"❌ AI Agent gửi Webmail thất bại: {e}")
+            success = False
+    else:
+        settings = load_gmail_smtp_settings()
+        success = await send_phathanh_reply(original_mail, html_body, settings)
     
     if success:
         await msg_status.edit_text(
@@ -260,6 +277,46 @@ async def finalize_phathanh(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     else:
         await msg_status.edit_text("❌ Lỗi khi gửi mail. Anh vui lòng kiểm tra cấu hình SMTP/Password ứng dụng nhé.")
     
+    return ConversationHandler.END
+
+
+async def finalize_phathanh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    from .email_reply_service import send_phathanh_email_for_case
+
+    record = context.user_data.get("phathanh_record") or {}
+    recipient = context.user_data.get("phathanh_recipient")
+    record_source = context.user_data.get("phathanh_record_source")
+    cases_db = context.user_data.get("phathanh_cases_db")
+    contract_number = record.get("contract_number")
+
+    msg_status = await (update.callback_query.message if update.callback_query else update.message).reply_text(
+        f"Đang tìm luồng mail và gửi phát hành cho hợp đồng {contract_number}..."
+    )
+
+    try:
+        to_email = await send_phathanh_email_for_case(record, recipient=recipient)
+    except Exception as exc:
+        await msg_status.edit_text(f"Gửi mail phát hành thất bại: {exc}")
+        return ConversationHandler.END
+
+    update_warning = ""
+    if record_source == "cases" and cases_db and record.get("id"):
+        try:
+            from src.sqlite_store import update_case
+
+            values = {"case_status": "Hoàn thành", "cancel_reason": ""}
+            if record.get("certificate_number"):
+                values["certificate_number"] = record.get("certificate_number")
+            update_case(cases_db, int(record["id"]), values)
+        except Exception as exc:
+            update_warning = f"\n\nMail đã gửi nhưng không thể cập nhật trạng thái hồ sơ: {exc}"
+
+    await msg_status.edit_text(
+        f"Đã gửi mail phát hành thành công!\n\n"
+        f"Hợp đồng: {contract_number}\n"
+        f"Người nhận: {to_email}{update_warning}"
+    )
+
     return ConversationHandler.END
 
 
