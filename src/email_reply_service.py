@@ -5,6 +5,7 @@ import email
 from email.header import decode_header
 import smtplib
 import html
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
 import os
@@ -18,6 +19,94 @@ DEFAULT_PHATHANH_RECIPIENT = (
     "Địa chỉ: 90/60/3 Trường Chinh, phường Pleiku, tỉnh Gia Lai\n"
     "Điện thoại 0905226968"
 )
+
+
+def gemini_keys_with_backups(primary_key: str | None = None, backup_keys: str | None = None) -> list[str]:
+    keys: list[str] = []
+    backup_value = backup_keys if backup_keys is not None else os.getenv("GEMINI_BACKUP_KEYS", "")
+    for key in [primary_key or os.getenv("GEMINI_API_KEY", ""), *backup_value.split(",")]:
+        clean_key = str(key or "").strip()
+        if clean_key and clean_key not in keys:
+            keys.append(clean_key)
+    return keys
+
+
+def build_phathanh_browser_tools(html_body: str):
+    from browser_use import Tools
+    from browser_use.agent.views import ActionResult
+
+    tools = Tools()
+
+    @tools.action("Insert the prepared certificate release HTML into the currently open OWA reply editor.")
+    async def insert_phathanh_html(browser_session):
+        page = await browser_session.must_get_current_page()
+        result = await page.evaluate(
+            """
+            async (html) => {
+              const isVisible = (el) => {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+              };
+
+              const candidates = Array.from(document.querySelectorAll([
+                '[contenteditable="true"]',
+                '[role="textbox"]',
+                '[aria-label*="Nội dung"]',
+                '[aria-label*="Message body"]',
+                '[aria-label*="body"]'
+              ].join(','))).filter(isVisible);
+
+              let editor = null;
+              const active = document.activeElement;
+              if (active && candidates.includes(active)) {
+                editor = active;
+              }
+              if (!editor && active && active.closest) {
+                editor = candidates.find((candidate) => candidate.contains(active) || active.contains(candidate));
+              }
+              if (!editor) {
+                editor = candidates[candidates.length - 1];
+              }
+              if (!editor) {
+                return { ok: false, reason: 'reply editor not found' };
+              }
+
+              editor.focus();
+              const selection = window.getSelection();
+              const range = document.createRange();
+              range.selectNodeContents(editor);
+              range.collapse(false);
+              selection.removeAllRanges();
+              selection.addRange(range);
+
+              let inserted = false;
+              try {
+                inserted = document.execCommand('insertHTML', false, html);
+              } catch (error) {
+                inserted = false;
+              }
+              if (!inserted) {
+                editor.innerHTML = html;
+              }
+
+              editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertHTML', data: html }));
+              editor.dispatchEvent(new Event('change', { bubbles: true }));
+
+              const renderedText = (editor.innerText || editor.textContent || '').trim();
+              return {
+                ok: renderedText.includes('Dear all') || editor.innerHTML.includes('Dear all'),
+                reason: renderedText.slice(0, 160),
+              };
+            }
+            """,
+            html_body,
+        )
+        if result.get("ok"):
+            return ActionResult(extracted_content="Inserted phathanh HTML into the OWA reply editor.")
+        return ActionResult(error=f"Could not insert phathanh HTML: {result.get('reason')}")
+
+    return tools
 
 
 def format_phathanh_recipient_html(recipient: str | None) -> str:
@@ -35,6 +124,52 @@ def format_phathanh_recipient_html(recipient: str | None) -> str:
     elif "Điện thoại" in recipient_html:
         recipient_html = recipient_html.replace("Điện thoại", "<strong>Điện thoại</strong>")
     return recipient_html
+
+
+def phathanh_send_mode() -> str:
+    return os.getenv("PHATHANH_SEND_MODE", "").strip().casefold()
+
+
+def build_phathanh_email_html(case: dict, recipient: str | None = None) -> str:
+    from datetime import datetime, timedelta
+
+    template_path = Path("src/templates/phathanh_template.html")
+    if not template_path.exists():
+        template_path = Path(__file__).parent / "templates" / "phathanh_template.html"
+    if not template_path.exists():
+        raise FileNotFoundError("Thiáº¿u file template: src/templates/phathanh_template.html")
+
+    html_template = template_path.read_text(encoding="utf-8")
+
+    now = datetime.now()
+    date_receive = (now + timedelta(days=1)).strftime("%d/%m/%Y")
+    date_payment = now.strftime("%d/%m/%Y")
+
+    signature = os.getenv("MAIL_SIGNATURE", "TrÃ¢n trá»ng,<br>Century Appraisal")
+
+    customer_extra_html = ""
+    if case.get("customer_type") == "individual":
+        citizen_id = case.get("citizen_id")
+        if citizen_id:
+            customer_extra_html = f'<br><i style="color: #7f8c8d; font-size: 12px;">(CCCD: {citizen_id})</i>'
+
+    recipient_html = format_phathanh_recipient_html(recipient)
+
+    replacements = {
+        "{{ customer_name }}": case.get("customer_info", case.get("owner_name", "N/A")),
+        "{{ customer_address }}": case.get("customer_address", case.get("dia_chi_thua_dat", "N/A")),
+        "{{ customer_extra_html }}": customer_extra_html,
+        "{{ recipient_info }}": recipient_html,
+        "{{ date_receive }}": date_receive,
+        "{{ date_payment }}": date_payment,
+        "{{ personal_note }}": "",
+        "{{ email_signature }}": signature,
+    }
+
+    html_body = html_template
+    for placeholder, value in replacements.items():
+        html_body = html_body.replace(placeholder, str(value))
+    return html_body
 
 
 def _decode_header_str(header_value):
@@ -269,11 +404,13 @@ async def send_phathanh_reply(original_mail, html_body, settings):
 
 async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str:
     """Gửi email phát hành chứng thư cho một hồ sơ."""
-    from datetime import datetime, timedelta
-    
     contract_number = case.get("contract_number")
     if not contract_number:
         raise ValueError("Hồ sơ không có số hợp đồng.")
+
+    html_body = build_phathanh_email_html(case, recipient)
+    if phathanh_send_mode() == "playwright":
+        return await send_phathanh_email_via_playwright_raw(case, html_body)
 
     from src.oauth2_service import get_enabled_oauth_provider, fetch_emails_via_oauth2, send_email_via_oauth2
 
@@ -414,3 +551,310 @@ async def send_phathanh_email_for_case(case: dict, recipient: str = None) -> str
             raise RuntimeError("Gửi email SMTP thất bại.")
         
     return original_mail.get("to") or original_mail.get("from")
+
+
+async def send_phathanh_email_via_browser_use(case_data: dict, html_body: str) -> str:
+    """Gửi email phát hành chứng thư thông qua Webmail (OWA/Outlook) bằng Browser Use và Gemini API."""
+    import os
+    import asyncio
+    from browser_use import Agent, Browser, ChatGoogle
+    api_keys = gemini_keys_with_backups()
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+    username = os.getenv("MAIL_USERNAME")
+    password = os.getenv("MAIL_PASSWORD")
+    user_data_dir = os.getenv("CHROME_USER_DATA_DIR")
+    webmail_url = os.getenv("WEBMAIL_URL", "https://owa.cengroup.vn/").strip()
+    
+    contract_number = str(case_data.get("contract_number") or "").strip()
+    if not contract_number:
+        raise ValueError("Hồ sơ không có số hợp đồng để tìm kiếm email.")
+        
+    if not api_keys:
+        raise RuntimeError("Thiếu biến môi trường GEMINI_API_KEY để chạy AI Agent.")
+
+    llm = ChatGoogle(
+        model=model,
+        api_key=api_keys[0]
+    )
+    fallback_llm = None
+    if len(api_keys) > 1:
+        fallback_llm = ChatGoogle(
+            model=model,
+            api_key=api_keys[1]
+        )
+
+    # Khởi tạo Browser ẩn danh (headless=True trên Linux/VPS, False trên Windows để test trực quan)
+    is_headless = os.getenv("PLAYWRIGHT_HEADLESS", "true" if os.name != "nt" else "false").strip().casefold() in ("true", "1", "yes")
+    
+    # Chrome arguments required for Linux root context execution
+    chrome_args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+    
+    browser_kwargs = {
+        "headless": is_headless,
+        "args": chrome_args,
+        "enable_default_extensions": False
+    }
+    if user_data_dir and os.path.exists(user_data_dir):
+        browser_kwargs["user_data_dir"] = user_data_dir
+
+    browser = Browser(**browser_kwargs)
+    tools = build_phathanh_browser_tools(html_body)
+    
+    # Prompt chỉ dẫn chi tiết cho AI Agent điều khiển OWA
+    prompt = (
+        f"Hãy thực hiện các bước sau để gửi email phát hành chứng thư:\n"
+        f"1. Truy cập vào trang Webmail {webmail_url}.\n"
+        f"2. Nếu chưa đăng nhập, sử dụng tài khoản '{username}' và mật khẩu '{password}' để đăng nhập.\n"
+        f"3. Nhập từ khóa số hợp đồng '{contract_number}' vào ô tìm kiếm (Search) ở trên cùng và nhấn Enter.\n"
+        f"4. Click mở email mới nhất trong kết quả tìm kiếm.\n"
+        f"5. Tìm và click nút 'Trả lời tất cả' (Reply All).\n"
+        f"6. Tìm ô soạn thảo nội dung trả lời (thường là ô nhập liệu contenteditable='true' hoặc role='textbox').\n"
+        f"7. Nhập nội dung sau vào ô soạn thảo: 'Dear all, Mọi người cho phát hành chứng thư giúp mình nhé, mình cảm ơn!' "
+        f"và dán bảng thông tin này vào. Để dán bảng thông tin một cách chuẩn xác nhất, hãy thực hiện chạy JavaScript (execute_javascript) để đặt `innerHTML` của ô soạn thảo bằng đoạn mã HTML sau:\n"
+        f"\"\"\"{html_body}\"\"\"\n"
+        f"8. Sau khi đã chèn thành công nội dung và bảng thông tin xuất hiện chính xác trên giao diện, hãy click nút 'Gửi' (Send) để hoàn thành gửi mail."
+    )
+
+    prompt = (
+        f"Use OWA Webmail at {webmail_url} to send the certificate release reply.\n"
+        f"1. Log in with the username '{username}' and password '{password}' if needed.\n"
+        f"2. Search for the email whose subject contains this contract number: {contract_number}.\n"
+        f"3. Click on the first/newest email item in the search results list to open its details. Wait for the email details pane to load completely.\n"
+        f"4. Look for and click the 'Reply All' button (or 'Trả lời tất cả' in Vietnamese) inside the opened email pane.\n"
+        f"5. Once the reply editor opens, click the editor body to focus it, then call the `insert_phathanh_html` tool exactly once to insert the prepared release content.\n"
+        f"6. Confirm the content is inserted correctly, then click the 'Send' button (or 'Gửi' in Vietnamese) to send the email."
+    )
+
+    try:
+        agent = None
+        try:
+            agent = Agent(
+                task=prompt,
+                llm=llm,
+                fallback_llm=fallback_llm,
+                browser=browser,
+                tools=tools
+            )
+            history = await agent.run()
+            if not history or not history.is_successful():
+                raise RuntimeError("AI Agent execution was not successful (likely rate limited or failed).")
+        except Exception as e:
+            # Catch inner exceptions (like rate limits / API errors during run)
+            raise e
+        finally:
+            try:
+                await browser.stop()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to stop browser: {e}")
+    except Exception as agent_exc:
+        import logging
+        logging.getLogger(__name__).error(f"Browser Use agent failed: {agent_exc}. Falling back to raw Playwright flow...")
+        try:
+            # Ensure the browser session is fully stopped before starting fallback
+            await browser.stop()
+        except Exception:
+            pass
+        return await send_phathanh_email_via_playwright_raw(case_data, html_body)
+        
+    return case_data.get("to") or case_data.get("from") or "Webmail AI Agent"
+
+
+async def send_phathanh_email_via_playwright_raw(case_data: dict, html_body: str) -> str:
+    """Fallback method using raw Playwright commands to reply to the certificate release email."""
+    import os
+    import asyncio
+    from playwright.async_api import async_playwright
+    
+    username = os.getenv("MAIL_USERNAME")
+    password = os.getenv("MAIL_PASSWORD")
+    user_data_dir = os.getenv("CHROME_USER_DATA_DIR")
+    webmail_url = os.getenv("WEBMAIL_URL", "https://owa.cengroup.vn/").strip()
+    is_headless = os.getenv("PLAYWRIGHT_HEADLESS", "true" if os.name != "nt" else "false").strip().casefold() in ("true", "1", "yes")
+    
+    contract_number = str(case_data.get("contract_number") or "").strip()
+    if not contract_number:
+        raise ValueError("Hồ sơ không có số hợp đồng để tìm kiếm email.")
+        
+    chrome_args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+    
+    print(f"[Playwright Raw Fallback] Starting raw Playwright flow for contract {contract_number}")
+    
+    async with async_playwright() as p:
+        if user_data_dir and os.path.exists(user_data_dir):
+            context = await p.chromium.launch_persistent_context(
+                user_data_dir=user_data_dir,
+                headless=is_headless,
+                args=chrome_args,
+            )
+            page = context.pages[0] if context.pages else await context.new_page()
+        else:
+            browser = await p.chromium.launch(
+                headless=is_headless,
+                args=chrome_args,
+            )
+            context = await browser.new_context()
+            page = await context.new_page()
+            
+        try:
+            # 1. Navigate to the login page
+            print(f"[Playwright Raw Fallback] Navigating to {webmail_url}")
+            await page.goto(webmail_url, timeout=60000)
+            await page.wait_for_load_state("load")
+            
+            # Check if we are already logged in
+            username_selector = "input#username, input[name='username'], input[type='email'], input[type='text']"
+            try:
+                await page.wait_for_selector(username_selector, timeout=5000)
+                needs_login = True
+            except Exception:
+                needs_login = False
+                
+            if needs_login:
+                print("[Playwright Raw Fallback] Login form detected. Logging in...")
+                await page.fill("input#username, input[name='username'], input[type='email']", username)
+                await page.fill("input#password, input[name='password'], input[type='password']", password)
+                signin_btn_selector = "input[type='submit'], button[type='submit'], button:has-text('Sign in'), button:has-text('Đăng nhập'), div[role='button']:has-text('Sign in')"
+                await page.click(signin_btn_selector)
+                print("[Playwright Raw Fallback] Submitted login form. Waiting for navigation/dashboard...")
+                await page.wait_for_load_state("networkidle", timeout=15000)
+            else:
+                print("[Playwright Raw Fallback] Already logged in or login form not visible.")
+
+            # 2. Wait for search input
+            search_selector = "input[placeholder*='Tìm kiếm'], input[placeholder*='Search'], input[aria-label*='Search'], input[aria-label*='Tìm kiếm'], input#sb"
+            print("[Playwright Raw Fallback] Waiting for search input...")
+            search_input = await page.wait_for_selector(search_selector, timeout=30000)
+            
+            # 3. Input contract number and press Enter
+            print(f"[Playwright Raw Fallback] Inputting contract number: {contract_number}")
+            await search_input.click()
+            await search_input.press("Control+A")
+            await search_input.press("Delete")
+            await search_input.fill(contract_number)
+            await search_input.press("Enter")
+            
+            # Wait for search results
+            print("[Playwright Raw Fallback] Waiting for search results to load...")
+            await page.wait_for_timeout(5000)
+            
+            # Click first search result
+            item_selector = "div[role='listitem'], div[role='option'], div.customListItem, tr.read, tr.unread, div[aria-label*='Message List'] div[role='button']"
+            try:
+                first_item = await page.wait_for_selector(item_selector, timeout=15000)
+                print("[Playwright Raw Fallback] Clicking the first search result...")
+                await first_item.click()
+            except Exception as e:
+                print(f"[Playwright Raw Fallback] Warning: Could not find mail item by selector: {e}. Trying fallback click on list...")
+                await page.click("div[role='listitem'] >> nth=0")
+                
+            await page.wait_for_timeout(3000)
+            
+            # 4. Click 'Reply All'
+            reply_all_selector = (
+                "button:has-text('Reply All'), button:has-text('Trả lời tất cả'), "
+                "[aria-label*='Reply all'], [aria-label*='Trả lời tất cả'], "
+                "[aria-label*='Reply All'], "
+                "[title*='Reply all'], [title*='Trả lời tất cả'], "
+                "[title*='Reply All'], "
+                "div[role='button']:has-text('Reply All'), div[role='button']:has-text('Trả lời tất cả'), "
+                "span:has-text('Reply All'), span:has-text('Trả lời tất cả')"
+            )
+            print("[Playwright Raw Fallback] Waiting for Reply All button...")
+            reply_all_btn = await page.wait_for_selector(reply_all_selector, timeout=20000)
+            print("[Playwright Raw Fallback] Clicking Reply All button...")
+            await reply_all_btn.click()
+            
+            await page.wait_for_timeout(3000)
+            
+            # 5. Use JS to insert the html_body into the active editor
+            editor_selector = "[contenteditable='true'], [role='textbox'], [aria-label*='Nội dung'], [aria-label*='Message body'], [aria-label*='body']"
+            print("[Playwright Raw Fallback] Waiting for reply editor...")
+            await page.wait_for_selector(editor_selector, timeout=20000)
+            
+            print("[Playwright Raw Fallback] Evaluating JS to insert HTML into editor...")
+            result = await page.evaluate(
+                """
+                async (html) => {
+                  const isVisible = (el) => {
+                    const rect = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+                  };
+
+                  const candidates = Array.from(document.querySelectorAll([
+                    '[contenteditable="true"]',
+                    '[role="textbox"]',
+                    '[aria-label*="Nội dung"]',
+                    '[aria-label*="Message body"]',
+                    '[aria-label*="body"]'
+                  ].join(','))).filter(isVisible);
+
+                  let editor = null;
+                  const active = document.activeElement;
+                  if (active && candidates.includes(active)) {
+                    editor = active;
+                  }
+                  if (!editor && active && active.closest) {
+                    editor = candidates.find((candidate) => candidate.contains(active) || active.contains(candidate));
+                  }
+                  if (!editor) {
+                    editor = candidates[candidates.length - 1];
+                  }
+                  if (!editor) {
+                    return { ok: false, reason: 'reply editor not found' };
+                  }
+
+                  editor.focus();
+                  const selection = window.getSelection();
+                  const range = document.createRange();
+                  range.selectNodeContents(editor);
+                  range.collapse(false);
+                  selection.removeAllRanges();
+                  selection.addRange(range);
+
+                  let inserted = false;
+                  try {
+                    inserted = document.execCommand('insertHTML', false, html);
+                  } catch (error) {
+                    inserted = false;
+                  }
+                  if (!inserted) {
+                    editor.innerHTML = html;
+                  }
+
+                  editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertHTML', data: html }));
+                  editor.dispatchEvent(new Event('change', { bubbles: true }));
+
+                  const renderedText = (editor.innerText || editor.textContent || '').trim();
+                  return {
+                    ok: renderedText.includes('Dear all') || editor.innerHTML.includes('Dear all'),
+                    reason: renderedText.slice(0, 160),
+                  };
+                }
+                """,
+                html_body
+            )
+            print(f"[Playwright Raw Fallback] Editor insertion result: {result}")
+            await page.wait_for_timeout(2000)
+            
+            # 6. Click Send button
+            send_btn_selector = (
+                "button:has-text('Send'), button:has-text('Gửi'), "
+                "[aria-label*='Send'], [aria-label*='Gửi'], "
+                "[title*='Send'], [title*='Gửi'], "
+                "div[role='button']:has-text('Send'), div[role='button']:has-text('Gửi'), "
+                "span:has-text('Send'), span:has-text('Gửi')"
+            )
+            print("[Playwright Raw Fallback] Locating Send button...")
+            send_btn = await page.wait_for_selector(send_btn_selector, timeout=15000)
+            print("[Playwright Raw Fallback] Clicking Send button...")
+            await send_btn.click()
+            
+            await page.wait_for_timeout(5000)
+            print("[Playwright Raw Fallback] Email sent successfully.")
+            
+        finally:
+            await context.close()
+            
+    return case_data.get("to") or case_data.get("from") or "Webmail Playwright Raw Fallback"
