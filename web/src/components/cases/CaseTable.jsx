@@ -193,6 +193,7 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
     setActiveCaseForPhathanh(record);
     phathanhDeliveryForm.setFieldsValue({
       delivery_contact_id: record.delivery_contact_id || 0,
+      delivery_quantity: '2',
     });
     setPhathanhDeliverySearch('');
     setPhathanhDeliveryOpen(true);
@@ -213,7 +214,7 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
       });
       setPhathanhDeliveryOpen(false);
       setActiveCaseForPhathanh(null);
-      await handleDownloadPhathanhDocx(activeCaseForPhathanh);
+      await handleOpenPhathanhContent(activeCaseForPhathanh, values.delivery_quantity);
     } catch (err) {
       if (err?.errorFields) return;
       console.error(err);
@@ -224,10 +225,10 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
   };
 
   // Open "Tạo form phát hành chứng thư" content
-  const handleOpenPhathanhContent = async (record) => {
+  const handleOpenPhathanhContent = async (record, deliveryQuantity) => {
     const hide = message.loading('Đang lấy nội dung phát hành...', 0);
     try {
-      const res = await getPhathanhContent(record.id);
+      const res = await getPhathanhContent(record.id, deliveryQuantity);
       setContentModalTitle(`Nội dung phát hành chứng thư: ${record.contract_number || record.id}`);
       setContentModalHtml(res.data.html || '');
       setContentModalOpen(true);
@@ -1208,6 +1209,17 @@ open={appraisalMailOpen}
                 })),
               ]}
             />
+          </Form.Item>
+
+          <Form.Item
+            name="delivery_quantity"
+            label="Số lượng hồ sơ gửi"
+            rules={[
+              { required: true, message: 'Vui lòng nhập số lượng hồ sơ gửi' },
+              { pattern: /^[1-9]\d*$/, message: 'Số lượng hồ sơ gửi phải là số nguyên dương' },
+            ]}
+          >
+            <Input placeholder="Ví dụ: 2" />
           </Form.Item>
 
           <Form.Item label="Thông tin chuyển phát">

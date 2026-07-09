@@ -574,7 +574,7 @@ def get_phathanh_content(case_id):
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
 
     try:
-        from src.email_reply_service import build_phathanh_email_html
+        from src.email_reply_service import build_phathanh_email_html, phathanh_logo_data_uri
         recipient = None
         delivery_contact_id = case.get("delivery_contact_id")
         if delivery_contact_id:
@@ -590,7 +590,13 @@ def get_phathanh_content(case_id):
             except Exception:
                 pass
 
-        html_content = build_phathanh_email_html(case, recipient=recipient)
+        delivery_quantity = request.args.get("delivery_quantity", "2").strip() or "2"
+        html_content = build_phathanh_email_html(
+            case,
+            recipient=recipient,
+            logo_src=phathanh_logo_data_uri(),
+            delivery_quantity=delivery_quantity,
+        )
         return jsonify({"success": True, "html": html_content})
     except Exception as e:
         return jsonify({"error": f"Lỗi tạo nội dung phát hành: {str(e)}"}), 500

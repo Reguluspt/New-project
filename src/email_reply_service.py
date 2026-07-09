@@ -12,6 +12,7 @@ import smtplib
 import html
 import shutil
 import tempfile
+import base64
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
@@ -164,6 +165,14 @@ def phathanh_docx_template_path() -> Path:
         return project_data_path
 
     return configured_path
+
+
+def phathanh_logo_data_uri() -> str:
+    logo_path = Path(__file__).resolve().parent / "templates" / "logo.jpg"
+    if not logo_path.exists():
+        return "cid:logo_cenvalue"
+    encoded = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
 
 
 def _phathanh_case_values(case: dict, recipient: str | None) -> dict[str, str]:
@@ -453,28 +462,23 @@ def html_to_plain_text(html_content: str) -> str:
     return "\n\n".join([p for p in parts if p.strip()])
 
 
-def build_phathanh_email_html(case: dict, recipient: str | None = None, include_signature: bool = True) -> str:
-
-    # Bỏ qua DOCX để luôn dùng form HTML mới (phathanh_template.html)
-    # template_docx = phathanh_docx_template_path()
-    # if template_docx.exists():
-    #     temp_docx = create_phathanh_docx_for_case(case, recipient)
-    #     return phathanh_docx_to_email_html(temp_docx)
-
-    from datetime import datetime, timedelta
-
+def build_phathanh_email_html(
+    case: dict,
+    recipient: str | None = None,
+    include_signature: bool = True,
+    logo_src: str = "cid:logo_cenvalue",
+    delivery_quantity: str | int = "2",
+) -> str:
     template_path = Path("src/templates/phathanh_template.html")
     if not template_path.exists():
         template_path = Path(__file__).parent / "templates" / "phathanh_template.html"
     if not template_path.exists():
-        raise FileNotFoundError("Thiếu file template: src/templates/phathanh_template.html")
+        raise FileNotFoundError("Thi?u file template: src/templates/phathanh_template.html")
 
     html_template = template_path.read_text(encoding="utf-8")
-
     now = datetime.now()
     date_receive = (now + timedelta(days=1)).strftime("%d/%m/%Y")
     date_payment = now.strftime("%d/%m/%Y")
-
     signature = os.getenv("MAIL_SIGNATURE", "Trân trọng,<br>Century Appraisal")
 
     cccd_row = ""
@@ -482,40 +486,41 @@ def build_phathanh_email_html(case: dict, recipient: str | None = None, include_
         citizen_id = case.get("citizen_id")
         if citizen_id:
             cccd_row = f'''
-            <tr>
-                <td colspan="2" class="label-cell">Số CCCD*:</td>
-                <td colspan="5" class="value-cell"><strong>{citizen_id}</strong></td>
-            </tr>'''
+<tr>
+<td colspan="2" class="label-cell">Số CCCD*:</td>
+<td colspan="5" class="value-cell"><strong>{html.escape(str(citizen_id))}</strong></td>
+</tr>'''
 
+    quantity_text = str(delivery_quantity or "2").strip() or "2"
     recipient_html = format_phathanh_recipient_html(recipient)
-    
     signature_block_html = ""
     if include_signature:
-        signature_block_html = """
-        <!-- Restored Premium Signature layout as in user screenshot -->
-        <div class="signature">
-            <table class="sig-table">
-                <tr style="border: none !important; background: none;">
-                    <td class="sig-cell-logo">
-                        <img src="cid:logo_cenvalue" alt="Cenvalue Logo" style="width: 100px; height: auto; display: block;" />
-                    </td>
-                    <td class="sig-cell-info">
-                        <div style="font-size: 15px; font-weight: bold; color: #1e3d59;">CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ (CENVALUE)</div>
-                        <div style="font-size: 13px; color: #555555; margin-top: 4px;">
-                            <strong>VP TẠI GIA LAI:</strong> 90/60/3 Trường Chinh, phường Pleiku, tỉnh Gia Lai
-                        </div>
-                        <div style="font-size: 13px; color: #555555; margin-top: 2px;">
-                            <strong>Hotline:</strong> 0905.226.968 | <strong>Website:</strong> <a href="http://www.cenvalue.vn" target="_blank" style="color: #17b978; text-decoration: none; font-weight: bold;">www.cenvalue.vn</a>
-                        </div>
-                    </td>
-                </tr>
-            </table>
-        </div>"""
+        signature_block_html = f'''
+<!-- Restored Premium Signature layout as in user screenshot -->
+<div class="signature">
+<table class="sig-table">
+<tr style="border: none !important; background: none;">
+<td class="sig-cell-logo">
+<img src="{logo_src}" alt="Cenvalue Logo" style="width: 100px; height: auto; display: block;" />
+</td>
+<td class="sig-cell-info">
+<div style="font-size: 15px; font-weight: bold; color: #1e3d59;">CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ (CENVALUE)</div>
+<div style="font-size: 13px; color: #555555; margin-top: 4px;">
+<strong>VP TẠI GIA LAI:</strong> 90/60/3 Trường Chinh, phường Pleiku, tỉnh Gia Lai
+</div>
+<div style="font-size: 13px; color: #555555; margin-top: 2px;">
+<strong>Hotline:</strong> 0905.226.968 | <strong>Website:</strong> <a href="http://www.cenvalue.vn" target="_blank" style="color: #17b978; text-decoration: none; font-weight: bold;">www.cenvalue.vn</a>
+</div>
+</td>
+</tr>
+</table>
+</div>'''
 
     replacements = {
-        "{{ customer_name }}": case.get("customer_info", case.get("owner_name", "N/A")),
-        "{{ customer_address }}": case.get("customer_address", case.get("dia_chi_thua_dat", "N/A")),
+        "{{ customer_name }}": html.escape(str(case.get("customer_info") or case.get("owner_name") or "")),
+        "{{ customer_address }}": html.escape(str(case.get("customer_address") or case.get("dia_chi_thua_dat") or "")),
         "{{ cccd_row }}": cccd_row,
+        "{{ delivery_quantity }}": html.escape(quantity_text),
         "{{ recipient_info }}": recipient_html,
         "{{ date_receive }}": date_receive,
         "{{ date_payment }}": date_payment,
@@ -527,13 +532,10 @@ def build_phathanh_email_html(case: dict, recipient: str | None = None, include_
     html_body = html_template
     for placeholder, value in replacements.items():
         html_body = html_body.replace(placeholder, str(value))
-        
-    # Sanitize html_body to prevent Javascript SyntaxError (Invalid or unexpected token)
-    # when Playwright passes the string containing unescaped line terminators to eval()
-    html_body = html_body.replace("\u2028", " ").replace("\u2029", " ").replace("\r", " ").replace("\n", " ")
-    
-    return inline_phathanh_email_styles(html_body)
 
+    # Sanitize line separators before inserting through browser automation.
+    html_body = html_body.replace("\u2028", " ").replace("\u2029", " ").replace("\r", " ").replace("\n", " ")
+    return inline_phathanh_email_styles(html_body)
 
 def _decode_header_str(header_value):
     if not header_value:

@@ -33,12 +33,13 @@ export const saveDelivery = (caseId, payload) =>
 export const downloadPhathanhDocx = (caseId) =>
   client.get(`/cases/${caseId}/documents/phathanh`, { responseType: 'blob' });
 
-export const getPhathanhContent = (caseId) =>
-  client.get(`/cases/${caseId}/documents/phathanh-content`);
+export const getPhathanhContent = (caseId, deliveryQuantity) =>
+  client.get(`/cases/${caseId}/documents/phathanh-content`, {
+    params: deliveryQuantity ? { delivery_quantity: deliveryQuantity } : {},
+  });
 
 export const getXinsoContent = (caseId) =>
   client.get(`/cases/${caseId}/documents/xinso-content`);
 
 export const getLatestEmail = (caseId) =>
   client.get(`/cases/${caseId}/latest-email`);
-
