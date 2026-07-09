@@ -77,12 +77,16 @@ async def send_sobo_email_with_result(
     
     # --- TÍCH HỢP OAUTH2 ---
     from .oauth2_service import (
+        GmailRateLimitError,
+        GMAIL_API_LOCK,
         get_enabled_oauth_provider,
         get_outlook_sender_email,
         get_sobo_email_config,
         get_valid_access_token_async,
+        handle_gmail_rate_limit_response,
         is_oauth_enabled,
         is_outlook_smtp_enabled,
+        raise_if_gmail_cooling_down,
         send_outlook_message_via_smtp_oauth2,
     )
 
@@ -159,26 +163,38 @@ async def send_sobo_email_with_result(
                 import httpx
                 raw_bytes = msg.as_bytes()
                 raw_b64 = base64.urlsafe_b64encode(raw_bytes).decode("utf-8")
-                
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    headers = {
-                        "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "application/json",
-                    }
-                    send_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
-                    response = await client.post(send_url, headers=headers, json={"raw": raw_b64})
-                    if response.status_code not in [200, 201]:
-                        raise RuntimeError(f"Gửi sobo qua Gmail API thất bại: {response.text}")
-                return SoboEmailResult(True, message_id=message_id)
+
+                try:
+                    raise_if_gmail_cooling_down()
+                    async with GMAIL_API_LOCK:
+                        raise_if_gmail_cooling_down()
+                        async with httpx.AsyncClient(timeout=30.0) as client:
+                            headers = {
+                                "Authorization": f"Bearer {access_token}",
+                                "Content-Type": "application/json",
+                            }
+                            send_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+                            response = await client.post(send_url, headers=headers, json={"raw": raw_b64})
+                            handle_gmail_rate_limit_response(response)
+                            if response.status_code not in [200, 201]:
+                                raise RuntimeError(f"Gửi sobo qua Gmail API thất bại: {response.text}")
+                    return SoboEmailResult(True, message_id=message_id)
+                except GmailRateLimitError as exc:
+                    return SoboEmailResult(
+                        False,
+                        user_message=f"Gmail đang bị giới hạn đến {exc.retry_after}. Đã giữ hồ sơ ở trạng thái chờ để gửi lại sau.",
+                        technical_error=str(exc),
+                    )
                 
             elif provider == "outlook":
                 import base64
                 import httpx
                 outlook_sender_email = get_outlook_sender_email()
-                to_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in to_email.split(",") if addr.strip()]
+                from email.utils import parseaddr
+                to_recipients = [{"emailAddress": {"address": parseaddr(addr.strip())[1]}} for addr in to_email.split(",") if parseaddr(addr.strip())[1]]
                 cc_recipients = []
                 if cc_emails:
-                    cc_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in cc_emails if addr.strip()]
+                    cc_recipients = [{"emailAddress": {"address": parseaddr(addr.strip())[1]}} for addr in cc_emails if parseaddr(addr.strip())[1]]
                     
                 attachments_payload = []
                 if html_body:

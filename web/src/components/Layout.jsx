@@ -12,7 +12,8 @@ import {
   FileWordOutlined,
   SettingOutlined,
   LogoutOutlined,
-  MenuOutlined
+  MenuOutlined,
+  UnorderedListOutlined
 } from '@ant-design/icons';
 
 const { Header, Content, Footer } = AntLayout;
@@ -35,8 +36,9 @@ export default function Layout({ children }) {
     : [
         { path: '/dashboard', label: 'Dashboard', icon: <DashboardOutlined style={{ fontSize: '16px' }} /> },
         { path: '/entry', label: 'Nhập hồ sơ', icon: <FileSearchOutlined style={{ fontSize: '16px' }} /> },
-        { path: '/cases', label: 'Quản lý hồ sơ', icon: <FolderOutlined style={{ fontSize: '16px' }} /> },
-        { path: '/sobo', label: 'Sơ bộ', icon: <FileTextOutlined style={{ fontSize: '16px' }} /> },
+    { path: '/cases', label: 'Quản lý hồ sơ', icon: <FolderOutlined style={{ fontSize: '16px' }} /> },
+    { path: '/tasks', label: 'Công việc', icon: <UnorderedListOutlined style={{ fontSize: '16px' }} /> },
+    { path: '/sobo', label: 'Sơ bộ', icon: <FileTextOutlined style={{ fontSize: '16px' }} /> },
         { path: '/organizations', label: 'Tổ chức', icon: <BankOutlined style={{ fontSize: '16px' }} /> },
         { path: '/delivery', label: 'Chuyển phát', icon: <SendOutlined style={{ fontSize: '16px' }} /> },
         { path: '/templates', label: 'Templates', icon: <FileWordOutlined style={{ fontSize: '16px' }} /> },
@@ -70,7 +72,7 @@ export default function Layout({ children }) {
   );
 
   return (
-    <AntLayout style={{ minHeight: '100vh', backgroundColor: '#f5f7fb' }}>
+    <AntLayout style={{ minHeight: '100vh', backgroundColor: '#f4faf9' }}>
       {/* Styles block for responsive NavLink, active state, and scrollbar */}
       <style>{`
         .layout-header {
@@ -118,12 +120,12 @@ export default function Layout({ children }) {
         }
 
         .nav-link-item:hover {
-          color: #0057d8;
+          color: #006b67;
         }
 
         .nav-link-item.active {
-          color: #0057d8;
-          border-bottom: 3px solid #0057d8;
+          color: #006b67;
+          border-bottom: 3px solid #006b67;
         }
 
         .hamburger-btn {
@@ -160,21 +162,20 @@ export default function Layout({ children }) {
         }
         .mobile-nav-link:hover,
         .mobile-nav-link.active {
-          background: #eff6ff;
-          color: #0057d8;
+          background: #e6f4f2;
+          color: #006b67;
         }
       `}</style>
 
       {/* Header Container */}
       <Header className="layout-header">
         {/* Brand / Logo */}
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2', flexShrink: 0 }}>
-          <span style={{ fontWeight: 800, fontSize: '16px', color: '#0f6cbd' }}>
-            Hệ Thống Thẩm Định
-          </span>
-          <span className="brand-subtitle" style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
-            Phòng Kinh Doanh
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <img
+            src="/cenvalue-logo.png"
+            alt="CEN VALUE"
+            style={{ display: 'block', height: 36, width: 'auto', maxWidth: 180, objectFit: 'contain' }}
+          />
         </div>
 
         {/* Desktop Navigation Bar */}
@@ -188,7 +189,7 @@ export default function Layout({ children }) {
         <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
           <Space size="middle">
             <Space size="small">
-              <Avatar style={{ backgroundColor: '#0f6cbd', fontWeight: 'bold' }} size="default">
+              <Avatar style={{ backgroundColor: '#007f7a', fontWeight: 'bold' }} size="default">
                 {firstLetter}
               </Avatar>
               <span className="user-name-text" style={{ fontWeight: 600, color: '#0f172a' }}>
@@ -220,7 +221,7 @@ export default function Layout({ children }) {
       <Drawer
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Avatar style={{ backgroundColor: '#0f6cbd', fontWeight: 'bold' }}>
+            <Avatar style={{ backgroundColor: '#007f7a', fontWeight: 'bold' }}>
               {firstLetter}
             </Avatar>
             <span style={{ fontWeight: 700, color: '#0f172a' }}>{user?.username}</span>
@@ -276,7 +277,7 @@ export default function Layout({ children }) {
         </div>
       </Content>
 
-      <Footer style={{ textAlign: 'center', color: '#64748b', background: '#f5f7fb', padding: '20px 0 30px' }}>
+      <Footer style={{ textAlign: 'center', color: '#64748b', background: '#f4faf9', padding: '20px 0 30px' }}>
         Hệ thống Thẩm định Giá Cenvalue ©2026 - SPA Migration
       </Footer>
     </AntLayout>

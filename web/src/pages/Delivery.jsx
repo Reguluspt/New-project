@@ -284,17 +284,17 @@ export default function Delivery() {
       {/* KPI Stats cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
-          <Card bordered style={{ borderLeft: '5px solid #0f6cbd' }} hoverable>
+          <Card bordered style={{ borderLeft: '5px solid #007f7a' }} hoverable>
             <Statistic title="Tổng liên hệ" value={totalContacts} prefix={<ContactsOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
-          <Card bordered style={{ borderLeft: '5px solid #10b981' }} hoverable>
+          <Card bordered style={{ borderLeft: '5px solid #047857' }} hoverable>
             <Statistic title="Liên hệ đầy đủ thông tin" value={completeContacts} suffix={`/ ${totalContacts}`} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
-          <Card bordered style={{ borderLeft: '5px solid #ef4444' }} hoverable>
+          <Card bordered style={{ borderLeft: '5px solid #c2413d' }} hoverable>
             <Statistic title="Cần bổ sung thông tin" value={incompleteContacts} />
           </Card>
         </Col>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Card, Tabs, Button, Tag, Descriptions, Input, List, 
-  Form, message, Skeleton, Space, Breadcrumb, Divider 
+  Form, message, Skeleton, Space, Breadcrumb, Divider, Empty
 } from 'antd';
 import { 
   ArrowLeftOutlined, 
@@ -10,11 +10,15 @@ import {
   InfoCircleOutlined, 
   FileTextOutlined, 
   CommentOutlined,
-  SendOutlined
+  SendOutlined,
+  CheckSquareOutlined,
+  PlusOutlined
 } from '@ant-design/icons';
 import { getCase, getNotes, addNote } from '../api/cases';
+import client from '../api/client';
 import CaseDocuments from '../components/cases/CaseDocuments';
 import CaseEditModal from '../components/cases/CaseEditModal';
+import TaskModal from '../components/tasks/TaskModal';
 
 export default function CaseDetail() {
   const { id } = useParams();
@@ -29,11 +33,15 @@ export default function CaseDetail() {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [relatedTasks, setRelatedTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
       fetchCaseData();
       fetchNotes();
+      fetchRelatedTasks();
     }
   }, [id]);
 
@@ -60,6 +68,30 @@ export default function CaseDetail() {
     } finally {
       setLoadingNotes(false);
     }
+  };
+
+  const fetchRelatedTasks = async () => {
+    setLoadingTasks(true);
+    try {
+      const res = await client.get('/tasks', { params: { case_id: id } });
+      setRelatedTasks(res.data?.items || []);
+    } catch (err) {
+      console.error(err);
+      message.error('Không thể lấy danh sách công việc liên quan');
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  const handleCreateRelatedTask = async (payload) => {
+    await client.post('/tasks', {
+      ...payload,
+      case_id: Number(id),
+      status: 'todo',
+    });
+    message.success('Đã tạo công việc liên quan');
+    setTaskModalOpen(false);
+    fetchRelatedTasks();
   };
 
   const handleAddNote = async () => {
@@ -94,14 +126,57 @@ export default function CaseDetail() {
     }
   };
 
+  const getTaskStatusTag = (status) => {
+    const labels = {
+      todo: 'Cần làm',
+      in_progress: 'Đang làm',
+      review: 'Đánh giá',
+      done: 'Hoàn thành',
+    };
+    const colors = {
+      todo: 'default',
+      in_progress: 'processing',
+      review: 'warning',
+      done: 'success',
+    };
+    return <Tag color={colors[status] || 'default'}>{labels[status] || status || 'Chưa đặt'}</Tag>;
+  };
+
+  const getTaskPriorityTag = (priority) => {
+    const labels = {
+      low: 'Thấp',
+      medium: 'Trung bình',
+      high: 'Cao',
+    };
+    const colors = {
+      low: 'green',
+      medium: 'gold',
+      high: 'red',
+    };
+    return <Tag color={colors[priority] || 'default'}>{labels[priority] || priority || 'Chưa đặt'}</Tag>;
+  };
+
+  const formatTaskDueDate = (value) => {
+    if (!value) return 'Chưa có hạn';
+    const date = new Date(String(value).replace(' ', 'T'));
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3' }}>
+        <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5' }}>
           <Skeleton.Input active style={{ width: 300, marginBottom: 8 }} />
           <Skeleton active paragraph={{ rows: 1 }} title={false} />
         </Card>
-        <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3' }}>
+        <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5' }}>
           <Skeleton active paragraph={{ rows: 8 }} />
         </Card>
       </div>
@@ -133,7 +208,7 @@ export default function CaseDetail() {
         <Card style={{ borderRadius: 10, border: '1px solid #e5e7eb' }}>
           <Descriptions title="Hồ sơ chi tiết" bordered column={{ xxl: 3, xl: 3, lg: 2, md: 2, sm: 1, xs: 1 }}>
             <Descriptions.Item label="Số hợp đồng" span={1}>
-              <strong style={{ color: '#0f6cbd' }}>{caseData.contract_number || 'N/A'}</strong>
+              <strong style={{ color: '#007f7a' }}>{caseData.contract_number || 'N/A'}</strong>
             </Descriptions.Item>
             <Descriptions.Item label="Khách hàng" span={2}>
               {caseData.customer_info || 'N/A'} {caseData.customer_type === 'individual' ? '(Cá nhân)' : '(Tổ chức)'}
@@ -170,15 +245,15 @@ export default function CaseDetail() {
 
             <Descriptions.Item label="Phí thẩm định" span={1}>
               {caseData.valuation_fee_number 
-                ? `${caseData.valuation_fee_number.toLocaleString('vi-VN')} ₫` 
-                : '0 ₫'
+                ? `${caseData.valuation_fee_number.toLocaleString('vi-VN')} ?` 
+                : '0 ?'
               }
             </Descriptions.Item>
             <Descriptions.Item label="Tạm ứng" span={1}>
-              {caseData.advance_payment ? `${parseInt(caseData.advance_payment).toLocaleString('vi-VN')} ₫` : '0 ₫'}
+              {caseData.advance_payment ? `${parseInt(caseData.advance_payment).toLocaleString('vi-VN')} ?` : '0 ?'}
             </Descriptions.Item>
             <Descriptions.Item label="Chi phí khảo sát" span={1}>
-              {caseData.survey_cost ? `${parseInt(caseData.survey_cost).toLocaleString('vi-VN')} ₫` : '0 ₫'}
+              {caseData.survey_cost ? `${parseInt(caseData.survey_cost).toLocaleString('vi-VN')} ?` : '0 ?'}
             </Descriptions.Item>
 
             <Descriptions.Item label="Thanh toán" span={1}>
@@ -223,6 +298,68 @@ export default function CaseDetail() {
         </span>
       ),
       children: <CaseDocuments caseData={caseData} onCaseRefresh={fetchCaseData} />
+    },
+    {
+      key: 'tasks',
+      label: (
+        <span>
+          <CheckSquareOutlined />
+          Danh sách công việc liên quan
+        </span>
+      ),
+      children: (
+        <Card
+          title="Danh sách công việc liên quan"
+          extra={
+            <Space wrap>
+              <Button onClick={() => navigate('/cases')}>
+                Vào Quản lý hồ sơ
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setTaskModalOpen(true)}
+              >
+                Tạo công việc mới
+              </Button>
+            </Space>
+          }
+          style={{ borderRadius: 10, border: '1px solid #e5e7eb' }}
+        >
+          <List
+            loading={loadingTasks}
+            dataSource={relatedTasks}
+            locale={{ emptyText: <Empty description="Chưa có công việc nào liên quan đến hồ sơ này." /> }}
+            renderItem={(task) => (
+              <List.Item
+                actions={[
+                  <Link key="open-case" to={`/cases/${task.case_id || id}`}>
+                    Mở hồ sơ
+                  </Link>
+                ]}
+              >
+                <List.Item.Meta
+                  title={
+                    <Space wrap>
+                      <strong>{task.title}</strong>
+                      {getTaskStatusTag(task.status)}
+                      {getTaskPriorityTag(task.priority)}
+                    </Space>
+                  }
+                  description={
+                    <Space direction="vertical" size={4}>
+                      <span>{task.description || 'Không có mô tả'}</span>
+                      <span style={{ color: '#64748b', fontSize: 12 }}>
+                        Hạn chót: {formatTaskDueDate(task.due_date)}
+                      </span>
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      )
     },
     {
       key: 'notes',
@@ -301,7 +438,7 @@ export default function CaseDetail() {
       </div>
 
       {/* Case Header Card */}
-      <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3' }}>
+      <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <Space direction="vertical" size={2}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -326,7 +463,7 @@ export default function CaseDetail() {
       <Tabs defaultActiveKey="info" items={tabItems} size="large" />
 
       {/* Edit Modal */}
-      <CaseEditModal
+      <CaseEditModal 
         open={editModalOpen}
         caseData={caseData}
         filterOptions={{}} // Will be fetched internally or handled
@@ -335,6 +472,13 @@ export default function CaseDetail() {
           setEditModalOpen(false);
           fetchCaseData();
         }}
+      />
+
+      <TaskModal
+        open={taskModalOpen}
+        defaultCaseId={Number(id)}
+        onCancel={() => setTaskModalOpen(false)}
+        onSubmit={handleCreateRelatedTask}
       />
     </div>
   );

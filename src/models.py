@@ -21,6 +21,9 @@ class LandCertificateExtraction(BaseModel):
     ten_chu_so_huu_cuoi_cung: ExtractedValue
     dia_chi_chu_so_huu_cuoi_cung: ExtractedValue
     so_cccd_chu_so_huu_cuoi_cung: ExtractedValue
+    so_giay_chung_nhan: ExtractedValue = Field(default_factory=lambda: ExtractedValue(value="", confidence=0.0, evidence=""))
+    so_vao_so_cap_giay_chung_nhan: ExtractedValue = Field(default_factory=lambda: ExtractedValue(value="", confidence=0.0, evidence=""))
+    ngay_cap_giay_chung_nhan: ExtractedValue = Field(default_factory=lambda: ExtractedValue(value="", confidence=0.0, evidence=""))
     notes: list[str] = Field(description="Canh bao ngan gon ve phan khong doc duoc hoac nghi ngo.")
     page_metadata: list[PageOrientationMetadata] = Field(
         default_factory=list,
@@ -41,6 +44,9 @@ def blank_extraction() -> LandCertificateExtraction:
         ten_chu_so_huu_cuoi_cung=empty.model_copy(),
         dia_chi_chu_so_huu_cuoi_cung=empty.model_copy(),
         so_cccd_chu_so_huu_cuoi_cung=empty.model_copy(),
+        so_giay_chung_nhan=empty.model_copy(),
+        so_vao_so_cap_giay_chung_nhan=empty.model_copy(),
+        ngay_cap_giay_chung_nhan=empty.model_copy(),
         notes=[],
         page_metadata=[],
     )

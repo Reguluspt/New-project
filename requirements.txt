@@ -8,6 +8,8 @@ openai==2.32.0
 openpyxl==3.1.5
 pillow==12.2.0
 playwright==1.56.0
+browser-use
+langchain-google-genai
 pydantic==2.13.3
 pymupdf==1.27.2.2
 python-docx==1.2.0
@@ -24,3 +26,4 @@ flask-cors==5.0.1
 flask-login==0.6.3
 gunicorn==23.0.0
 pyjwt==2.10.1
+unidecode

@@ -5,10 +5,10 @@ const { Title } = Typography;
 
 export default function StatusDonut({ statusCounts = {} }) {
   const colors = {
-    'Đang thực hiện': '#f59e0b',
-    'Hoàn thành': '#10b981',
-    'Đã phát hành': '#3b82f6',
-    'Hủy': '#ef4444',
+    'Đang thực hiện': '#d98a2b',
+    'Hoàn thành': '#047857',
+    'Đã phát hành': '#2aa0a4',
+    'Hủy': '#c2413d',
   };
 
   const total = Object.values(statusCounts).reduce((a, b) => a + b, 0);
@@ -35,7 +35,7 @@ export default function StatusDonut({ statusCounts = {} }) {
     : `conic-gradient(#e2e8f0 0% 100%)`;
 
   return (
-    <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3', height: '100%' }}>
+    <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5', height: '100%' }}>
       <Title level={4} style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>
         Trạng thái hồ sơ
       </Title>

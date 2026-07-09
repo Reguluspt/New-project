@@ -14,7 +14,7 @@ export default function ProtectedRoute({ children, adminOnly = false }) {
         justifyContent: 'center', 
         alignItems: 'center', 
         height: '100vh',
-        background: '#f5f7fb'
+        background: '#f4faf9'
       }}>
         <Spin size="large" tip="Đang xác thực tài khoản..." />
       </div>

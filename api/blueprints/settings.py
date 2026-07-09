@@ -129,12 +129,45 @@ def get_settings_endpoint():
         "db_size": db_size
     }
     
+    webmail = {
+        "url": os.getenv("WEBMAIL_URL", "https://owa.cengroup.vn/").strip(),
+        "username": os.getenv("MAIL_USERNAME", "").strip(),
+        "password": _mask_secret(os.getenv("MAIL_PASSWORD", "").strip()) if os.getenv("MAIL_PASSWORD") else "",
+        "use_ai": os.getenv("USE_WEBMAIL_AI", "false").strip().lower() in ("true", "1", "yes")
+    }
+
     return jsonify({
         "paths": paths,
         "oauth": oauth,
         "services": services,
-        "system": system
+        "system": system,
+        "webmail": webmail
     })
+
+
+@settings_bp.route("/settings/webmail", methods=["PUT"])
+@login_required
+def update_webmail_settings_endpoint():
+    data = request.get_json() or {}
+    try:
+        if "url" in data:
+            _write_api_env_value("WEBMAIL_URL", data["url"].strip())
+            os.environ["WEBMAIL_URL"] = data["url"].strip()
+        if "username" in data:
+            _write_api_env_value("MAIL_USERNAME", data["username"].strip())
+            os.environ["MAIL_USERNAME"] = data["username"].strip()
+        if "password" in data:
+            pwd = data["password"].strip()
+            if pwd and not pwd.startswith("••••"):
+                _write_api_env_value("MAIL_PASSWORD", pwd)
+                os.environ["MAIL_PASSWORD"] = pwd
+        if "use_ai" in data:
+            val = "true" if data["use_ai"] else "false"
+            _write_api_env_value("USE_WEBMAIL_AI", val)
+            os.environ["USE_WEBMAIL_AI"] = val
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @settings_bp.route("/settings/ai-config", methods=["GET"])

@@ -12,9 +12,33 @@ import json
 from src.sqlite_store import create_case, update_case
 from src.case_files import case_folder
 from src.app_config import CASE_FILES_DIR
+from src.form_options_store import add_custom_form_option, merge_custom_form_options
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 entry_bp = Blueprint("entry", __name__)
+
+
+def create_pdf_from_images(image_paths: list[Path], output_path: Path) -> int:
+    document = fitz.open()
+    try:
+        for image_path in image_paths:
+            image_doc = fitz.open(str(image_path))
+            try:
+                pdf_bytes = image_doc.convert_to_pdf()
+            finally:
+                image_doc.close()
+            image_pdf = fitz.open("pdf", pdf_bytes)
+            try:
+                document.insert_pdf(image_pdf)
+            finally:
+                image_pdf.close()
+        if len(document) == 0:
+            return 0
+        document.save(output_path)
+        return len(document)
+    finally:
+        document.close()
+
 
 def extract_selected_pages(original_pdf_path, pages_list):
     with fitz.open(original_pdf_path) as doc:
@@ -42,6 +66,7 @@ def upload_entry_files():
     upload_dir.mkdir(parents=True, exist_ok=True)
     
     response_files = []
+    uploaded_image_pages: list[Path] = []
     for f in files:
         if not f.filename:
             continue
@@ -74,7 +99,9 @@ def upload_entry_files():
                 img = Image.open(file_path)
                 if img.mode in ("RGBA", "P"):
                     img = img.convert("RGB")
-                img.save(file_dir / "page_1.jpg", format="JPEG", quality=90)
+                image_page_path = file_dir / "page_1.jpg"
+                img.save(image_page_path, format="JPEG", quality=90)
+                uploaded_image_pages.append(image_page_path)
             except Exception as e:
                 return jsonify({"error": f"Lỗi xử lý file ảnh: {str(e)}"}), 500
         else:
@@ -91,7 +118,32 @@ def upload_entry_files():
             "pages": page_count,
             "thumbnails": thumbnails
         })
-        
+
+    if len(uploaded_image_pages) > 1:
+        merged_file_id = uuid.uuid4().hex
+        merged_dir = upload_dir / merged_file_id
+        merged_dir.mkdir(parents=True, exist_ok=True)
+        merged_path = merged_dir / "GCN_anh_ghep.pdf"
+        try:
+            page_count = create_pdf_from_images(uploaded_image_pages, merged_path)
+            for i in range(1, page_count + 1):
+                with fitz.open(merged_path) as doc:
+                    page = doc[i - 1]
+                    pix = page.get_pixmap(matrix=fitz.Matrix(1.4, 1.4), alpha=False)
+                    pix.save(str(merged_dir / f"page_{i}.jpg"))
+            response_files.insert(0, {
+                "file_id": merged_file_id,
+                "name": "GCN_anh_ghep.pdf",
+                "pages": page_count,
+                "thumbnails": [
+                    f"/api/entry/uploads/{upload_id}/{merged_file_id}/page/{i}"
+                    for i in range(1, page_count + 1)
+                ],
+                "merged_from_images": True,
+            })
+        except Exception as e:
+            return jsonify({"error": f"Lỗi ghép ảnh GCN thành PDF: {str(e)}"}), 500
+
     return jsonify({
         "upload_id": upload_id,
         "files": response_files
@@ -142,7 +194,10 @@ def merge_extractions(extractions):
         "dia_chi_thua_dat",
         "ten_chu_so_huu_cuoi_cung",
         "dia_chi_chu_so_huu_cuoi_cung",
-        "so_cccd_chu_so_huu_cuoi_cung"
+        "so_cccd_chu_so_huu_cuoi_cung",
+        "so_giay_chung_nhan",
+        "so_vao_so_cap_giay_chung_nhan",
+        "ngay_cap_giay_chung_nhan",
     ]
     
     for field in fields:
@@ -171,6 +226,42 @@ def merge_extractions(extractions):
             
     return merged
 
+def append_certificate_info_notes(extraction: dict) -> dict:
+    if not isinstance(extraction, dict):
+        return extraction
+    labels = [
+        ("so_giay_chung_nhan", "Số giấy chứng nhận"),
+        ("so_vao_so_cap_giay_chung_nhan", "Số vào sổ cấp giấy chứng nhận"),
+        ("ngay_cap_giay_chung_nhan", "Ngày cấp giấy chứng nhận"),
+    ]
+    pending_notes = []
+    for field, label in labels:
+        raw_value = extraction.get(field) or {}
+        value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+        value = str(value or "").strip()
+        if not value:
+            continue
+        note = f"{label}: {value}"
+        pending_notes.append(note)
+    if not pending_notes:
+        return extraction
+    notes = extraction.setdefault("notes", [])
+    if not isinstance(notes, list):
+        notes = [str(notes)]
+        extraction["notes"] = notes
+    for note in pending_notes:
+        if note not in notes:
+            notes.append(note)
+    return extraction
+
+
+def find_original_upload_file(upload_dir: Path) -> Path | None:
+    for item in upload_dir.iterdir():
+        if item.is_file() and not item.name.startswith("page_"):
+            return item
+    return None
+
+
 @entry_bp.route("/entry/extract", methods=["POST"])
 @login_required
 def extract_ocr_fields():
@@ -192,6 +283,18 @@ def extract_ocr_fields():
     file_ids = []
     if extract_all:
         file_ids = [d.name for d in upload_dir_base.iterdir() if d.is_dir()]
+        merged_image_ids = set()
+        image_ids = set()
+        for fid in file_ids:
+            original = find_original_upload_file(upload_dir_base / fid)
+            if not original:
+                continue
+            if original.name == "GCN_anh_ghep.pdf":
+                merged_image_ids.add(fid)
+            elif original.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+                image_ids.add(fid)
+        if merged_image_ids:
+            file_ids = [fid for fid in file_ids if fid not in image_ids]
     else:
         file_ids = [file_id]
 
@@ -282,11 +385,14 @@ def extract_ocr_fields():
                 
     if extract_all:
         merged = merge_extractions(extractions)
+        append_certificate_info_notes(merged)
         return jsonify({
             "extraction": merged,
             "multi_extraction": {"assets": [merged]}
         })
     else:
+        if extractions:
+            append_certificate_info_notes(extractions[0])
         return jsonify({
             "extraction": extractions[0] if extractions else {},
             "multi_extraction": res_dicts[0] if res_dicts else {}
@@ -309,7 +415,20 @@ def entry_form_options():
                 
         from src.excel_writer import load_dropdown_options
         options = load_dropdown_options(excel_template_path)
-        return jsonify(options)
+        return jsonify(merge_custom_form_options(options))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@entry_bp.route("/entry/form-options/custom", methods=["POST"])
+@login_required
+def add_entry_form_option():
+    data = request.get_json() or {}
+    try:
+        values = add_custom_form_option(data.get("field"), data.get("value"))
+        return jsonify({"field": data.get("field"), "values": values})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

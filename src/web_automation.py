@@ -266,7 +266,6 @@ async def _click_yctd_navigation(page) -> bool:
 
 
 WEB_ENTRY_REQUIRED_FIELDS = [
-    ("contract_number", "Số hợp đồng", ("contract_number",)),
     ("customer_info", "Tên khách hàng", ("customer_info", "customer_name")),
     ("customer_address", "Địa chỉ khách hàng", ("customer_address",)),
     ("asset_description", "Tài sản thẩm định", ("asset_description", "dia_chi", "dia_chi_thua_dat", "city")),
@@ -994,9 +993,8 @@ async def fill_basic_info(page, data: Mapping[str, str]) -> None:
     logger.info("Điền Số điện thoại (Fixed): 0905226968")
 
     # Email (Fixed)
-    admin_email = os.getenv("ADMIN_EMAIL", "truongpham.sacc@gmail.com")
-    await page.locator("#input-email").fill(admin_email)
-    logger.info(f"Điền Email (Env): {admin_email}")
+    await page.locator("#input-email").fill("truongpham.sacc@gmail.com")
+    logger.info("Điền Email (Fixed): truongpham.sacc@gmail.com")
 
     # Địa chỉ (Dynamic)
     dia_chi = str(data.get("customer_address") or "").strip()
@@ -1319,11 +1317,10 @@ async def fill_credit_and_submit(page, data: Mapping[str, str]) -> str:
         logger.warning("Không thể điền Số điện thoại tín dụng: %s", exc)
 
     try:
-        admin_email = os.getenv("ADMIN_EMAIL", "truongpham.sacc@gmail.com")
-        await page.locator("#input-emailTinDung").fill(admin_email)
-        logger.info(f"Dien Email tin dung (Env): {admin_email}")
+        await page.locator("#input-emailTinDung").fill("truongpham.sacc@gmail.com")
+        logger.info("Điền Email tín dụng (Fixed): truongpham.sacc@gmail.com")
     except Exception as exc:
-        logger.warning("Khong the dien Email tin dung: %s", exc)
+        logger.warning("Không thể điền Email tín dụng: %s", exc)
 
     # ── 3. THÔNG TIN HỢP ĐỒNG ──────────────────────────────────────────
 
@@ -1876,8 +1873,9 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
                     except Exception as exc:
                         import traceback
                         tb_str = traceback.format_exc()
-                        err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id} (Tài sản {i + 1}/{N}): {type(exc).__name__}: {exc}\nChi tiết:\n{tb_str}"
-                        logger.error(err_msg)
+                        log_err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id} (Tài sản {i + 1}/{N}): {type(exc).__name__}: {exc}\nChi tiết:\n{tb_str}"
+                        logger.error(log_err_msg)
+                        err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id} (Tài sản {i + 1}/{N}):\n- Lý do: {exc}"
                         
                         error_artifacts = []
                         if page:
@@ -1964,8 +1962,9 @@ async def run_company_web_entry(record: Mapping[str, str], *, web_url: str) -> s
     except Exception as exc:
         import traceback
         tb_str = traceback.format_exc()
-        err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id}: {type(exc).__name__}: {exc}\nChi tiết:\n{tb_str}"
-        logger.error(err_msg)
+        log_err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id}: {type(exc).__name__}: {exc}\nChi tiết:\n{tb_str}"
+        logger.error(log_err_msg)
+        err_msg = f"❌ Lỗi khi nhập Web C.Ty cho hồ sơ #{record_id}:\n- Lý do: {exc}"
         
         # Chụp ảnh màn hình nếu page đang mở
         if page:

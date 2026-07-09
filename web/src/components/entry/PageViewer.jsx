@@ -85,7 +85,7 @@ export default function PageViewer({ uploadId, activeFile, currentPage, onPageCh
   if (!uploadId || !activeFile) {
     return (
       <Card 
-        style={{ height: '600px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: 12, border: '1px solid #dbe3f3' }}
+        style={{ height: '600px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: 12, border: '1px solid #d8e7e5' }}
         bodyStyle={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}
       >
         <FileTextOutlined style={{ fontSize: 48, color: '#bfbfbf' }} />
@@ -98,7 +98,7 @@ export default function PageViewer({ uploadId, activeFile, currentPage, onPageCh
 
   return (
     <Card
-      style={{ borderRadius: 12, border: '1px solid #dbe3f3', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: '600px', overflow: 'hidden' }}
+      style={{ borderRadius: 12, border: '1px solid #d8e7e5', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: '600px', overflow: 'hidden' }}
       bodyStyle={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}
     >
       {/* Top Toolbar */}
@@ -176,7 +176,7 @@ export default function PageViewer({ uploadId, activeFile, currentPage, onPageCh
                 style={{ 
                   width: 60, 
                   height: 80, 
-                  border: isActive ? '2px solid #0f6cbd' : '1px solid #d9d9d9',
+                  border: isActive ? '2px solid #007f7a' : '1px solid #d9d9d9',
                   borderRadius: 4,
                   overflow: 'hidden',
                   cursor: 'pointer',
@@ -195,7 +195,7 @@ export default function PageViewer({ uploadId, activeFile, currentPage, onPageCh
                   bottom: 0, 
                   left: 0, 
                   right: 0, 
-                  background: isActive ? '#0f6cbd' : 'rgba(0,0,0,0.5)', 
+                  background: isActive ? '#007f7a' : 'rgba(0,0,0,0.5)', 
                   color: '#ffffff', 
                   fontSize: 10, 
                   textAlign: 'center', 

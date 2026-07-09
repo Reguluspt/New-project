@@ -20,7 +20,7 @@ export default function RevenueChart({ data = [] }) {
   };
 
   return (
-    <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3', height: '100%' }}>
+    <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5', height: '100%' }}>
       <Title level={4} style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>
         Doanh thu vs Công nợ hàng tháng
       </Title>
@@ -44,19 +44,19 @@ export default function RevenueChart({ data = [] }) {
             <Tooltip 
               formatter={(value) => [formatCurrency(value), '']}
               labelFormatter={(label) => `Tháng ${label}`}
-              contentStyle={{ borderRadius: 8, border: '1px solid #dbe3f3', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+              contentStyle={{ borderRadius: 8, border: '1px solid #d8e7e5', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
             />
             <Legend verticalAlign="top" height={36} />
             <Bar 
               name="Công nợ" 
               dataKey="unpaid" 
-              fill="#0f6cbd" 
+              fill="#c2413d" 
               radius={[4, 4, 0, 0]} 
             />
             <Bar 
               name="Doanh thu" 
               dataKey="projected" 
-              fill="#c7d8ff" 
+              fill="#007f7a" 
               radius={[4, 4, 0, 0]} 
             />
           </BarChart>
@@ -65,4 +65,3 @@ export default function RevenueChart({ data = [] }) {
     </Card>
   );
 }
-

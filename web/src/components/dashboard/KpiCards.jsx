@@ -22,7 +22,7 @@ export default function KpiCards({ stats = {} }) {
 
   const cardStyle = {
     borderRadius: 12,
-    border: '1px solid #dbe3f3',
+    border: '1px solid #d8e7e5',
     padding: '20px 22px',
     background: '#ffffff',
     height: '100%',
@@ -35,9 +35,9 @@ export default function KpiCards({ stats = {} }) {
 
   const primaryCardStyle = {
     ...cardStyle,
-    background: '#0b579c',
+    background: '#006b67',
     color: '#ffffff',
-    borderColor: '#0b579c',
+    borderColor: '#006b67',
     overflow: 'hidden',
   };
 
@@ -90,7 +90,7 @@ export default function KpiCards({ stats = {} }) {
             {formatMillion(year_projected)}<span style={unitStyle}> Tr</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 'auto' }}>
-            <svg style={{ width: 14, height: 14, color: '#0f6cbd' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg style={{ width: 14, height: 14, color: '#007f7a' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M3 17l6-6 4 4 8-8M21 13V7h-6" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <span style={{ color: '#64748b' }}>Dữ liệu theo bộ lọc hiện tại</span>
@@ -109,7 +109,7 @@ export default function KpiCards({ stats = {} }) {
             <Progress 
               percent={paid_ratio} 
               size="small" 
-              strokeColor="#10b981" 
+              strokeColor="#047857" 
               trailColor="#f1f5f9"
               showInfo={false}
               style={{ margin: 0, height: 6 }}
@@ -129,7 +129,7 @@ export default function KpiCards({ stats = {} }) {
             {formatMillion(year_unpaid)}<span style={unitStyle}> Tr</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 'auto' }}>
-            <svg style={{ width: 14, height: 14, color: '#ef4444' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg style={{ width: 14, height: 14, color: '#c2413d' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <span style={{ color: '#64748b' }}>Không tính hồ sơ trạng thái Hủy</span>
@@ -154,7 +154,7 @@ export default function KpiCards({ stats = {} }) {
             <div 
               style={{ 
                 backgroundColor: '#ffffff', 
-                color: '#0b579c', 
+                color: '#006b67', 
                 fontWeight: 700, 
                 borderRadius: 12, 
                 fontSize: 11,

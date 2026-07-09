@@ -1,15 +1,20 @@
-export const theme = {
+﻿export const theme = {
   token: {
-    colorPrimary: '#0f6cbd',
-    colorPrimaryHover: '#0057d8',
+    colorPrimary: '#007f7a',
+    colorPrimaryHover: '#006b67',
+    colorPrimaryActive: '#005854',
+    colorInfo: '#007f7a',
+    colorLink: '#007f7a',
+    colorLinkHover: '#006b67',
     colorBgContainer: '#ffffff',
-    colorBgLayout: '#f5f7fb',
+    colorBgLayout: '#f4faf9',
     colorText: '#0f172a',
     colorTextSecondary: '#64748b',
+    colorBorder: '#d8e7e5',
     borderRadius: 12,
     fontFamily: '"Segoe UI", system-ui, -apple-system, sans-serif',
-    colorError: '#be123c',
+    colorError: '#c2413d',
     colorSuccess: '#047857',
-    colorWarning: '#c2410c',
+    colorWarning: '#d98a2b',
   },
 };

@@ -1,10 +1,8 @@
 from flask import Flask
 
+
 def register_blueprints(app: Flask):
-    """
-    Register all blueprints for the application.
-    For Phase 0, we only register the health check blueprint.
-    """
+    """Register all API blueprints."""
     from api.blueprints.health import health_bp
     from api.blueprints.auth import auth_bp
     from api.blueprints.dashboard import dashboard_bp
@@ -16,8 +14,8 @@ def register_blueprints(app: Flask):
     from api.blueprints.delivery import delivery_bp
     from api.blueprints.templates_bp import templates_bp
     from api.blueprints.settings import settings_bp
-    
-    # Register blueprints with /api prefix
+    from api.blueprints.tasks import tasks_bp
+
     app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
@@ -29,3 +27,4 @@ def register_blueprints(app: Flask):
     app.register_blueprint(delivery_bp, url_prefix="/api")
     app.register_blueprint(templates_bp, url_prefix="/api")
     app.register_blueprint(settings_bp, url_prefix="/api")
+    app.register_blueprint(tasks_bp, url_prefix="/api/tasks")

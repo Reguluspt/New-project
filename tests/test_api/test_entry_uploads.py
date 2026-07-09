@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 
 import fitz
+from PIL import Image
 
 from api.blueprints import entry as entry_module
 
@@ -14,6 +15,14 @@ def _pdf_bytes(text: str) -> bytes:
     content = document.tobytes()
     document.close()
     return content
+
+
+def _image_bytes(color: tuple[int, int, int]) -> bytes:
+    image = Image.new("RGB", (80, 80), color)
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG")
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 def _upload_two_pdfs(auth_client, monkeypatch, tmp_path):
@@ -30,6 +39,29 @@ def _upload_two_pdfs(auth_client, monkeypatch, tmp_path):
     )
     assert response.status_code == 200
     return response.get_json()
+
+
+def test_entry_upload_merges_multiple_images_into_one_pdf(auth_client, monkeypatch, tmp_path):
+    monkeypatch.setattr(entry_module, "PROJECT_ROOT", tmp_path)
+
+    response = auth_client.post(
+        "/api/entry/upload",
+        data={
+            "files": [
+                (io.BytesIO(_image_bytes((255, 0, 0))), "front.jpg"),
+                (io.BytesIO(_image_bytes((0, 0, 255))), "back.jpg"),
+            ],
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert len(payload["files"]) == 3
+    merged = payload["files"][0]
+    assert merged["name"] == "GCN_anh_ghep.pdf"
+    assert merged["pages"] == 2
+    assert merged["merged_from_images"] is True
 
 
 def test_entry_upload_keeps_each_pdf_in_a_separate_directory(auth_client, monkeypatch, tmp_path):
@@ -81,6 +113,57 @@ def test_entry_extract_uses_the_selected_pdf(auth_client, monkeypatch, tmp_path)
     assert response.get_json()["extraction"] == {"marker": "SECOND PDF"}
 
 
+def test_entry_extract_adds_certificate_info_to_notes(auth_client, monkeypatch, tmp_path):
+    payload = _upload_two_pdfs(auth_client, monkeypatch, tmp_path)
+    selected = payload["files"][0]
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    def field(value):
+        return {"value": value, "confidence": 0.95, "evidence": ""}
+
+    def fake_extract(path, *, api_key, model):
+        class Extraction:
+            def model_dump(self):
+                return {
+                    "assets": [{
+                        "so_thua_dat": field("11"),
+                        "so_to_ban_do": field("22"),
+                        "dia_chi_thua_dat": field("Dia chi"),
+                        "ten_chu_so_huu_cuoi_cung": field("Chu so huu"),
+                        "dia_chi_chu_so_huu_cuoi_cung": field("Dia chi chu"),
+                        "so_cccd_chu_so_huu_cuoi_cung": field("012345678901"),
+                        "so_giay_chung_nhan": field("CN123456"),
+                        "so_vao_so_cap_giay_chung_nhan": field("CS789"),
+                        "ngay_cap_giay_chung_nhan": field("01/02/2026"),
+                        "notes": [],
+                    }]
+                }
+
+        return Extraction()
+
+    monkeypatch.setattr(
+        "src.gemini_extractor.extract_land_certificate_with_gemini",
+        fake_extract,
+    )
+
+    response = auth_client.post(
+        "/api/entry/extract",
+        json={
+            "upload_id": payload["upload_id"],
+            "file_id": selected["file_id"],
+            "pages": [1],
+            "provider": "Gemini",
+            "model": "gemini-2.5-flash",
+        },
+    )
+
+    assert response.status_code == 200
+    notes = response.get_json()["extraction"]["notes"]
+    assert "Số giấy chứng nhận: CN123456" in notes
+    assert "Số vào sổ cấp giấy chứng nhận: CS789" in notes
+    assert "Ngày cấp giấy chứng nhận: 01/02/2026" in notes
+
+
 def test_entry_extract_all_files(auth_client, monkeypatch, tmp_path):
     payload = _upload_two_pdfs(auth_client, monkeypatch, tmp_path)
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
@@ -128,4 +211,3 @@ def test_entry_extract_all_files(auth_client, monkeypatch, tmp_path):
     
     assert "so_thua_dat" in res_json["extraction"]
     assert res_json["extraction"]["so_thua_dat"]["value"] in ("thua-FIRST PDF", "thua-SECOND PDF")
-

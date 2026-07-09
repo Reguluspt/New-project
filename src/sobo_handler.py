@@ -14,6 +14,7 @@ from .email_utils import send_sobo_email_with_result
 from .models import LandCertificateExtraction
 
 logger = logging.getLogger(__name__)
+SOBO_RETRY_CALLBACK_PREFIX = "sobo_retry"
 
 
 def _subject_with_sobo_record_id(subject: str, record_id: int) -> str:
@@ -26,6 +27,72 @@ def _subject_with_sobo_record_id(subject: str, record_id: int) -> str:
         flags=re.IGNORECASE,
     )
     return updated if updated != text else f"[SƠ BỘ #{record_id}] - {text}"
+
+
+def _sobo_retry_markup(record_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔁 Thử gửi lại", callback_data=f"{SOBO_RETRY_CALLBACK_PREFIX}:{record_id}")]
+    ])
+
+def _safe_sobo_attachment_part(value: object) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"[\\/:*?\"<>|]+", "-", text)
+    text = re.sub(r"\s+", " ", text).strip(" .-_")
+    return text
+
+
+def _sobo_attachment_base_name(so_to: object, so_thua: object) -> str:
+    safe_so_to = _safe_sobo_attachment_part(so_to)
+    safe_so_thua = _safe_sobo_attachment_part(so_thua)
+    if safe_so_to and safe_so_thua:
+        return f"To {safe_so_to} - Thua {safe_so_thua}"
+    if safe_so_to:
+        return f"To {safe_so_to}"
+    if safe_so_thua:
+        return f"Thua {safe_so_thua}"
+    return ""
+
+
+def _rename_sobo_attachment_by_parcel(file_path: str, so_to: object, so_thua: object) -> tuple[str, str]:
+    base_name = _sobo_attachment_base_name(so_to, so_thua)
+    if not base_name:
+        return file_path, os.path.basename(file_path)
+    folder = os.path.dirname(file_path)
+    _, ext = os.path.splitext(file_path)
+    ext = ext or ".bin"
+    target_path = os.path.join(folder, f"{base_name}{ext}")
+    if os.path.abspath(target_path) == os.path.abspath(file_path):
+        return file_path, os.path.basename(file_path)
+    counter = 2
+    while os.path.exists(target_path):
+        target_path = os.path.join(folder, f"{base_name} ({counter}){ext}")
+        counter += 1
+    try:
+        os.replace(file_path, target_path)
+        return target_path, os.path.basename(target_path)
+    except OSError:
+        return file_path, os.path.basename(file_path)
+
+
+def _ocr_value(asset: object, field_name: str) -> str:
+    field = getattr(asset, field_name, None)
+    return str(getattr(field, "value", "") or "").strip()
+
+
+def _store_sobo_ocr_details(sobo: dict, asset: object) -> None:
+    mappings = {
+        "owner_name": "ten_chu_so_huu_cuoi_cung",
+        "owner_address": "dia_chi_chu_so_huu_cuoi_cung",
+        "owner_citizen_id": "so_cccd_chu_so_huu_cuoi_cung",
+        "so_giay_chung_nhan": "so_giay_chung_nhan",
+        "so_vao_so_cap_giay_chung_nhan": "so_vao_so_cap_giay_chung_nhan",
+        "ngay_cap_giay_chung_nhan": "ngay_cap_giay_chung_nhan",
+    }
+    for target, source in mappings.items():
+        value = _ocr_value(asset, source)
+        if value and not str(sobo.get(target) or "").strip():
+            sobo[target] = value
+
 
 # Các trạng thái
 (
@@ -46,7 +113,10 @@ def _subject_with_sobo_record_id(subject: str, record_id: int) -> str:
     SOBO_MANUAL_TO,
     SOBO_MANUAL_DIA_CHI,
     SOBO_MANUAL_MULTI_CHOICE,
-) = range(20, 37)
+    SOBO_EDIT_ASSET_TYPE,
+    SOBO_ADD_DOC,
+    SOBO_ADD_DOC_CHOICE,
+) = range(20, 40)
 
 # Danh sách Mapping
 SOBO_MAPPING = {
@@ -150,7 +220,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
     safe_so_to = html.escape(so_to)
     safe_dia_chi = html.escape(dia_chi)
     safe_href = html.escape(href, quote=True)
-    safe_asset_type = html.escape(SOBO_ASSET_TYPE)
+    safe_asset_type = html.escape(sobo.get('custom_asset_type', SOBO_ASSET_TYPE))
     safe_note = html.escape(note_display).replace("\n", "<br>")
 
     if sobo.get("asset_sub_type") == "multi":
@@ -170,7 +240,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
             "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
             f"- Nguồn khách hàng: {source}\n"
-            f"- Loại tài sản: {SOBO_ASSET_TYPE}\n\n"
+            f"- Loại tài sản: {sobo.get('custom_asset_type', SOBO_ASSET_TYPE)}\n\n"
             f"DANH SÁCH CHI TIẾT TÀI SẢN:\n"
             f"{assets_text}"
             f"- Ghi chú: {note_display}\n\n"
@@ -223,7 +293,7 @@ def build_sobo_email_content(sobo: dict) -> tuple[str, str]:
             "Em gửi thông tin tài sản cần hỗ trợ tham khảo giá trị sơ bộ như sau:\n\n"
             "THÔNG TIN TÀI SẢN THẨM ĐỊNH\n"
             f"- Nguồn khách hàng: {source}\n"
-            f"- Loại tài sản: {SOBO_ASSET_TYPE}\n"
+            f"- Loại tài sản: {sobo.get('custom_asset_type', SOBO_ASSET_TYPE)}\n"
             f"- Số thửa đất: {so_thua}\n"
             f"- Số tờ bản đồ: {so_to}\n"
             f"- Địa chỉ tài sản: {dia_chi}\n"
@@ -685,6 +755,7 @@ async def _process_sobo_extracted_file_multi(update: Update, context: ContextTyp
         start_idx = len(assets_list) + 1
         new_assets = []
         for asset in extracted_assets:
+            _store_sobo_ocr_details(sobo, asset)
             current_asset = {
                 'so_thua': asset.so_thua_dat.value.strip() if hasattr(asset, "so_thua_dat") and asset.so_thua_dat else "",
                 'so_to': asset.so_to_ban_do.value.strip() if hasattr(asset, "so_to_ban_do") and asset.so_to_ban_do else "",
@@ -693,8 +764,10 @@ async def _process_sobo_extracted_file_multi(update: Update, context: ContextTyp
             assets_list.append(current_asset)
             new_assets.append(current_asset)
         
+        so_to_for_name = new_assets[0].get("so_to") if new_assets else ""
+        so_thua_for_name = new_assets[0].get("so_thua") if new_assets else ""
+        file_path, filename = _rename_sobo_attachment_by_parcel(file_path, so_to_for_name, so_thua_for_name)
         sobo.setdefault('file_paths', []).append(file_path)
-        filename = os.path.basename(file_path)
         sobo.setdefault('attachment_names', []).append(filename)
 
         if len(new_assets) == 1:
@@ -1075,6 +1148,7 @@ async def _process_sobo_extracted_file(update: Update, context: ContextTypes.DEF
                 dia_chi = asset.dia_chi_thua_dat.value.strip()
         else:
             asset = extraction
+            _store_sobo_ocr_details(context.user_data['sobo'], asset)
             so_thua = asset.so_thua_dat.value.strip()
             so_to = asset.so_to_ban_do.value.strip()
             dia_chi = asset.dia_chi_thua_dat.value.strip()
@@ -1082,7 +1156,10 @@ async def _process_sobo_extracted_file(update: Update, context: ContextTypes.DEF
         context.user_data['sobo']['so_thua'] = so_thua
         context.user_data['sobo']['so_to'] = so_to
         context.user_data['sobo']['dia_chi'] = dia_chi
+        file_path, filename = _rename_sobo_attachment_by_parcel(file_path, so_to, so_thua)
         context.user_data['sobo']['file_path'] = file_path
+        context.user_data['sobo']['file_paths'] = [file_path]
+        context.user_data['sobo']['attachment_names'] = [filename]
         
         suggested_email = find_department_email(dia_chi)
         if suggested_email:
@@ -1423,7 +1500,8 @@ async def sobo_receive_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sobo['link'] = " | ".join(links) if links else ""
             attachment_preview = f"{len(sobo.get('file_paths', []))} file GCN"
         else:
-            attachment_preview = "1 file GCN"
+            file_paths = sobo.get('file_paths', [sobo.get('file_path')] if sobo.get('file_path') else [])
+            attachment_preview = f"{len(file_paths)} file đính kèm"
 
         subject = f"[SƠ BỘ] - {sobo.get('source')} - Thửa đất số {sobo.get('so_thua')}, tờ bản đồ số {sobo.get('so_to')}; tại địa chỉ {sobo.get('dia_chi')}"
         body, body_html = build_sobo_email_content(sobo)
@@ -1434,6 +1512,8 @@ async def sobo_receive_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_markup = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Gửi Mail ngay", callback_data="sobo_send")],
+        [InlineKeyboardButton("📝 Sửa loại tài sản", callback_data="sobo_edit_asset")],
+        [InlineKeyboardButton("📎 Tải thêm tài liệu", callback_data="sobo_add_doc")],
         [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
     ])
 
@@ -1453,6 +1533,19 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
     
+    if query.data == "sobo_edit_asset":
+        await query.edit_message_text(
+            "📝 Vui lòng nhập chi tiết Loại tài sản mới (hoặc gửi 'Không có' để bỏ qua):"
+        )
+        return SOBO_EDIT_ASSET_TYPE
+
+    if query.data == "sobo_add_doc":
+        await query.edit_message_text(
+            "📎 Vui lòng gửi ảnh hoặc file tài liệu (PDF) bổ sung:\n"
+            "Các ảnh gửi cùng lúc sẽ được gom thành 1 file PDF."
+        )
+        return SOBO_ADD_DOC
+
     if query.data == "sobo_send":
         await query.edit_message_text("📨 Đang tiến hành gửi Mail...")
         sobo = context.user_data.get('sobo', {})
@@ -1460,10 +1553,7 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         subject = sobo.get('subject')
         body = sobo.get('body')
         body_html = sobo.get('body_html')
-        if sobo.get('asset_sub_type') == "multi" or sobo.get('asset_type') == "machinery":
-            file_path = sobo.get('file_paths')
-        else:
-            file_path = sobo.get('file_path')
+        file_path = sobo.get('file_paths', sobo.get('file_path'))
         
         # Bắt buộc phải có email gửi
         if email == "Chưa xác định" or not email:
@@ -1492,6 +1582,12 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
             "note": sobo.get("note"),
             "equipment_name": sobo.get("equipment_name"),
             "attachment_paths": "\n".join(file_path) if isinstance(file_path, list) else (file_path or ""),
+            "owner_name": sobo.get("owner_name"),
+            "owner_address": sobo.get("owner_address"),
+            "owner_citizen_id": sobo.get("owner_citizen_id"),
+            "so_giay_chung_nhan": sobo.get("so_giay_chung_nhan"),
+            "so_vao_so_cap_giay_chung_nhan": sobo.get("so_vao_so_cap_giay_chung_nhan"),
+            "ngay_cap_giay_chung_nhan": sobo.get("ngay_cap_giay_chung_nhan"),
         }
         sobo_record_id = await create_sobo_record(db_path, record_payload)
         subject_with_id = _subject_with_sobo_record_id(subject, sobo_record_id)
@@ -1509,8 +1605,11 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
             raise
 
         if not result.success:
-            await delete_sobo_record(db_path, sobo_record_id)
-            await query.edit_message_text(f"Lỗi: {result.user_message}")
+            await query.edit_message_text(
+                f"Lỗi: {result.user_message}\n\n"
+                f"Đã giữ hồ sơ sơ bộ #{sobo_record_id} ở trạng thái chờ để thử gửi lại.",
+                reply_markup=_sobo_retry_markup(sobo_record_id),
+            )
             return ConversationHandler.END
 
         await update_sobo_record_outbound(
@@ -1526,6 +1625,249 @@ async def sobo_handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     context.user_data.pop('sobo', None)
     return ConversationHandler.END
+
+async def sobo_retry_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        record_id = int((query.data or "").split(":", 1)[1])
+    except (IndexError, ValueError):
+        await query.edit_message_text("❌ Không xác định được hồ sơ sơ bộ cần gửi lại.")
+        return
+
+    from .database_manager import (
+        get_sobo_record_by_id,
+        resolve_records_db_path,
+        update_sobo_record_outbound,
+    )
+
+    db_path = resolve_records_db_path()
+    record = await get_sobo_record_by_id(db_path, record_id)
+    if not record:
+        await query.edit_message_text(f"❌ Không tìm thấy hồ sơ sơ bộ #{record_id}.")
+        return
+
+    if str(record.get("outbound_message_id") or "").strip():
+        await query.edit_message_text(f"✅ Hồ sơ sơ bộ #{record_id} đã có email gửi đi, không cần gửi lại.")
+        return
+
+    if str(record.get("status") or "").upper() != "PENDING":
+        await query.edit_message_text(f"ℹ️ Hồ sơ sơ bộ #{record_id} không còn ở trạng thái chờ gửi.")
+        return
+
+    email = str(record.get("email_recipient") or "").strip()
+    if not email:
+        await query.edit_message_text(f"❌ Hồ sơ sơ bộ #{record_id} chưa có email người nhận.")
+        return
+
+    await query.edit_message_text(f"📨 Đang thử gửi lại hồ sơ sơ bộ #{record_id}...")
+
+    sobo = dict(record)
+    sobo["email"] = email
+    attachment_paths = [
+        path.strip()
+        for path in str(record.get("attachment_paths") or "").splitlines()
+        if path.strip()
+    ]
+    if attachment_paths:
+        sobo["file_paths"] = attachment_paths
+    subject, body, body_html = build_sobo_email_content(sobo)
+    subject = _subject_with_sobo_record_id(record.get("outbound_subject") or subject, record_id)
+
+    result = await send_sobo_email_with_result(
+        email,
+        subject,
+        body,
+        html_body=body_html,
+        attachment_path=attachment_paths,
+        cc_emails=["bksdn@cenvalue.vn", "truongpnt@cenvalue.vn"],
+    )
+    if not result.success:
+        await query.edit_message_text(
+            f"Lỗi: {result.user_message}\n\n"
+            f"Đã giữ hồ sơ sơ bộ #{record_id} ở trạng thái chờ để thử gửi lại.",
+            reply_markup=_sobo_retry_markup(record_id),
+        )
+        return
+
+    await update_sobo_record_outbound(
+        db_path,
+        record_id,
+        outbound_subject=subject,
+        outbound_message_id=str(result.message_id or ""),
+    )
+    await query.edit_message_text(f"✅ Đã gửi lại Email Yêu cầu Sơ bộ thành công! Mã hồ sơ: #{record_id}")
+
+
+async def sobo_receive_edit_asset_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    asset_type = update.message.text.strip()
+    sobo = context.user_data.setdefault('sobo', {})
+    if asset_type.lower() != 'không có' and asset_type:
+        sobo['custom_asset_type'] = asset_type
+        
+    if sobo.get('asset_type') == "machinery":
+        equipment_name = sobo.get('equipment_name', '')
+        subject = f"[SƠ BỘ] - Máy móc thiết bị - {equipment_name}"
+        body, body_html = build_machinery_email_content(sobo)
+        attachment_preview = ", ".join(sobo.get('attachment_names', [])) or "Chưa có file hồ sơ"
+    else:
+        if sobo.get("asset_sub_type") == "multi":
+            attachment_preview = f"{len(sobo.get('file_paths', []))} file GCN"
+        else:
+            file_paths = sobo.get('file_paths', [sobo.get('file_path')] if sobo.get('file_path') else [])
+            attachment_preview = f"{len(file_paths)} file đính kèm"
+        subject = f"[SƠ BỘ] - {sobo.get('source')} - Thửa đất số {sobo.get('so_thua')}, tờ bản đồ số {sobo.get('so_to')}; tại địa chỉ {sobo.get('dia_chi')}"
+        body, body_html = build_sobo_email_content(sobo)
+        
+    sobo['subject'] = subject
+    sobo['body'] = body
+    sobo['body_html'] = body_html
+
+    reply_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Gửi Mail ngay", callback_data="sobo_send")],
+        [InlineKeyboardButton("📝 Sửa loại tài sản", callback_data="sobo_edit_asset")],
+        [InlineKeyboardButton("📎 Tải thêm tài liệu", callback_data="sobo_add_doc")],
+        [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+    ])
+    email = sobo.get('email')
+    preview_msg = (
+        "📧 <b>BẢN XEM TRƯỚC EMAIL:</b>\n\n"
+        f"<b>Người nhận:</b> {html.escape(str(email))}\n"
+        f"<b>File đính kèm:</b> {html.escape(str(attachment_preview))}\n"
+        f"<b>Tiêu đề:</b> <code>{html.escape(subject)}</code>\n\n"
+        f"<b>Nội dung:</b>\n{html.escape(body)}\n\n"
+        "Bạn có muốn gửi mail này không?"
+    )
+    await update.message.reply_text(preview_msg, reply_markup=reply_markup, parse_mode="HTML")
+    return SOBO_CONFIRM
+
+async def sobo_receive_extra_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    if message.document:
+        file_ref = message.document
+        filename = message.document.file_name or "tai_lieu_them"
+        extension = os.path.splitext(filename)[1].lower()
+        if not extension or len(extension) > 10 or not extension[1:].isalnum():
+            extension = ".bin"
+    elif message.photo:
+        media_group_id = message.media_group_id
+        if media_group_id:
+            groups = context.bot_data.setdefault("sobo_extra_media_groups", {})
+            if media_group_id not in groups:
+                groups[media_group_id] = []
+                import asyncio
+                asyncio.create_task(_wait_and_process_extra_media_group(media_group_id, context))
+            groups[media_group_id].append(update)
+            return SOBO_ADD_DOC
+
+        file_ref = message.photo[-1]
+        filename = "hinh_anh_them.jpg"
+        extension = ".jpg"
+    else:
+        await message.reply_text("❌ Vui lòng tải lên một file tài liệu hoặc hình ảnh.")
+        return SOBO_ADD_DOC
+
+    file = await context.bot.get_file(file_ref.file_id)
+    upload_dir = _sobo_upload_dir()
+    os.makedirs(upload_dir, exist_ok=True)
+    from uuid import uuid4
+    file_path = os.path.join(upload_dir, f"sobo_extra_{uuid4().hex}{extension}")
+    await file.download_to_drive(file_path)
+
+    sobo = context.user_data.setdefault('sobo', {})
+    file_path, filename = _rename_sobo_attachment_by_parcel(file_path, sobo.get('so_to'), sobo.get('so_thua'))
+    if 'file_path' in sobo and 'file_paths' not in sobo:
+        sobo['file_paths'] = [sobo['file_path']]
+    sobo.setdefault('file_paths', []).append(file_path)
+    sobo.setdefault('attachment_names', []).append(filename)
+    
+    await message.reply_text(
+        f"✅ Đã tải lên tài liệu bổ sung thành công.\n\n"
+        "Bạn muốn tải thêm tài liệu khác hay Gửi mail ngay?",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📎 Tải thêm tài liệu khác", callback_data="sobo_add_doc")],
+            [InlineKeyboardButton("✅ Gửi Mail ngay", callback_data="sobo_send")],
+            [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+        ]),
+        parse_mode="HTML",
+    )
+    return SOBO_ADD_DOC_CHOICE
+
+async def _wait_and_process_extra_media_group(media_group_id: str, context: ContextTypes.DEFAULT_TYPE):
+    import asyncio
+    await asyncio.sleep(1.5)
+    updates = context.bot_data.get("sobo_extra_media_groups", {}).pop(media_group_id, [])
+    if updates:
+        await _handle_extra_media_group_photos(updates, context)
+
+async def _handle_extra_media_group_photos(updates: list[Update], context: ContextTypes.DEFAULT_TYPE):
+    first_update = updates[0]
+    await first_update.message.reply_text(
+        f"Đã nhận album gồm {len(updates)} ảnh. Đang ghép thành file PDF đính kèm thêm..."
+    )
+
+    try:
+        updates.sort(key=lambda item: item.message.message_id)
+        image_paths = []
+        upload_dir = _sobo_upload_dir()
+        os.makedirs(upload_dir, exist_ok=True)
+        from uuid import uuid4
+        import fitz
+
+        for index, item in enumerate(updates):
+            photo = item.message.photo[-1]
+            file = await context.bot.get_file(photo.file_id)
+            image_path = os.path.join(upload_dir, f"sobo_extra_part_{index}_{photo.file_unique_id}.jpg")
+            await file.download_to_drive(image_path)
+            image_paths.append(image_path)
+
+        merged_pdf_path = os.path.join(upload_dir, f"sobo_extra_merged_{uuid4().hex[:8]}.pdf")
+        document = fitz.open()
+        for image_path in image_paths:
+            try:
+                image_doc = fitz.open(image_path)
+                pdf_bytes = image_doc.convert_to_pdf()
+                image_doc.close()
+                with fitz.open("pdf", pdf_bytes) as image_pdf:
+                    document.insert_pdf(image_pdf)
+            except Exception:
+                pass
+        document.save(merged_pdf_path)
+        document.close()
+
+        for image_path in image_paths:
+            try:
+                os.remove(image_path)
+            except OSError:
+                pass
+
+        sobo = context.user_data.setdefault('sobo', {})
+        merged_pdf_path, attachment_name = _rename_sobo_attachment_by_parcel(
+            merged_pdf_path,
+            sobo.get('so_to'),
+            sobo.get('so_thua'),
+        )
+        if 'file_path' in sobo and 'file_paths' not in sobo:
+            sobo['file_paths'] = [sobo['file_path']]
+
+        sobo.setdefault('file_paths', []).append(merged_pdf_path)
+        sobo.setdefault('attachment_names', []).append(attachment_name)
+        
+        await first_update.message.reply_text(
+            f"✅ Đã ghép album thành PDF tài liệu bổ sung.\n\n"
+            "Bạn muốn tải thêm tài liệu khác hay Gửi mail ngay?",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📎 Tải thêm tài liệu khác", callback_data="sobo_add_doc")],
+                [InlineKeyboardButton("✅ Gửi Mail ngay", callback_data="sobo_send")],
+                [InlineKeyboardButton("❌ Hủy bỏ", callback_data="sobo_cancel")],
+            ]),
+            parse_mode="HTML",
+        )
+        return SOBO_ADD_DOC_CHOICE
+    except Exception as exc:
+        await first_update.message.reply_text(f"Xử lý album ảnh thất bại: {exc}")
+        return SOBO_ADD_DOC
 
 async def sobo_cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🚫 Đã hủy thao tác Sơ bộ.", reply_markup=ReplyKeyboardRemove())
@@ -1591,6 +1933,14 @@ def get_sobo_conversation_handler() -> ConversationHandler:
             SOBO_MANUAL_MULTI_CHOICE: [
                 CallbackQueryHandler(sobo_manual_multi_choice, pattern="^sobo_manual_"),
                 CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+            ],
+            SOBO_EDIT_ASSET_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sobo_receive_edit_asset_type)],
+            SOBO_ADD_DOC: [
+                MessageHandler(filters.Document.ALL | filters.PHOTO, sobo_receive_extra_doc),
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_cancel$"),
+            ],
+            SOBO_ADD_DOC_CHOICE: [
+                CallbackQueryHandler(sobo_handle_confirm, pattern="^sobo_"),
             ],
         },
         fallbacks=[CommandHandler('cancel', sobo_cancel_cmd)],

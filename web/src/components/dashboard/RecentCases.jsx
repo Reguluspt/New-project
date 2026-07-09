@@ -42,7 +42,7 @@ export default function RecentCases({ data = [] }) {
       dataIndex: 'contract_number',
       key: 'contract_number',
       fontWeight: 'bold',
-      render: (text) => <strong style={{ color: '#0f6cbd' }}>{text || 'N/A'}</strong>,
+      render: (text) => <strong style={{ color: '#007f7a' }}>{text || 'N/A'}</strong>,
     },
     {
       title: 'Khách hàng',
@@ -62,7 +62,7 @@ export default function RecentCases({ data = [] }) {
       dataIndex: 'valuation_fee',
       key: 'valuation_fee',
       align: 'right',
-      render: (val) => val ? `${val.toLocaleString('vi-VN')} ₫` : '0 ₫',
+      render: (val) => val ? `${val.toLocaleString('vi-VN')} ?` : '0 ?',
     },
     {
       title: 'Trạng thái',
@@ -83,7 +83,7 @@ export default function RecentCases({ data = [] }) {
   ];
 
   return (
-    <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3' }}>
+    <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5' }}>
       <Title level={4} style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
         Hồ sơ thực hiện gần đây
       </Title>

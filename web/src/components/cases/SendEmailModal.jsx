@@ -48,7 +48,7 @@ export default function SendEmailModal({ open, onClose, caseId, documents, initi
       open={open}
       title={
         <Space>
-          <MailOutlined style={{ color: '#0f6cbd' }} />
+          <MailOutlined style={{ color: '#007f7a' }} />
           <span>Gửi email kết quả thẩm định</span>
         </Space>
       }
@@ -123,7 +123,7 @@ export default function SendEmailModal({ open, onClose, caseId, documents, initi
                 {documents.map((doc) => (
                   <Checkbox key={doc.name} value={doc.name} style={{ display: 'flex', alignItems: 'center' }}>
                     <Space size="small">
-                      <FileOutlined style={{ color: doc.type === 'pdf' ? '#ef4444' : '#0f6cbd' }} />
+                      <FileOutlined style={{ color: doc.type === 'pdf' ? '#c2413d' : '#007f7a' }} />
                       <span>{doc.name}</span>
                       <span style={{ color: '#8c8c8c', fontSize: 12 }}>
                         ({(doc.size / 1024).toFixed(1)} KB)

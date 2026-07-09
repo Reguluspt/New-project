@@ -4,6 +4,8 @@ import re
 import shutil
 from pathlib import Path
 
+from src.contracts import short_contract_number
+
 
 INVALID_PATH_CHARS = r'<>:"/\|?*'
 
@@ -36,6 +38,27 @@ def case_folder(
 ) -> Path:
     contract = sanitize_folder_name(contract_number, fallback=f"HS-{case_id:05d}")
     customer = sanitize_folder_name(clean_customer_folder_name(customer_name), fallback="")
+    folder_name = f"{contract} - {customer}" if customer else contract
+    return Path(base_dir) / folder_name
+
+
+def word_export_folder(
+    base_dir: str | Path,
+    *,
+    case_id: int,
+    contract_number: str = "",
+    customer_name: str = "",
+    customer_type: str = "",
+    organization_abbreviation: str = "",
+) -> Path:
+    short_contract = short_contract_number(contract_number, fallback=f"HS-{case_id:05d}")
+    contract = sanitize_folder_name(short_contract, fallback=f"HS-{case_id:05d}")
+    display_customer = (
+        organization_abbreviation
+        if str(customer_type or "").strip() == "organization" and organization_abbreviation
+        else customer_name
+    )
+    customer = sanitize_folder_name(clean_customer_folder_name(display_customer), fallback="")
     folder_name = f"{contract} - {customer}" if customer else contract
     return Path(base_dir) / folder_name
 

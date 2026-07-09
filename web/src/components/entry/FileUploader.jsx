@@ -42,7 +42,7 @@ export default function FileUploader({ onUploadSuccess }) {
 
   return (
     <Card 
-      style={{ borderRadius: 10, border: '1px dashed #dbe3f3', padding: 4 }}
+      style={{ borderRadius: 10, border: '1px dashed #d8e7e5', padding: 4 }}
       bodyStyle={{ padding: 12 }}
     >
       <Dragger
@@ -61,7 +61,7 @@ export default function FileUploader({ onUploadSuccess }) {
         disabled={uploading}
       >
         <p className="ant-upload-drag-icon">
-          <InboxOutlined style={{ color: '#0f6cbd' }} />
+          <InboxOutlined style={{ color: '#007f7a' }} />
         </p>
         <p className="ant-upload-text" style={{ fontSize: 15, fontWeight: 500 }}>
           Kéo thả hoặc Click để tải lên GCN

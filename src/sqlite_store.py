@@ -59,6 +59,9 @@ CASE_FIELDS = [
     "valuation_branch",
     "office",
     "web_case_id",
+    "certificate_number",
+    "delivery_contact_id",
+    "tracking_number",
 ]
 
 OPTIONAL_COLUMNS = {
@@ -82,6 +85,9 @@ OPTIONAL_COLUMNS = {
     "valuation_branch": "TEXT DEFAULT 'cn Đà Nẵng'",
     "office": "TEXT DEFAULT 'vp Đà Nẵng'",
     "web_case_id": "TEXT",
+    "certificate_number": "TEXT",
+    "delivery_contact_id": "INTEGER",
+    "tracking_number": "TEXT",
 }
 
 DEFAULT_PAYMENT_STATUS = "Đã thanh toán"

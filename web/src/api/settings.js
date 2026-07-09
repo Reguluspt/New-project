@@ -8,6 +8,10 @@ export const updatePaths = (paths) => {
   return client.put('/settings/paths', paths);
 };
 
+export const updateWebmailConfig = (payload) => {
+  return client.put('/settings/webmail', payload);
+};
+
 export const getOAuthUrl = (provider, redirectUri) => {
   return client.get(`/settings/oauth/${provider}/auth-url`, {
     params: { redirect_uri: redirectUri },

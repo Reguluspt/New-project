@@ -26,6 +26,7 @@ from src.mail_listener import (
     match_record,
     parse_incoming_email,
     process_incoming_email,
+    send_professional_forward,
     was_email_processed,
     update_matched_record,
 )
@@ -309,6 +310,59 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("010/2024/D10-0105", html)
         self.assertNotIn("010/2026/N06-010/2024/D10-0105/DN", html)
         self.assertIn("THÔNG TIN HỒ SƠ", html)
+
+    async def test_professional_forward_forces_playwright_when_env_requests_oauth2(self) -> None:
+        incoming = parse_incoming_email(_raw_admin_reply(), uid="23")
+        settings = MailListenerSettings(
+            imap_host="imap.gmail.com",
+            imap_port=993,
+            imap_username="sender@gmail.com",
+            imap_password="app-password",
+            mailbox="INBOX",
+            records_db_path="tmp/records.db",
+            gemini_api_key="gemini",
+            gemini_model="gemini-test",
+            telegram_bot_token="token",
+            telegram_chat_id="123",
+            auto_reply_cc=[],
+            admin_email="admin@example.com",
+            professional_dept_email="pro@example.com",
+            monitor_cc_list=["manager@example.com"],
+        )
+
+        with (
+            patch.dict("os.environ", {"PROFESSIONAL_FORWARD_SEND_MODE": "oauth2"}),
+            patch("src.mail_listener.append_listener_log"),
+            patch("src.email_reply_service.send_professional_reply_all_via_playwright_raw", AsyncMock()) as playwright_send,
+            patch(
+                "src.oauth2_service.get_enabled_oauth_provider",
+                side_effect=AssertionError("OAuth2 Graph must not be used"),
+            ) as oauth_provider,
+        ):
+            await send_professional_forward(
+                incoming=incoming,
+                record={
+                    "id": "5",
+                    "customer_info": "Nguyễn Thị Loan",
+                    "asset_description": "Thửa đất số Lô 25B2",
+                    "valuation_fee_number": "3000000",
+                    "professional_recipient_email": "anhvtn6@cenvalue.vn",
+                },
+                certificate_number="CT-2026-0007",
+                smtp_settings=GmailSmtpSettings(
+                    host="smtp.gmail.com",
+                    port=587,
+                    username="sender@gmail.com",
+                    password="app-password",
+                    mail_from="Sender <sender@gmail.com>",
+                    mail_to="",
+                    mail_cc=[],
+                ),
+                settings=settings,
+            )
+
+        playwright_send.assert_awaited_once()
+        oauth_provider.assert_not_called()
 
     async def test_certificate_updates_preserve_contract_number(self) -> None:
         with TemporaryDirectory() as tmpdir:

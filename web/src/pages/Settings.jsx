@@ -17,7 +17,8 @@ import {
   Popconfirm,
   Badge,
   Descriptions,
-  Select
+  Select,
+  Switch
 } from 'antd';
 import {
   FolderOpenOutlined,
@@ -45,7 +46,8 @@ import {
   restartAiServices,
   createBackup,
   downloadBackupUrl,
-  restoreBackup
+  restoreBackup,
+  updateWebmailConfig
 } from '../api/settings';
 
 const { Title, Paragraph, Text } = Typography;
@@ -83,6 +85,7 @@ export default function Settings() {
   const [savingOutlook, setSavingOutlook] = useState(false);
   const [savingRedirect, setSavingRedirect] = useState(false);
   const [savingSobo, setSavingSobo] = useState(false);
+  const [savingWebmail, setSavingWebmail] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
   const [restartingAiServices, setRestartingAiServices] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
@@ -93,6 +96,7 @@ export default function Settings() {
   const [outlookForm] = Form.useForm();
   const [redirectForm] = Form.useForm();
   const [soboForm] = Form.useForm();
+  const [webmailForm] = Form.useForm();
   const [aiForm] = Form.useForm();
   const [aiConfig, setAiConfig] = useState({ configured: false, key_suffix: '', model: 'gemini-2.5-flash', backup_keys: [] });
   const [backupKeys, setBackupKeys] = useState([]);
@@ -130,6 +134,14 @@ export default function Settings() {
             mail_from: res.data.oauth.sobo_email.mail_from || ''
           });
         }
+      }
+      if (res.data.webmail) {
+        webmailForm.setFieldsValue({
+          url: res.data.webmail.url || 'https://owa.cengroup.vn/',
+          username: res.data.webmail.username || '',
+          password: res.data.webmail.password || '',
+          use_ai: res.data.webmail.use_ai || false
+        });
       }
     } catch (err) {
       console.error(err);
@@ -286,6 +298,23 @@ export default function Settings() {
       }
     } finally {
       setSavingSobo(false);
+    }
+  };
+
+  // Save Webmail configuration
+  const handleWebmailSave = async () => {
+    try {
+      const values = await webmailForm.validateFields();
+      setSavingWebmail(true);
+      await updateWebmailConfig(values);
+      message.success('Đã lưu cấu hình Webmail OWA thành công!');
+      fetchSettings();
+    } catch (err) {
+      if (err.name !== 'ValidationError') {
+        message.error('Lỗi khi lưu cấu hình Webmail: ' + (err.response?.data?.error || err.message));
+      }
+    } finally {
+      setSavingWebmail(false);
     }
   };
 
@@ -859,6 +888,59 @@ export default function Settings() {
                         loading={savingSobo}
                       >
                         Lưu cấu hình mail Sơ bộ
+                      </Button>
+                    </Form.Item>
+                  </Form>
+                </Card>
+              </div>
+
+              <div style={{ marginTop: 32, borderTop: '1px solid #f0f0f0', paddingTop: 24 }}>
+                <Title level={4} style={{ marginBottom: 4 }}>Cấu hình Webmail OWA (AI Web Agent)</Title>
+                <Paragraph style={{ color: '#64748b', marginBottom: 16 }}>
+                  Thiết lập thông tin đăng nhập Outlook Web Access (OWA) và trạng thái kích hoạt tác vụ gửi email bằng AI (Browser Use + Gemini).
+                </Paragraph>
+
+                <Card size="small" style={{ borderRadius: '8px', maxWidth: 650 }}>
+                  <Form form={webmailForm} layout="vertical" onFinish={handleWebmailSave}>
+                    <Form.Item
+                      name="url"
+                      label="Đường dẫn OWA Webmail"
+                      rules={[{ required: true, message: 'Vui lòng nhập đường dẫn OWA' }]}
+                    >
+                      <Input placeholder="https://owa.cengroup.vn/" />
+                    </Form.Item>
+
+                    <Form.Item
+                      name="username"
+                      label="Tài khoản đăng nhập Webmail"
+                      rules={[{ required: true, message: 'Vui lòng nhập tài khoản Webmail' }]}
+                    >
+                      <Input placeholder="Nhập tài khoản đăng nhập..." />
+                    </Form.Item>
+
+                    <Form.Item
+                      name="password"
+                      label="Mật khẩu đăng nhập Webmail"
+                    >
+                      <Input.Password autoComplete="new-password" placeholder="Nhập mật khẩu mới hoặc giữ nguyên..." />
+                    </Form.Item>
+
+                    <Form.Item
+                      name="use_ai"
+                      label="Kích hoạt AI Webmail (Browser Use)"
+                      valuePropName="checked"
+                    >
+                      <Switch checkedChildren="BẬT" unCheckedChildren="TẮT" />
+                    </Form.Item>
+
+                    <Form.Item style={{ marginBottom: 0 }}>
+                      <Button
+                        type="primary"
+                        htmlType="submit"
+                        icon={<SaveOutlined />}
+                        loading={savingWebmail}
+                      >
+                        Lưu cấu hình Webmail
                       </Button>
                     </Form.Item>
                   </Form>

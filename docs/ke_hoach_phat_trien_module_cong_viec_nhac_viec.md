@@ -1,0 +1,275 @@
+# Ke hoach phat trien module Cong viec va Nhac viec
+
+Ngay lap: 29/06/2026
+
+## 1. Muc tieu
+
+Xay dung module Cong viec va Nhac viec de gom cac viec can xu ly trong qua trinh van hanh ho so tham dinh gia vao mot man hinh tap trung.
+
+Module nay khong thay the cac luong hien co nhu Quan ly ho so, So bo, Cong no, Phat hanh hay Chuyen phat. Module dong vai tro lop dieu phoi, giup nguoi dung biet ho so nao dang ket, viec nao den han, viec nao qua han va cong no nao can nhac.
+
+## 2. Pham vi nghiep vu
+
+Module nen bao phu cac nhom viec sau:
+
+- Viec gan voi ho so tham dinh.
+- Viec nhac cong no.
+- Viec theo doi ho so so bo.
+- Viec phat hanh chung thu, phieu phat hanh va chuyen phat.
+- Viec thu cong do nguoi dung tu tao.
+
+Khong nen phat trien thanh module quan ly du an phuc tap o giai doan dau. Trong ban dau, moi viec nen gan truc tiep voi ho so, so bo hoac mot hanh dong nghiep vu cu the.
+
+## 3. Man hinh de xuat
+
+Mockup giao dien da duoc tao tai:
+
+`Z:\mockups\task-reminders-ui.html`
+
+Anh co the mo truc tiep bang trinh duyet. Mockup gom cac khu vuc:
+
+- Thanh tong quan: Qua han, Hom nay, Dang lam, Can nhac no, Da xong tuan nay.
+- Bo loc nhanh theo pham vi viec, trang thai, nguoi phu trach, do uu tien.
+- Danh sach viec dang mo.
+- Panel chi tiet viec.
+- Lich su nhac viec.
+- Rule tu dong de xuat.
+- Form tao viec moi.
+
+## 4. Du lieu de xuat
+
+Them bang `tasks` vao SQLite hien tai.
+
+Truong du lieu de xuat:
+
+| Truong | Kieu | Ghi chu |
+|---|---|---|
+| id | INTEGER | Khoa chinh |
+| title | TEXT | Tieu de viec |
+| description | TEXT | Noi dung xu ly |
+| task_type | TEXT | case, payment, sobo, document, delivery, manual |
+| status | TEXT | todo, doing, done, cancelled |
+| priority | TEXT | low, normal, high |
+| due_at | TEXT | Han xu ly |
+| remind_at | TEXT | Thoi diem nhac |
+| case_id | INTEGER | Lien ket ho so, co the rong |
+| sobo_record_id | INTEGER | Lien ket ho so so bo, co the rong |
+| source | TEXT | system hoac manual |
+| created_by | TEXT | Nguoi tao, giai doan dau co the de trong |
+| assigned_to | TEXT | Nguoi phu trach, giai doan dau co the la text |
+| completed_at | TEXT | Thoi diem hoan thanh |
+| created_at | TEXT | Thoi diem tao |
+| updated_at | TEXT | Thoi diem cap nhat |
+
+Them bang `task_events` neu can luu lich su nhac viec ro rang:
+
+| Truong | Kieu | Ghi chu |
+|---|---|---|
+| id | INTEGER | Khoa chinh |
+| task_id | INTEGER | Lien ket task |
+| event_type | TEXT | created, updated, reminded, completed, cancelled |
+| note | TEXT | Noi dung su kien |
+| created_at | TEXT | Thoi diem ghi nhan |
+
+## 5. API de xuat
+
+Them blueprint moi: `api/blueprints/tasks.py`.
+
+Endpoint can co trong MVP:
+
+| Method | Endpoint | Chuc nang |
+|---|---|---|
+| GET | /api/tasks | Danh sach viec, co loc va phan trang |
+| POST | /api/tasks | Tao viec moi |
+| GET | /api/tasks/:id | Chi tiet viec |
+| PUT | /api/tasks/:id | Cap nhat viec |
+| PATCH | /api/tasks/:id/status | Doi trang thai |
+| DELETE | /api/tasks/:id | Xoa hoac huy viec |
+| GET | /api/tasks/stats | So lieu tong quan |
+| POST | /api/tasks/sync | Dong bo task tu ho so/cong no/so bo |
+| GET | /api/cases/:id/tasks | Viec gan voi mot ho so |
+
+## 6. UI de xuat
+
+Them route frontend:
+
+- `/tasks`: man hinh Cong viec va Nhac viec.
+
+Them menu tren thanh dieu huong:
+
+- `Cong viec`
+
+Them trong chi tiet ho so:
+
+- Tab hoac panel `Viec can lam`.
+- Cho phep tao nhanh task gan voi ho so dang xem.
+- Hien thi task qua han, task dang lam va task da xong gan voi ho so.
+
+Thanh tong quan nen nam o dau man hinh:
+
+- Qua han.
+- Hom nay.
+- Dang lam.
+- Can nhac no.
+- Da xong tuan nay.
+
+Bang viec nen co cot:
+
+- Tieu de.
+- Ho so/khach hang.
+- Loai viec.
+- Han xu ly.
+- Trang thai.
+- Do uu tien.
+- Hanh dong nhanh.
+
+## 7. Rule tu dong de xuat
+
+Giai doan dau chi nen co mot so rule that su can thiet:
+
+1. Ho so chua thanh toan
+   - Dieu kien: `payment_status` la chua thanh toan.
+   - Ket qua: tao task nhac cong no.
+   - Han nhac mac dinh: sau 3 ngay hoac theo cau hinh.
+
+2. So bo qua 24 gio
+   - Dieu kien: so bo trang thai PENDING qua 24 gio.
+   - Ket qua: tao task theo doi so bo.
+
+3. Ho so sap den han hoan thanh
+   - Dieu kien: `expected_finish_date` con 1 ngay.
+   - Ket qua: tao task hoan thien ho so.
+
+4. Phat hanh chua co ma van don
+   - Dieu kien: ho so da co buoc phat hanh nhung `tracking_number` rong.
+   - Ket qua: tao task cap nhat chuyen phat.
+
+Can tranh tao trung task. Moi rule nen kiem tra task dang mo cung loai va cung `case_id` hoac `sobo_record_id` truoc khi tao moi.
+
+## 8. Tich hop voi luong hien co
+
+### Quan ly ho so
+
+- Tao viec tu dong khi ho so thieu du lieu quan trong.
+- Tao viec nhac hoan thien ho so theo `expected_finish_date`.
+- Hien thi viec lien quan trong chi tiet ho so.
+
+### Cong no
+
+- Dong bo cac ho so chua thanh toan thanh viec nhac no.
+- Khi gui email nhac no, ghi them event vao lich su task.
+- Khi cap nhat da thanh toan, co the de xuat dong task nhac no.
+
+### So bo
+
+- Tao viec neu so bo qua 24 gio chua phan hoi.
+- Tao viec neu so bo da phan hoi nhung chua tao ho so chinh.
+
+### Phat hanh va chuyen phat
+
+- Tao viec xin so chung thu.
+- Tao viec gui phieu phat hanh.
+- Tao viec cap nhat ma van don.
+
+## 9. Lo trinh thuc hien
+
+### Giai doan 1: MVP noi bo
+
+Muc tieu: co man hinh quan ly viec co ban va gan duoc voi ho so.
+
+Cong viec:
+
+- Tao bang `tasks`.
+- Tao API CRUD cho task.
+- Tao man hinh `/tasks`.
+- Them menu `Cong viec`.
+- Cho phep tao task thu cong.
+- Cho phep gan task voi `case_id`.
+- Them thong ke: qua han, hom nay, dang lam, da xong.
+
+Kiem thu:
+
+- Tao/sua/xoa task.
+- Loc task theo trang thai, loai viec, han xu ly.
+- Mo task gan voi ho so.
+- Dam bao khong anh huong CRUD ho so hien co.
+
+### Giai doan 2: Nhac viec theo cong no va so bo
+
+Muc tieu: tu dong tao viec tu cac diem nghiep vu that su hay bi quen.
+
+Cong viec:
+
+- Rule tao task nhac cong no.
+- Rule so bo qua 24 gio.
+- Rule ho so sap den han.
+- API `/api/tasks/sync`.
+- Hien thi lich su nhac viec.
+
+Kiem thu:
+
+- Dong bo khong tao trung task.
+- Ho so da thanh toan khong tiep tuc tao task nhac no.
+- So bo da phan hoi khong bi tinh la qua han.
+
+### Giai doan 3: Tich hop hanh dong nhanh
+
+Muc tieu: nguoi dung xu ly viec ngay trong module.
+
+Cong viec:
+
+- Nut mo ho so.
+- Nut gui email nhac cong no.
+- Nut danh dau hoan thanh.
+- Ghi log vao `task_events`.
+- Hien thi task trong chi tiet ho so.
+
+Kiem thu:
+
+- Gui email thanh cong thi task co event tuong ung.
+- Danh dau hoan thanh cap nhat `completed_at`.
+- Mo ho so dung `case_id`.
+
+### Giai doan 4: Nhieu nguoi dung va phan cong
+
+Chi nen lam neu phan mem chuyen sang dung cho nhieu nguoi.
+
+Cong viec:
+
+- Nguoi phu trach.
+- Phan quyen xem/sua task.
+- Thong bao rieng theo nguoi dung.
+- Audit log day du.
+
+## 10. Rủi ro va luu y
+
+- Neu rule tu dong qua nhieu, danh sach viec se bi nhiu. Ban dau chi nen bat 3-4 rule quan trong.
+- Can chong tao trung task khi dong bo nhieu lan.
+- Khong nen sua truc tiep `personal_note` de lam lich su task; nen co bang `task_events` rieng.
+- Neu chua co phan quyen nhieu nguoi, `assigned_to` nen la text tuy chon, khong nen lam phuc tap.
+- Nen giu module nay gan voi ho so thay vi bien thanh cong cu quan ly du an tong quat.
+
+## 11. Tieu chi hoan thanh MVP
+
+MVP duoc xem la dat khi:
+
+- Nguoi dung co the vao menu Cong viec.
+- Xem duoc viec qua han, viec hom nay, viec dang lam.
+- Tao duoc viec thu cong gan voi ho so.
+- Sua trang thai viec.
+- Loc va tim viec theo noi dung, loai viec, trang thai.
+- Dong bo duoc task nhac cong no ma khong tao trung.
+- Khong lam thay doi hanh vi cua cac man hinh hien co: Dashboard, Quan ly ho so, So bo, Phat hanh.
+
+## 12. De xuat uu tien
+
+Nen lam theo thu tu:
+
+1. Tao model/API `tasks`.
+2. Tao giao dien `/tasks` dua tren mockup.
+3. Gan task vao chi tiet ho so.
+4. Them rule nhac cong no.
+5. Them rule so bo qua 24 gio.
+6. Them hanh dong nhanh gui email nhac cong no.
+
+Huong nay giup co gia tri su dung som, trong khi van giu thay doi nho va de kiem soat.

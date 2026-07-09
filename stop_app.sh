@@ -17,6 +17,7 @@ PID_FILES=(
     "$ROOT/telegram.pid"
     "$ROOT/data/mail_listener.pid"
     "$ROOT/data/ngrok.pid"
+    "$ROOT/flask.pid"
 )
 
 # Hàm tắt tiến trình bằng PID
@@ -54,12 +55,13 @@ terminate_pid "$ROOT/streamlit.pid" "Streamlit App"
 terminate_pid "$ROOT/telegram.pid" "Telegram Bot Webhook"
 terminate_pid "$ROOT/data/mail_listener.pid" "Mail Listener Service"
 terminate_pid "$ROOT/data/ngrok.pid" "Ngrok Service"
+terminate_pid "$ROOT/flask.pid" "Flask API Service"
 
 # Tìm và dọn dẹp các tiến trình python chạy ngầm còn dư trong thư mục này
 echo "🔍 Đang tìm các tiến trình Python còn sót lại trong thư mục dự án..."
 CURRENT_USER=$(whoami)
 # Lấy danh sách tiến trình Python đang chạy liên quan đến dự án của user hiện tại
-RESIDUAL_PIDS=$(ps -u "$CURRENT_USER" -o pid,cmd | grep -E "python.*(app\.py|telegram_server|mail_listener)" | grep -v grep | awk '{print $1}')
+RESIDUAL_PIDS=$(ps -u "$CURRENT_USER" -o pid,cmd | grep -E "python.*(app\.py|telegram_server|mail_listener|api\.run)" | grep -v grep | awk '{print $1}')
 
 if [ -n "$RESIDUAL_PIDS" ]; then
     for pid in $RESIDUAL_PIDS; do

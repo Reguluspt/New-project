@@ -8,7 +8,7 @@ import { getFilters } from '../../api/cases';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import moment from 'moment';
 
-const COLORS = ['#0f6cbd', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6'];
+const COLORS = ['#007f7a', '#047857', '#c2413d', '#d98a2b', '#d99a55'];
 
 export default function CaseRevenue() {
   const { getResizableProps } = useResizableColumns('case_revenue_table', {
@@ -126,7 +126,7 @@ export default function CaseRevenue() {
   };
 
   const formatCurrency = (val) => {
-    return (val || 0).toLocaleString('vi-VN') + ' ₫';
+    return (val || 0).toLocaleString('vi-VN') + ' ?';
   };
 
   const formatMillion = (val) => {
@@ -245,7 +245,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
       key: 'contract_number',
       render: (text, record) => (
         <a 
-          style={{ fontWeight: 'bold', color: '#0f6cbd' }} 
+          style={{ fontWeight: 'bold', color: '#007f7a' }} 
           onClick={() => handleOpenDetailModal(record)}
         >
           {text || 'N/A'}
@@ -339,7 +339,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
   return (
     <div>
       {/* Filters bar */}
-      <Card style={{ marginBottom: 16, borderRadius: 12, border: '1px solid #dbe3f3' }} bodyStyle={{ padding: 14 }}>
+      <Card style={{ marginBottom: 16, borderRadius: 12, border: '1px solid #d8e7e5' }} bodyStyle={{ padding: 14 }}>
         <Space wrap size="middle">
           <div>
             <span style={{ marginRight: 8, fontWeight: 600 }}>Năm:</span>
@@ -380,16 +380,16 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
       {/* Statistic Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={6}>
-          <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3', background: 'linear-gradient(135deg, #f0f7ff 0%, #e0effe 100%)' }}>
+          <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5', background: 'linear-gradient(135deg, #effaf8 0%, #d7f0ed 100%)' }}>
             <Statistic
               title="Tổng doanh thu dự kiến"
               value={formatMillion(stats?.year_projected)}
-              valueStyle={{ color: '#0f6cbd', fontWeight: 750 }}
+              valueStyle={{ color: '#007f7a', fontWeight: 750 }}
             />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
-          <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' }}>
+          <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' }}>
             <Statistic
               title="Đã thanh toán (Đã thu)"
               value={formatMillion(stats?.year_paid)}
@@ -398,7 +398,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
           </Card>
         </Col>
         <Col xs={12} sm={6}>
-          <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3', background: 'linear-gradient(135deg, #fff5f5 0%, #ffe4e6 100%)' }}>
+          <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5', background: 'linear-gradient(135deg, #fff5f5 0%, #ffe4e6 100%)' }}>
             <Statistic
               title="Công nợ tồn đọng"
               value={formatMillion(stats?.year_unpaid)}
@@ -407,7 +407,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
           </Card>
         </Col>
         <Col xs={12} sm={6}>
-          <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+          <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
             <Statistic
               title="Số lượng hồ sơ"
               value={stats?.total_cases || 0}
@@ -420,7 +420,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
       {/* Charts & Table */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} lg={14}>
-          <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3', height: '100%' }} title="Biểu đồ doanh thu thực hiện">
+          <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5', height: '100%' }} title="Biểu đồ doanh thu thực hiện">
             <div style={{ width: '100%', height: 350 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
@@ -429,9 +429,9 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
                   <YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(0)}m`} stroke="#64748b" fontSize={12} />
                   <Tooltip formatter={(value, name) => [formatCurrency(value), name]} />
                   <Legend />
-                  <Bar dataKey="Đã thu" stackId="a" fill="#10b981" barSize={35} />
-                  <Bar dataKey="Công nợ" stackId="a" fill="#f43f5e" barSize={35} />
-                  <Line type="monotone" dataKey="Dự kiến" stroke="#0f6cbd" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Bar dataKey="Đã thu" stackId="a" fill="#047857" barSize={35} />
+                  <Bar dataKey="Công nợ" stackId="a" fill="#c2413d" barSize={35} />
+                  <Line type="monotone" dataKey="Dự kiến" stroke="#007f7a" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -441,7 +441,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
         {/* Pie Chart analysis */}
         <Col xs={24} lg={10}>
           <Card 
-            style={{ borderRadius: 12, border: '1px solid #dbe3f3', height: '100%' }} 
+            style={{ borderRadius: 12, border: '1px solid #d8e7e5', height: '100%' }} 
             title="Phân tích cơ cấu công nợ"
             extra={
               <Select 
@@ -497,7 +497,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
 
       <Row gutter={[16, 16]}>
         <Col span={24}>
-          <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3' }} title="Chi tiết công nợ chưa thu lớn nhất">
+          <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5' }} title="Chi tiết công nợ chưa thu lớn nhất">
             <Table
               size="small"
               columns={resizableProps.columns}
@@ -515,7 +515,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
       <Modal
         title={
           <Space>
-            <MailOutlined style={{ color: '#0f6cbd' }} />
+            <MailOutlined style={{ color: '#007f7a' }} />
             <span>Soạn thảo email nhắc nợ tự động</span>
           </Space>
         }
@@ -567,7 +567,7 @@ Trân trọng cảm ơn sự hợp tác của Quý khách.`;
                 <div style={{ marginBottom: 12 }}>
                   <span style={{ color: '#64748b', fontSize: '12px', display: 'block' }}>Số hợp đồng</span>
                   <Space align="center" wrap>
-                    <strong style={{ fontSize: '16px', color: '#0f6cbd' }}>{selectedCase.contract_number || 'N/A'}</strong>
+                    <strong style={{ fontSize: '16px', color: '#007f7a' }}>{selectedCase.contract_number || 'N/A'}</strong>
                     {selectedCase.customer_type === 'organization' ? <Tag color="blue">Tổ chức</Tag> : <Tag color="orange">Cá nhân</Tag>}
                   </Space>
                 </div>

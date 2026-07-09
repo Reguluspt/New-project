@@ -8,7 +8,7 @@ from zipfile import ZipFile
 
 from docx import Document
 
-from src.case_files import case_folder, save_original_file
+from src.case_files import case_folder, save_original_file, word_export_folder
 from src.case_exports import (
     approve_case_documents_pdf,
     collect_template_errors,
@@ -19,9 +19,10 @@ from src.case_exports import (
     package_case_documents,
 )
 from src.case_output_preferences import load_case_output_dir, save_case_output_dir
+from src.document_exporter import build_placeholder_context
+from src.document_exporter import describe_individual_documents
 from src.document_exporter import render_docx_preview_html
 from src.document_exporter import render_docx_template
-from src.document_exporter import build_placeholder_context
 from src.case_filters import (
     build_chart_data,
     build_chart_rows,
@@ -391,6 +392,47 @@ class CaseExportsTests(unittest.TestCase):
         )
 
         self.assertEqual(folder, Path("cases") / "010-2026-N04.1027-DN - Ông Nguyễn Huy Hoàng")
+
+    def test_word_export_folder_uses_short_contract_and_customer_name(self) -> None:
+        folder = word_export_folder(
+            Path("cases"),
+            case_id=12,
+            contract_number="010/2026/N07-0906/DN",
+            customer_name="Ông Nguyễn Huy Hoàng - 0905222125",
+        )
+
+        self.assertEqual(folder, Path("cases") / "N07-0906 - Ông Nguyễn Huy Hoàng")
+
+    def test_word_export_folder_uses_organization_abbreviation_when_available(self) -> None:
+        folder = word_export_folder(
+            Path("cases"),
+            case_id=12,
+            contract_number="010/2026/N07-0906/DN",
+            customer_name="Ngân hàng TMCP Ngoại thương Việt Nam - Chi nhánh Gia Lai",
+            customer_type="organization",
+            organization_abbreviation="VCB Gia Lai",
+        )
+
+        self.assertEqual(folder, Path("cases") / "N07-0906 - VCB Gia Lai")
+
+    def test_word_document_filename_uses_short_contract_number(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            templates_dir = root / "templates"
+            templates_dir.mkdir()
+            Document().save(templates_dir / "mau_hd.docx")
+
+            descriptions = describe_individual_documents(
+                {
+                    "id": 12,
+                    "contract_number": "010/2026/N07-0906/DN",
+                    "customer_info": "Ông Nguyễn Huy Hoàng",
+                },
+                templates_dir=templates_dir,
+                case_files_dir=root / "cases",
+            )
+
+        self.assertEqual(Path(descriptions[0]["output_path"]).name, "N07-0906_hop_dong.docx")
 
     def test_case_output_dir_preferences_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

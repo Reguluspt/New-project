@@ -31,7 +31,7 @@ export class ErrorBoundary extends React.Component {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#f5f7fb',
+          background: '#f4faf9',
           padding: 24
         }}>
           <div style={{ maxWidth: 560, width: '100%' }}>

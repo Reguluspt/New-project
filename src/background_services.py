@@ -242,6 +242,18 @@ def start_mail_listener_if_enabled() -> int | None:
     )
 
 
+def start_reminder_worker_if_enabled() -> int | None:
+    if not _truthy_env("AUTO_START_REMINDER_WORKER", True):
+        return None
+    return _start_hidden_process(
+        [sys.executable, "-m", "src.reminder_service", "--loop", "--interval", "60"],
+        pid_path=DATA_DIR / "reminder_worker.pid",
+        stdout_path=LOG_DIR / "reminders.log",
+        stderr_path=LOG_DIR / "reminders.log",
+        command_hint="src.reminder_service",
+    )
+
+
 def start_flask_if_enabled() -> int | None:
     if not _truthy_env("AUTO_START_FLASK", True):
         return None
@@ -263,10 +275,11 @@ def start_flask_if_enabled() -> int | None:
 
 def ensure_background_services() -> dict[str, int | None]:
     if not _truthy_env("AUTO_START_BACKGROUND_SERVICES", True):
-        return {"telegram": None, "mail_listener": None, "ngrok": None, "flask": None}
+        return {"telegram": None, "mail_listener": None, "reminder": None, "ngrok": None, "flask": None}
     return {
         "telegram": start_telegram_webhook_if_enabled(),
         "mail_listener": start_mail_listener_if_enabled(),
+        "reminder": start_reminder_worker_if_enabled(),
         "ngrok": start_ngrok_if_enabled(),
         "flask": start_flask_if_enabled(),
     }

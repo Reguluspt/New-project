@@ -41,7 +41,7 @@ export default function DocumentPreview({ open, onClose, caseId, filename }) {
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingRight: 24 }}>
           <Space>
-            <EyeOutlined style={{ color: '#0f6cbd' }} />
+            <EyeOutlined style={{ color: '#007f7a' }} />
             <span style={{ fontWeight: 600 }}>Xem trước: {filename}</span>
           </Space>
           <Space>

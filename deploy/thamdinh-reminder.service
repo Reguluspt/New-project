@@ -1,0 +1,15 @@
+[Unit]
+Description=Tham Dinh reminder worker
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/app
+EnvironmentFile=-/root/app/API.env
+ExecStart=/root/app/.venv/bin/python -m src.reminder_service --loop --interval 60
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

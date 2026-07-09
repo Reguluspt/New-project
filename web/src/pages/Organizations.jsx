@@ -397,12 +397,12 @@ export default function Organizations() {
       {/* KPI Stats Panel */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={12} sm={6}>
-          <Card bordered style={{ borderLeft: '5px solid #0f6cbd' }} hoverable>
+          <Card bordered style={{ borderLeft: '5px solid #007f7a' }} hoverable>
             <Statistic title="Tổng tổ chức" value={totalOrgs} prefix={<BankOutlined />} />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
-          <Card bordered style={{ borderLeft: '5px solid #10b981' }} hoverable>
+          <Card bordered style={{ borderLeft: '5px solid #047857' }} hoverable>
             <Statistic title="Đã có Mã Số Thuế" value={hasTaxCode} suffix={`/ ${totalOrgs}`} />
           </Card>
         </Col>
@@ -412,7 +412,7 @@ export default function Organizations() {
           </Card>
         </Col>
         <Col xs={12} sm={6}>
-          <Card bordered style={{ borderLeft: '5px solid #8b5cf6' }} hoverable>
+          <Card bordered style={{ borderLeft: '5px solid #d99a55' }} hoverable>
             <Statistic title="Chờ duyệt từ AI" value={extractedData.length} />
           </Card>
         </Col>
@@ -465,7 +465,7 @@ export default function Organizations() {
           <Card
             title={
               <Space>
-                <RobotOutlined style={{ color: '#8b5cf6' }} />
+                <RobotOutlined style={{ color: '#d99a55' }} />
                 <span>Trích xuất tổ chức từ hợp đồng bằng AI OCR</span>
               </Space>
             }
@@ -477,7 +477,7 @@ export default function Organizations() {
             
             <Upload.Dragger {...uploadProps} style={{ background: '#fafafa', padding: '16px 0' }}>
               <p className="ant-upload-drag-icon">
-                <InboxOutlined style={{ color: '#8b5cf6' }} />
+                <InboxOutlined style={{ color: '#d99a55' }} />
               </p>
               <p className="ant-upload-text">Nhấp hoặc kéo thả file hợp đồng vào đây</p>
               <p className="ant-upload-hint">Hỗ trợ PDF, PNG, JPG, JPEG, DOCX. Cho phép tải lên nhiều file.</p>
@@ -489,7 +489,7 @@ export default function Organizations() {
               onClick={handleAiExtract}
               loading={extracting}
               disabled={uploadList.length === 0}
-              style={{ marginTop: 16, width: '100%', background: '#8b5cf6', borderColor: '#8b5cf6' }}
+              style={{ marginTop: 16, width: '100%', background: '#d99a55', borderColor: '#d99a55' }}
             >
               Trích xuất hàng loạt bằng AI Gemini
             </Button>
@@ -588,7 +588,7 @@ export default function Organizations() {
       <Modal
         title={
           <Space>
-            <MergeCellsOutlined style={{ color: '#0f6cbd' }} />
+            <MergeCellsOutlined style={{ color: '#007f7a' }} />
             <span>Gộp thông tin tổ chức</span>
           </Space>
         }

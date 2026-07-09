@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Form, Input, Select, Radio, DatePicker, Button, Checkbox, InputNumber, Space, message, Divider, Collapse, Row, Col, Typography, Modal } from 'antd';
 import { SaveOutlined, DownloadOutlined, UserOutlined, HomeOutlined, MailOutlined, GlobalOutlined, PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
-import { getFormOptions, saveCase, downloadExcel, sendEmail, submitWeb } from '../../api/entry';
+import { getFormOptions, addFormOption, saveCase, downloadExcel, sendEmail, submitWeb } from '../../api/entry';
 import { getOrganizations, createOrganization } from '../../api/organizations';
 
 const { Option } = Select;
@@ -47,6 +47,22 @@ const locationsData = {
   }
 };
 
+const readExtractedValue = (field) => field?.value || '';
+
+const buildOcrPersonalNote = (formValues) => {
+  const notes = Array.isArray(formValues?.notes) ? [...formValues.notes] : [];
+  [
+    ['Số giấy chứng nhận', formValues?.so_giay_chung_nhan],
+    ['Số vào sổ cấp giấy chứng nhận', formValues?.so_vao_so_cap_giay_chung_nhan],
+    ['Ngày cấp giấy chứng nhận', formValues?.ngay_cap_giay_chung_nhan],
+  ].forEach(([label, field]) => {
+    const value = readExtractedValue(field).trim();
+    const note = value ? `${label}: ${value}` : '';
+    if (note && !notes.includes(note)) notes.push(note);
+  });
+  return notes.join('\n');
+};
+
 export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
   const [form] = Form.useForm();
   const [formOptions, setFormOptions] = useState({});
@@ -63,6 +79,15 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
 
   const [newOrgModalOpen, setNewOrgModalOpen] = useState(false);
   const [newOrgForm] = Form.useForm();
+
+  const saveCustomOption = async (field, value, setCustomOptions) => {
+    await addFormOption(field, value);
+    setFormOptions(prev => ({
+      ...prev,
+      [field]: [...new Set([...(prev[field] || []), value])],
+    }));
+    setCustomOptions([]);
+  };
 
   const handleCreateOrgSubmit = async (values) => {
     try {
@@ -101,7 +126,7 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
     let inputVal = '';
     Modal.confirm({
       title: 'Thêm mới Mục đích thẩm định',
-      icon: <PlusOutlined style={{ color: '#0f6cbd' }} />,
+      icon: <PlusOutlined style={{ color: '#007f7a' }} />,
       content: (
         <Input 
           placeholder="Nhập mục đích mới..." 
@@ -111,23 +136,27 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
       ),
       okText: 'Thêm',
       cancelText: 'Hủy',
-      onOk: () => {
-        const val = inputVal.trim();
-        if (val) {
-          if (![...(formOptions.valuation_purpose || []), ...customPurposes].includes(val)) {
-            setCustomPurposes(prev => [...prev, val]);
-          }
+    onOk: async () => {
+      const val = inputVal.trim();
+      if (val) {
+        try {
+          await saveCustomOption('valuation_purpose', val, setCustomPurposes);
           form.setFieldValue('valuation_purpose', val);
+          message.success('Đã lưu mục đích thẩm định mới');
+        } catch (err) {
+          message.error(err.response?.data?.error || 'Không lưu được mục đích thẩm định mới');
+          throw err;
         }
       }
-    });
-  };
+    }
+  });
+};
 
   const handleAddNewSource = () => {
     let inputVal = '';
     Modal.confirm({
       title: 'Thêm mới Nguồn / Ngân hàng',
-      icon: <PlusOutlined style={{ color: '#0f6cbd' }} />,
+      icon: <PlusOutlined style={{ color: '#007f7a' }} />,
       content: (
         <Input 
           placeholder="Nhập nguồn/ngân hàng mới..." 
@@ -137,23 +166,27 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
       ),
       okText: 'Thêm',
       cancelText: 'Hủy',
-      onOk: () => {
-        const val = inputVal.trim();
-        if (val) {
-          if (![...(formOptions.source || []), ...customSources].includes(val)) {
-            setCustomSources(prev => [...prev, val]);
-          }
+    onOk: async () => {
+      const val = inputVal.trim();
+      if (val) {
+        try {
+          await saveCustomOption('source', val, setCustomSources);
           form.setFieldValue('source', val);
+          message.success('Đã lưu nguồn/ngân hàng mới');
+        } catch (err) {
+          message.error(err.response?.data?.error || 'Không lưu được nguồn/ngân hàng mới');
+          throw err;
         }
       }
-    });
-  };
+    }
+  });
+};
 
   const handleAddNewStaff = () => {
     let inputVal = '';
     Modal.confirm({
       title: 'Thêm mới Chuyên viên nghiệp vụ',
-      icon: <PlusOutlined style={{ color: '#0f6cbd' }} />,
+      icon: <PlusOutlined style={{ color: '#007f7a' }} />,
       content: (
         <Input 
           placeholder="Nhập tên chuyên viên mới..." 
@@ -163,17 +196,21 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
       ),
       okText: 'Thêm',
       cancelText: 'Hủy',
-      onOk: () => {
-        const val = inputVal.trim();
-        if (val) {
-          if (![...(formOptions.valuation_staff || []), ...customStaffs].includes(val)) {
-            setCustomStaffs(prev => [...prev, val]);
-          }
+    onOk: async () => {
+      const val = inputVal.trim();
+      if (val) {
+        try {
+          await saveCustomOption('valuation_staff', val, setCustomStaffs);
           form.setFieldValue('valuation_staff', val);
+          message.success('Đã lưu nhân sự thẩm định mới');
+        } catch (err) {
+          message.error(err.response?.data?.error || 'Không lưu được nhân sự thẩm định mới');
+          throw err;
         }
       }
-    });
-  };
+    }
+  });
+};
   
   // Dynamic form state
   const [customerType, setCustomerType] = useState('individual');
@@ -216,9 +253,10 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
         // Populate standard form fields
         customer_info: formValues.ten_chu_so_huu_cuoi_cung?.value || formValues.owner_name || '',
         customer_address: formValues.dia_chi_chu_so_huu_cuoi_cung?.value || formValues.owner_address || '',
-        asset_description: formValues.asset_description || (formValues.so_thua_dat?.value || formValues.so_thua
-          ? `Thửa đất số ${formValues.so_thua_dat?.value || formValues.so_thua}, tờ bản đồ số ${formValues.so_to_ban_do?.value || formValues.so_to || ''}; tại địa chỉ ${formValues.dia_chi_thua_dat?.value || formValues.land_address || ''}`
-          : '')
+        asset_description: formValues.asset_description || (formValues.so_thua_dat?.value || formValues.so_thua 
+          ? `Thửa đất số ${formValues.so_thua_dat?.value || formValues.so_thua}, tờ bản đồ số ${formValues.so_to_ban_do?.value || formValues.so_to || ''}; tại địa chỉ ${formValues.dia_chi_thua_dat?.value || formValues.land_address || ''}` 
+          : ''),
+        personal_note: buildOcrPersonalNote(formValues)
       });
       
       // Auto guess locations if available
@@ -476,7 +514,7 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
 
   return (
     <Card 
-      style={{ borderRadius: 12, border: '1px solid #dbe3f3' }}
+      style={{ borderRadius: 12, border: '1px solid #d8e7e5' }}
       bodyStyle={{ padding: '16px 20px' }}
     >
       <Form
@@ -560,7 +598,7 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
                             type="text" 
                             size="small" 
                             icon={<PlusOutlined />} 
-                            style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                            style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                             onClick={() => setNewOrgModalOpen(true)}
                           >
                             Thêm mới tổ chức...
@@ -694,7 +732,7 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
                           type="text" 
                           size="small" 
                           icon={<PlusOutlined />} 
-                          style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                          style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                           onClick={handleAddNewPurpose}
                         >
                           Thêm mới...
@@ -740,7 +778,7 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
                           type="text" 
                           size="small" 
                           icon={<PlusOutlined />} 
-                          style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                          style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                           onClick={handleAddNewSource}
                         >
                           Thêm mới...
@@ -792,7 +830,7 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
                           type="text" 
                           size="small" 
                           icon={<PlusOutlined />} 
-                          style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                          style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                           onClick={handleAddNewStaff}
                         >
                           Thêm mới...
@@ -965,7 +1003,7 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
         open={newOrgModalOpen}
         title={
           <Space>
-            <PlusOutlined style={{ color: '#0f6cbd' }} />
+            <PlusOutlined style={{ color: '#007f7a' }} />
             <span>Thêm mới Tổ chức vào Danh bạ</span>
           </Space>
         }

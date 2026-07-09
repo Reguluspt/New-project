@@ -13,7 +13,8 @@ from docx.oxml.ns import qn
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
-from .case_files import case_folder, sanitize_folder_name
+from .case_files import sanitize_folder_name, word_export_folder
+from .contracts import short_contract_number
 from .database_store import format_money, money_to_vietnamese_words, parse_money
 from .template_manager import PLACEHOLDER_PATTERN, iter_paragraphs, read_docx_text
 
@@ -620,14 +621,19 @@ def _case_folder_and_contract(case: dict[str, Any], case_files_dir: str | Path) 
     case_id = int(case["id"])
     folder = Path(
         case.get("case_folder")
-        or case_folder(
+        or word_export_folder(
             case_files_dir,
             case_id=case_id,
             contract_number=case.get("contract_number") or "",
             customer_name=case.get("customer_info") or "",
+            customer_type=case.get("customer_type") or "",
+            organization_abbreviation=case.get("organization_abbreviation") or "",
         )
     )
-    contract = sanitize_folder_name(case.get("contract_number") or f"HS-{case_id:05d}", fallback=f"HS-{case_id:05d}")
+    contract = sanitize_folder_name(
+        short_contract_number(case.get("contract_number"), fallback=f"HS-{case_id:05d}"),
+        fallback=f"HS-{case_id:05d}",
+    )
     return folder, contract
 
 

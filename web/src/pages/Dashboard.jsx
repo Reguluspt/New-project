@@ -54,7 +54,7 @@ export default function Dashboard() {
         <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
           {[1, 2, 3, 4].map(i => (
             <Col key={i} xs={24} sm={12} md={6}>
-              <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3' }}>
+              <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5' }}>
                 <Skeleton active paragraph={{ rows: 2 }} />
               </Card>
             </Col>
@@ -63,12 +63,12 @@ export default function Dashboard() {
         {/* Charts Skeleton */}
         <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
           <Col xs={24} lg={12}>
-            <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3' }}>
+            <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5' }}>
               <Skeleton active paragraph={{ rows: 6 }} />
             </Card>
           </Col>
           <Col xs={24} lg={12}>
-            <Card style={{ borderRadius: 12, border: '1px solid #dbe3f3' }}>
+            <Card style={{ borderRadius: 12, border: '1px solid #d8e7e5' }}>
               <Skeleton active paragraph={{ rows: 6 }} />
             </Card>
           </Col>

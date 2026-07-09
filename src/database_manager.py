@@ -791,15 +791,29 @@ async def ensure_sobo_schema(db_path: str | Path) -> None:
             "  note TEXT,"
             "  equipment_name TEXT,"
             "  attachment_paths TEXT,"
+            "  owner_name TEXT,"
+            "  owner_address TEXT,"
+            "  owner_citizen_id TEXT,"
+            "  so_giay_chung_nhan TEXT,"
+            "  so_vao_so_cap_giay_chung_nhan TEXT,"
+            "  ngay_cap_giay_chung_nhan TEXT,"
             "  response_content TEXT"
             ")"
         )
         cursor = await db.execute("PRAGMA table_info(sobo_records)")
         columns = {str(row[1]) for row in await cursor.fetchall()}
-        if "attachment_paths" not in columns:
-            await db.execute("ALTER TABLE sobo_records ADD COLUMN attachment_paths TEXT")
-        if "response_content" not in columns:
-            await db.execute("ALTER TABLE sobo_records ADD COLUMN response_content TEXT")
+        for column in (
+            "attachment_paths",
+            "response_content",
+            "owner_name",
+            "owner_address",
+            "owner_citizen_id",
+            "so_giay_chung_nhan",
+            "so_vao_so_cap_giay_chung_nhan",
+            "ngay_cap_giay_chung_nhan",
+        ):
+            if column not in columns:
+                await db.execute(f"ALTER TABLE sobo_records ADD COLUMN {column} TEXT")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_sobo_outbound_msg_id ON sobo_records(outbound_message_id)")
         await db.commit()
 
@@ -810,7 +824,10 @@ async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int
     fields = [
         "created_at", "asset_type", "asset_sub_type", "source", "so_thua", "so_to", "dia_chi",
         "link", "email_recipient", "outbound_subject", "outbound_message_id",
-        "outbound_sent_at", "responded_at", "status", "note", "equipment_name", "attachment_paths", "response_content"
+        "outbound_sent_at", "responded_at", "status", "note", "equipment_name", "attachment_paths",
+        "owner_name", "owner_address", "owner_citizen_id",
+        "so_giay_chung_nhan", "so_vao_so_cap_giay_chung_nhan", "ngay_cap_giay_chung_nhan",
+        "response_content"
     ]
     columns = ", ".join(fields)
     placeholders = ", ".join(f":{f}" for f in fields)
@@ -820,8 +837,6 @@ async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int
         payload["created_at"] = datetime.now().isoformat()
     if not payload["status"]:
         payload["status"] = "PENDING"
-    if not payload["outbound_sent_at"]:
-        payload["outbound_sent_at"] = datetime.now().isoformat()
         
     async with aiosqlite.connect(db_path, timeout=30) as db:
         cursor = await db.execute(
@@ -909,6 +924,16 @@ async def get_all_sobo_records(db_path: str | Path) -> list[dict[str, Any]]:
         cursor = await db.execute("SELECT * FROM sobo_records ORDER BY id DESC")
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+
+async def get_sobo_record_by_id(db_path: str | Path, record_id: int) -> dict[str, Any] | None:
+    db_path = resolve_records_db_path(db_path)
+    await ensure_sobo_schema(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM sobo_records WHERE id = ? LIMIT 1", (int(record_id),))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
 
 async def find_sobo_record_by_thread(db_path: str | Path, ref_blob: str, subject: str) -> dict[str, Any] | None:
@@ -1051,5 +1076,3 @@ async def sync_telegram_records_to_sobo(db_path: str | Path) -> int:
         await db.commit()
         
     return synced_count
-
-

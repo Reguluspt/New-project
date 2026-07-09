@@ -7,7 +7,7 @@ import asyncio
 import os
 
 from src.sqlite_store import get_case, update_case
-from src.case_files import case_folder
+from src.case_files import word_export_folder
 from src.app_config import (
     CASE_FILES_DIR,
     INDIVIDUAL_TEMPLATE_DIR,
@@ -45,12 +45,14 @@ def _case_with_organization_contact_address(export_case, db_path):
     if not organizations:
         return export_case
 
-    organization_address = str(organizations[0].get("address") or "").strip()
-    if not organization_address:
-        return export_case
-
     enriched_case = dict(export_case)
-    enriched_case["customer_address"] = organization_address
+    organization = organizations[0]
+    organization_address = str(organization.get("address") or "").strip()
+    organization_abbreviation = str(organization.get("abbreviation") or "").strip()
+    if organization_address:
+        enriched_case["customer_address"] = organization_address
+    if organization_abbreviation:
+        enriched_case["organization_abbreviation"] = organization_abbreviation
     return enriched_case
 
 def send_custom_email_with_attachments_sync(case, recipients, cc, subject, body, attachments, send_method="oauth2"):
@@ -60,31 +62,33 @@ def send_custom_email_with_attachments_sync(case, recipients, cc, subject, body,
     from src.oauth2_service import get_enabled_oauth_provider, get_valid_access_token_async, send_outlook_message_via_smtp_oauth2
     import requests
     import base64
-    
+
     settings = load_gmail_smtp_settings()
     mail_from = settings.mail_from or settings.username or "appraisal@century.vn"
-    
+
     msg = EmailMessage()
     msg["From"] = mail_from
     msg["To"] = ", ".join(recipients)
     if cc:
         msg["Cc"] = ", ".join(cc)
     msg["Subject"] = subject
-    
+
     domain = (parseaddr(mail_from)[1].split("@", 1)[1] if "@" in parseaddr(mail_from)[1] else "gmail.com")
     msg["Message-ID"] = make_msgid(domain=domain)
-    
+
     msg.set_content(body)
     msg.add_alternative(body, subtype="html")
-    
+
     case_files_dir = current_app.config.get("CASE_FILES_DIR") or CASE_FILES_DIR
-    folder = Path(case.get("case_folder") or case_folder(
+    folder = Path(case.get("case_folder") or word_export_folder(
         case_files_dir,
         case_id=case["id"],
         contract_number=case.get("contract_number") or "",
         customer_name=case.get("customer_info") or "",
+        customer_type=case.get("customer_type") or "",
+        organization_abbreviation=case.get("organization_abbreviation") or "",
     ))
-    
+
     for filename in attachments:
         file_path = folder / filename
         if file_path.exists() and file_path.is_file():
@@ -92,11 +96,11 @@ def send_custom_email_with_attachments_sync(case, recipients, cc, subject, body,
             if ctype is None or encoding:
                 ctype = 'application/octet-stream'
             maintype, subtype = ctype.split('/', 1)
-            
+
             with open(file_path, 'rb') as f:
                 file_data = f.read()
             msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
-            
+
     provider = get_enabled_oauth_provider()
     if provider and send_method == "oauth2":
         loop = asyncio.new_event_loop()
@@ -131,33 +135,35 @@ def generate_documents(case_id):
     case = get_case(db, case_id)
     if not case:
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
-        
+
     data = request.get_json() or {}
     payment_method = data.get("organization_contract_payment_method") or case.get("organization_contract_payment_method") or "standard"
-    
+
     customer_type = case.get("customer_type") or "individual"
     if customer_type == "individual":
         templates_dir = INDIVIDUAL_TEMPLATE_DIR
     else:
         templates_dir = ORGANIZATION_TEMPLATE_DIR
-        
+
     case_files_dir = current_app.config.get("CASE_FILES_DIR") or CASE_FILES_DIR
-    
-    folder = Path(case.get("case_folder") or case_folder(
+
+    export_case = _case_with_organization_contact_address(dict(case), db)
+    folder = word_export_folder(
         case_files_dir,
         case_id=case_id,
-        contract_number=case.get("contract_number") or "",
-        customer_name=case.get("customer_info") or "",
-    ))
+        contract_number=export_case.get("contract_number") or "",
+        customer_name=export_case.get("customer_info") or "",
+        customer_type=export_case.get("customer_type") or "",
+        organization_abbreviation=export_case.get("organization_abbreviation") or "",
+    )
     folder.mkdir(parents=True, exist_ok=True)
-    
+
     update_case(db, case_id, {"case_folder": str(folder)})
-    
-    export_case = dict(case)
+
     export_case["case_folder"] = str(folder)
     if customer_type == "organization":
         export_case["organization_contract_payment_method"] = payment_method
-        
+
     try:
         from src.case_exports import export_case_documents
         generated_paths = export_case_documents(
@@ -166,7 +172,7 @@ def generate_documents(case_id):
             templates_dir=templates_dir,
             case_files_dir=case_files_dir
         )
-        
+
         documents_list = []
         for path in generated_paths:
             stat = path.stat()
@@ -175,8 +181,8 @@ def generate_documents(case_id):
                 "type": path.suffix.lower().lstrip("."),
                 "size": stat.st_size
             })
-            
-        return jsonify({"documents": documents_list})
+
+        return jsonify({"documents": documents_list, "folder_name": folder.name})
     except Exception as e:
         return jsonify({"error": f"Xuất văn bản thất bại: {str(e)}"}), 500
 
@@ -187,16 +193,19 @@ def list_documents(case_id):
     case = get_case(db, case_id)
     if not case:
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
-        
+
     case_files_dir = current_app.config.get("CASE_FILES_DIR") or CASE_FILES_DIR
-    
-    folder = Path(case.get("case_folder") or case_folder(
+
+    export_case = _case_with_organization_contact_address(dict(case), db)
+    folder = Path(case.get("case_folder") or word_export_folder(
         case_files_dir,
         case_id=case_id,
-        contract_number=case.get("contract_number") or "",
-        customer_name=case.get("customer_info") or "",
+        contract_number=export_case.get("contract_number") or "",
+        customer_name=export_case.get("customer_info") or "",
+        customer_type=export_case.get("customer_type") or "",
+        organization_abbreviation=export_case.get("organization_abbreviation") or "",
     ))
-    
+
     docs = []
     if folder.exists() and folder.is_dir():
         for item in folder.iterdir():
@@ -219,21 +228,21 @@ def preview_document(case_id, filename):
     case = get_case(db, case_id)
     if not case:
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
-        
+
     customer_type = case.get("customer_type") or "individual"
     if customer_type == "individual":
         templates_dir = INDIVIDUAL_TEMPLATE_DIR
     else:
         templates_dir = ORGANIZATION_TEMPLATE_DIR
-        
+
     case_files_dir = current_app.config.get("CASE_FILES_DIR") or CASE_FILES_DIR
-    
+
     from src.document_exporter import (
         describe_individual_documents,
         describe_organization_documents,
         render_docx_preview_html
     )
-    
+
     if customer_type == "individual":
         descriptions = describe_individual_documents(case, templates_dir=templates_dir, case_files_dir=case_files_dir)
     else:
@@ -243,16 +252,16 @@ def preview_document(case_id, filename):
         if not any(Path(d["output_path"]).name.lower() == filename.lower() for d in descriptions):
             export_case["organization_contract_payment_method"] = "advance"
             descriptions = describe_organization_documents(export_case, templates_dir=templates_dir, case_files_dir=case_files_dir)
-            
+
     matched = None
     for desc in descriptions:
         if Path(desc["output_path"]).name.lower() == filename.lower():
             matched = desc
             break
-            
+
     if not matched:
         return jsonify({"error": f"Không tìm thấy template tương ứng với file {filename}"}), 404
-        
+
     try:
         html_content = render_docx_preview_html(
             matched["template"],
@@ -289,26 +298,29 @@ def download_document(case_id, filename):
     case = get_case(db, case_id)
     if not case:
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
-        
+
     case_files_dir = current_app.config.get("CASE_FILES_DIR") or CASE_FILES_DIR
-    
-    folder = Path(case.get("case_folder") or case_folder(
+
+    export_case = _case_with_organization_contact_address(dict(case), db)
+    folder = Path(case.get("case_folder") or word_export_folder(
         case_files_dir,
         case_id=case_id,
-        contract_number=case.get("contract_number") or "",
-        customer_name=case.get("customer_info") or "",
+        contract_number=export_case.get("contract_number") or "",
+        customer_name=export_case.get("customer_info") or "",
+        customer_type=export_case.get("customer_type") or "",
+        organization_abbreviation=export_case.get("organization_abbreviation") or "",
     ))
-    
+
     file_path = folder / filename
     try:
         if not file_path.resolve().is_relative_to(folder.resolve()):
             return jsonify({"error": "Đường dẫn không hợp lệ"}), 400
     except OSError:
         return jsonify({"error": "Đường dẫn không hợp lệ"}), 400
-        
+
     if not file_path.exists() or not file_path.is_file():
         return jsonify({"error": "Không tìm thấy file"}), 404
-        
+
     return send_file(
         file_path,
         as_attachment=True,
@@ -322,25 +334,28 @@ def download_all_documents(case_id):
     case = get_case(db, case_id)
     if not case:
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
-        
+
     case_files_dir = current_app.config.get("CASE_FILES_DIR") or CASE_FILES_DIR
-    
-    folder = Path(case.get("case_folder") or case_folder(
+
+    export_case = _case_with_organization_contact_address(dict(case), db)
+    folder = Path(case.get("case_folder") or word_export_folder(
         case_files_dir,
         case_id=case_id,
-        contract_number=case.get("contract_number") or "",
-        customer_name=case.get("customer_info") or "",
+        contract_number=export_case.get("contract_number") or "",
+        customer_name=export_case.get("customer_info") or "",
+        customer_type=export_case.get("customer_type") or "",
+        organization_abbreviation=export_case.get("organization_abbreviation") or "",
     ))
-    
+
     if not folder.exists() or not folder.is_dir():
         return jsonify({"error": "Chưa có tài liệu nào được tạo để tải về"}), 400
-        
+
     try:
         from src.case_exports import package_case_documents
         zip_path = package_case_documents(folder)
         if not zip_path.exists():
             return jsonify({"error": "Không thể tạo file nén ZIP"}), 500
-            
+
         return send_file(
             zip_path,
             as_attachment=True,
@@ -356,7 +371,7 @@ def send_email_endpoint(case_id):
     case = get_case(db, case_id)
     if not case:
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
-        
+
     data = request.get_json() or {}
     recipients = data.get("recipients", [])
     cc = data.get("cc", [])
@@ -364,14 +379,14 @@ def send_email_endpoint(case_id):
     body = data.get("body", "").strip()
     attachments = data.get("attachments", [])
     send_method = data.get("send_method", "oauth2")
-    
+
     if not recipients:
         return jsonify({"error": "Danh sách người nhận không được trống"}), 400
     if not subject:
         return jsonify({"error": "Tiêu đề không được trống"}), 400
     if not body:
         return jsonify({"error": "Nội dung email không được trống"}), 400
-        
+
     try:
         send_custom_email_with_attachments_sync(
             case=case,
@@ -393,38 +408,41 @@ def send_phathanh_reply_endpoint(case_id):
     case = get_case(db, case_id)
     if not case:
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
-        
+
     data = request.get_json() or {}
     certificate_number = data.get("certificate_number", "").strip()
     recipient = data.get("recipient", "").strip()
-    
-    updates = {}
+
+    # 1. Lưu certificate_number trước (email template cần dữ liệu này)
     if certificate_number:
-        updates["certificate_number"] = certificate_number
-    updates["case_status"] = "Hoàn thành"
-    updates["cancel_reason"] = ""
-    
-    try:
-        update_case(db, case_id, updates)
-    except Exception as e:
-        return jsonify({"error": f"Không thể cập nhật trạng thái hồ sơ: {str(e)}"}), 500
-        
+        try:
+            update_case(db, case_id, {"certificate_number": certificate_number})
+        except Exception as e:
+            return jsonify({"error": f"Không thể lưu số chứng thư: {str(e)}"}), 500
+
     case = get_case(db, case_id)
-    
+
+    # 2. Gửi mail
     try:
         from src.email_reply_service import send_phathanh_email_for_case
         mail_case = _case_with_organization_contact_address(case, db)
-        
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             to_email = loop.run_until_complete(send_phathanh_email_for_case(mail_case, recipient=recipient))
         finally:
             loop.close()
-            
-        return jsonify({"success": True, "to_email": to_email})
     except Exception as e:
         return jsonify({"error": f"Gửi mail phát hành thất bại: {str(e)}"}), 500
+
+    # 3. Đánh dấu hoàn thành chỉ khi gửi mail OK
+    try:
+        update_case(db, case_id, {"case_status": "Hoàn thành", "cancel_reason": ""})
+    except Exception as e:
+        return jsonify({"success": True, "to_email": to_email, "warning": f"Mail đã gửi nhưng không thể cập nhật trạng thái: {str(e)}"}), 200
+
+    return jsonify({"success": True, "to_email": to_email})
 
 @documents_bp.route("/delivery/contacts", methods=["GET"])
 @login_required
@@ -432,7 +450,7 @@ def get_delivery_contacts():
     try:
         from src.database_manager import resolve_records_db_path, ensure_tracking_record_schema, get_all_delivery_contacts
         records_db_path = Path(resolve_records_db_path())
-        
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -440,7 +458,7 @@ def get_delivery_contacts():
             contacts = loop.run_until_complete(get_all_delivery_contacts(records_db_path))
         finally:
             loop.close()
-            
+
         result = []
         for c in contacts:
             result.append({
@@ -460,21 +478,37 @@ def save_case_delivery(case_id):
     case = get_case(db, case_id)
     if not case:
         return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
-        
+
     data = request.get_json() or {}
     delivery_contact_id = data.get("delivery_contact_id")
-    tracking_number = data.get("tracking_number", "").strip()
-    
+    save_to_contacts = data.get("save_to_contacts", False)
+    manual_short_name = data.get("manual_short_name", "").strip()
+    manual_details = data.get("manual_details", "").strip()
+
     ensure_delivery_columns(db)
-    
+
     try:
         update_case(db, case_id, {
-            "delivery_contact_id": delivery_contact_id,
-            "tracking_number": tracking_number
+            "delivery_contact_id": delivery_contact_id
         })
     except Exception as e:
         return jsonify({"error": f"Không thể cập nhật thông tin chuyển phát: {str(e)}"}), 500
-        
+
+    # Lưu người nhận vào danh bạ nếu được yêu cầu
+    if save_to_contacts and manual_short_name and manual_details:
+        try:
+            from src.database_manager import resolve_records_db_path, add_delivery_contact
+            records_db_path = Path(resolve_records_db_path())
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(add_delivery_contact(records_db_path, manual_short_name, manual_details))
+            finally:
+                loop.close()
+        except Exception:
+            pass  # Không block flow chính nếu lưu danh bạ lỗi
+
     delivery_contact = None
     if delivery_contact_id:
         try:
@@ -488,9 +522,210 @@ def save_case_delivery(case_id):
                     delivery_contact = dict(row)
         except Exception:
             pass
-            
+
     return jsonify({
         "success": True,
-        "delivery_contact": delivery_contact,
-        "tracking_number": tracking_number
+        "delivery_contact": delivery_contact
     })
+
+@documents_bp.route("/cases/<int:case_id>/documents/phathanh", methods=["GET"])
+@login_required
+def download_phathanh_docx(case_id):
+    db = current_app.config["SQLITE_DATABASE"]
+    case = get_case(db, case_id)
+    if not case:
+        return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
+
+    try:
+        from src.email_reply_service import create_phathanh_docx_for_case
+        recipient = None
+        delivery_contact_id = case.get("delivery_contact_id")
+        if delivery_contact_id:
+            try:
+                from src.database_manager import resolve_records_db_path
+                import sqlite3
+                records_db_path = resolve_records_db_path()
+                with sqlite3.connect(records_db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    row = conn.execute("SELECT * FROM delivery_contacts WHERE id = ?", (delivery_contact_id,)).fetchone()
+                    if row:
+                        recipient = row["full_details"]
+            except Exception:
+                pass
+
+        docx_path = create_phathanh_docx_for_case(case, recipient=recipient)
+        filename = f"phieu_phat_hanh_{case.get('contract_number') or case_id}.docx"
+        safe_filename = filename.replace("/", "_").replace("\\", "_")
+        
+        return send_file(
+            docx_path,
+            as_attachment=True,
+            download_name=safe_filename
+        )
+    except Exception as e:
+        return jsonify({"error": f"Lỗi tạo form phát hành: {str(e)}"}), 500
+
+@documents_bp.route("/cases/<int:case_id>/documents/phathanh-content", methods=["GET"])
+@login_required
+def get_phathanh_content(case_id):
+    db = current_app.config["SQLITE_DATABASE"]
+    case = get_case(db, case_id)
+    if not case:
+        return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
+
+    try:
+        from src.email_reply_service import build_phathanh_email_html
+        recipient = None
+        delivery_contact_id = case.get("delivery_contact_id")
+        if delivery_contact_id:
+            try:
+                from src.database_manager import resolve_records_db_path
+                import sqlite3
+                records_db_path = resolve_records_db_path()
+                with sqlite3.connect(records_db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    row = conn.execute("SELECT * FROM delivery_contacts WHERE id = ?", (delivery_contact_id,)).fetchone()
+                    if row:
+                        recipient = row["full_details"]
+            except Exception:
+                pass
+
+        html_content = build_phathanh_email_html(case, recipient=recipient)
+        return jsonify({"success": True, "html": html_content})
+    except Exception as e:
+        return jsonify({"error": f"Lỗi tạo nội dung phát hành: {str(e)}"}), 500
+
+@documents_bp.route("/cases/<int:case_id>/documents/xinso-content", methods=["GET"])
+@login_required
+def get_xinso_content(case_id):
+    db = current_app.config["SQLITE_DATABASE"]
+    case = get_case(db, case_id)
+    if not case:
+        return jsonify({"error": "Không tìm thấy hồ sơ"}), 404
+
+    try:
+        from src.mail_service import render_mail_html
+        case_dict = dict(case)
+        # Use customized intro text for requesting certificate number
+        case_dict["intro_text"] = "Em lấy số chứng thư theo thông tin bên dưới giúp anh nhé, anh cảm ơn!"
+        
+        # Ensure we expand contract number or fallback to XIN SỐ in the template view if appropriate
+        html_content = render_mail_html(case_dict)
+        return jsonify({"success": True, "html": html_content})
+    except Exception as e:
+        return jsonify({"error": f"Lỗi tạo nội dung xin số: {str(e)}"}), 500
+
+@documents_bp.route("/cases/<int:case_id>/latest-email", methods=["GET"])
+@login_required
+def get_latest_email(case_id):
+    from src.database_manager import resolve_records_db_path
+    import sqlite3
+    import os
+    
+    db_path = resolve_records_db_path()
+    if not db_path or not os.path.exists(db_path):
+        return jsonify({"error": "Không tìm thấy cơ sở dữ liệu Telegram"}), 404
+        
+    try:
+        email_data = None
+        row = None
+        
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # 1. Query by record_id
+            cursor.execute(
+                """
+                SELECT subject, from_email, processed_at, body 
+                FROM processed_emails 
+                WHERE record_id = ? 
+                ORDER BY processed_at DESC LIMIT 1
+                """,
+                (str(case_id),)
+            )
+            row = cursor.fetchone()
+            
+            if not row:
+                # 2. Query by contract number
+                cases_db = current_app.config["SQLITE_DATABASE"]
+                from src.sqlite_store import get_case
+                case = get_case(cases_db, case_id)
+                if case and case.get("contract_number"):
+                    contract_num = case["contract_number"]
+                    cursor.execute(
+                        """
+                        SELECT subject, from_email, processed_at, body 
+                        FROM processed_emails 
+                        WHERE subject LIKE ? 
+                        ORDER BY processed_at DESC LIMIT 1
+                        """,
+                        (f"%{contract_num}%",)
+                    )
+                    row = cursor.fetchone()
+            
+            if row:
+                email_data = {
+                    "subject": row["subject"],
+                    "from_email": row["from_email"],
+                    "processed_at": row["processed_at"],
+                    "body": row["body"]
+                }
+                
+                # If body is missing, attempt to fetch it from IMAP
+                if not email_data["body"]:
+                    try:
+                        cases_db = current_app.config["SQLITE_DATABASE"]
+                        from src.sqlite_store import get_case
+                        case = get_case(cases_db, case_id)
+                        if case and case.get("contract_number"):
+                            from src.email_reply_service import find_latest_email_by_subject
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            try:
+                                live_mail = loop.run_until_complete(find_latest_email_by_subject(case["contract_number"]))
+                            finally:
+                                loop.close()
+                            
+                            if live_mail and live_mail.get("body"):
+                                email_data["body"] = live_mail["body"]
+                                # Cache in database for next time
+                                cursor.execute(
+                                    "UPDATE processed_emails SET body = ? WHERE subject = ? AND processed_at = ?",
+                                    (live_mail["body"], row["subject"], row["processed_at"])
+                                )
+                                conn.commit()
+                    except Exception as imap_err:
+                        print(f"Lỗi lấy email body từ IMAP: {imap_err}")
+                
+                # Ensure we have a placeholder if everything failed
+                if not email_data["body"]:
+                    email_data["body"] = "Không có nội dung hiển thị (Email cũ nhận trước khi cập nhật lưu trữ)"
+                
+        # 3. Fallback: query live inbox if still not found in DB at all
+        if not email_data:
+            try:
+                cases_db = current_app.config["SQLITE_DATABASE"]
+                from src.sqlite_store import get_case
+                case = get_case(cases_db, case_id)
+                if case and case.get("contract_number"):
+                    from src.email_reply_service import find_latest_email_by_subject
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        live_mail = loop.run_until_complete(find_latest_email_by_subject(case["contract_number"]))
+                    finally:
+                        loop.close()
+                    if live_mail:
+                        email_data = {
+                            "subject": live_mail.get("subject"),
+                            "from_email": live_mail.get("from_email") or live_mail.get("from"),
+                            "processed_at": "Live Inbox",
+                            "body": live_mail.get("body") or "Không có nội dung hiển thị"
+                        }
+            except Exception:
+                pass
+                
+        return jsonify({"success": True, "email": email_data})
+    except Exception as e:
+        return jsonify({"error": f"Lỗi truy vấn email: {str(e)}"}), 500

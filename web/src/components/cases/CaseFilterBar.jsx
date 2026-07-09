@@ -78,7 +78,7 @@ export default function CaseFilterBar({ filterOptions = {}, filters = {}, onFilt
 
   return (
     <Card 
-      style={{ marginBottom: 16, borderRadius: 12, border: '1px solid #dbe3f3' }} 
+      style={{ marginBottom: 16, borderRadius: 12, border: '1px solid #d8e7e5' }} 
       bodyStyle={{ padding: '16px 20px' }}
     >
       <Row gutter={[16, 16]} align="middle">

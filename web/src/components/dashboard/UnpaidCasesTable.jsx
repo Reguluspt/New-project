@@ -56,7 +56,7 @@ export default function UnpaidCasesTable({
 
   return (
     <Card 
-      style={{ borderRadius: 12, border: '1px solid #dbe3f3', height: '100%' }}
+      style={{ borderRadius: 12, border: '1px solid #d8e7e5', height: '100%' }}
       bodyStyle={{ padding: '20px 22px' }}
     >
       <Title level={4} style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>

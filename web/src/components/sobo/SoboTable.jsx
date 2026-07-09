@@ -5,7 +5,8 @@ import {
   DeleteOutlined,
   CompassOutlined,
   DownloadOutlined,
-  MailOutlined
+  MailOutlined,
+  ImportOutlined
 } from '@ant-design/icons';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 
@@ -33,7 +34,8 @@ export default function SoboTable({
   onView,
   onEdit,
   onDelete,
-  isGuest
+  isGuest,
+  onConvert
 }) {
   const [previewRecord, setPreviewRecord] = useState(null);
 
@@ -42,7 +44,7 @@ export default function SoboTable({
     info: 450,
     response_content: 250,
     status_time: 180,
-    actions: 180
+    actions: 220
   });
 
   const getAssetDisplay = (record) => {
@@ -96,7 +98,7 @@ export default function SoboTable({
     {
       title: 'MÃ HỒ SƠ / NGÀY GỬI',
       key: 'id_date',
-      width: 180,
+    width: 180,
       render: (_, record) => (
         <div>
           <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
@@ -216,7 +218,7 @@ export default function SoboTable({
                   fontWeight: 700, 
                   fontSize: '11px' 
                 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', marginRight: 6 }} />
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#047857', marginRight: 6 }} />
                   Đã phản hồi
                 </span>
               ) : (
@@ -231,7 +233,7 @@ export default function SoboTable({
                   fontWeight: 700, 
                   fontSize: '11px' 
                 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', marginRight: 6 }} />
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#c2413d', marginRight: 6 }} />
                   Chờ phản hồi
                 </span>
               )}
@@ -247,7 +249,7 @@ export default function SoboTable({
                 width: 6, 
                 height: 6, 
                 borderRadius: '50%', 
-                background: isResponded ? '#10b981' : '#ef4444', 
+                background: isResponded ? '#047857' : '#c2413d', 
                 marginRight: 6 
               }} />
               {isResponded ? 'Xử lý: ' : 'Trễ: '}{elapsed}
@@ -259,7 +261,7 @@ export default function SoboTable({
     {
       title: 'THAO TÁC',
       key: 'actions',
-      width: 180,
+    width: 220,
       align: 'center',
       render: (_, record) => (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
@@ -269,7 +271,7 @@ export default function SoboTable({
               disabled={!record.link}
               href={record.link || undefined}
               target="_blank"
-              icon={<CompassOutlined style={{ color: record.link ? '#0f6cbd' : '#bfbfbf', fontSize: '18px' }} />}
+              icon={<CompassOutlined style={{ color: record.link ? '#007f7a' : '#bfbfbf', fontSize: '18px' }} />}
               style={{ 
                 width: '36px', 
                 height: '36px', 
@@ -290,7 +292,7 @@ export default function SoboTable({
               disabled={!record.attachment_paths || record.attachment_paths.trim() === ''}
               href={record.attachment_paths ? `/api/sobo/${record.id}/files/download-all` : undefined}
               target="_blank"
-              icon={<DownloadOutlined style={{ color: (record.attachment_paths && record.attachment_paths.trim() !== '') ? '#0f6cbd' : '#bfbfbf', fontSize: '18px' }} />}
+              icon={<DownloadOutlined style={{ color: (record.attachment_paths && record.attachment_paths.trim() !== '') ? '#007f7a' : '#bfbfbf', fontSize: '18px' }} />}
               style={{ 
                 width: '36px', 
                 height: '36px', 
@@ -305,7 +307,27 @@ export default function SoboTable({
               }}
             />
           </Tooltip>
-          {!isGuest && (
+ {!isGuest && (
+            <Tooltip title="Chuyển Sang Thẩm Định">
+              <Button
+                type="text"
+                icon={<ImportOutlined style={{ color: '#7c3aed', fontSize: '18px' }} />}
+                onClick={() => onConvert(record)}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  minWidth: '36px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderRadius: '6px',
+                  backgroundColor: '#f5f3ff',
+                  border: 'none',
+                  padding: 0
+                }}
+              />
+            </Tooltip>
+          )} {!isGuest && (
             <Tooltip title="Xóa">
               <Popconfirm
                 title="Xóa hồ sơ sơ bộ"
@@ -339,7 +361,7 @@ export default function SoboTable({
             <Tooltip title="Xem chi tiết">
               <Button
                 type="text"
-                icon={<EyeOutlined style={{ color: '#0f6cbd', fontSize: '18px' }} />}
+                icon={<EyeOutlined style={{ color: '#007f7a', fontSize: '18px' }} />}
                 onClick={() => onView(record)}
                 style={{ 
                   width: '36px', 
@@ -373,6 +395,7 @@ export default function SoboTable({
           dataSource={dataSource}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 'max-content' }}
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,

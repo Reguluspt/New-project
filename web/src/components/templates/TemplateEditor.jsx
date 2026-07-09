@@ -89,7 +89,7 @@ export default function TemplateEditor({ open, templateName, onClose, onSuccess 
     <Drawer
       title={
         <Space>
-          <FileTextOutlined style={{ color: '#0f6cbd' }} />
+          <FileTextOutlined style={{ color: '#007f7a' }} />
           <span>Chi tiết Mẫu: {templateName}</span>
         </Space>
       }

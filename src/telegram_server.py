@@ -64,7 +64,7 @@ from .mail_listener import (
     set_listener_enabled,
     write_listener_pid,
 )
-from .sobo_handler import get_sobo_conversation_handler
+from .sobo_handler import SOBO_RETRY_CALLBACK_PREFIX, get_sobo_conversation_handler, sobo_retry_send
 from .phathanh_handler import get_phathanh_conversation_handler
 
 
@@ -2078,8 +2078,12 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def register_bot_commands(telegram_app: Application) -> None:
-    await telegram_app.bot.set_my_commands(TELEGRAM_BOT_COMMANDS)
-    await telegram_app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    try:
+        await telegram_app.bot.set_my_commands(TELEGRAM_BOT_COMMANDS)
+        await telegram_app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to register bot commands due to rate limit/error: {e}")
 
 
 def build_telegram_application(token: str) -> Application:
@@ -2119,6 +2123,7 @@ def build_telegram_application(token: str) -> Application:
     telegram_app.add_handler(CommandHandler("tra_cuu", search_case_by_contract_command))
     telegram_app.add_handler(CommandHandler("search", search_case_by_contract_command))
     telegram_app.add_handler(get_sobo_conversation_handler())
+    telegram_app.add_handler(CallbackQueryHandler(sobo_retry_send, pattern=f"^{SOBO_RETRY_CALLBACK_PREFIX}:\\d+$"))
     telegram_app.add_handler(get_phathanh_conversation_handler())
     telegram_app.add_handler(conversation)
     telegram_app.add_handler(
@@ -2213,4 +2218,3 @@ async def serve_logo():
     if logo_path.exists():
         return FileResponse(logo_path, media_type="image/jpeg")
     raise HTTPException(status_code=404, detail="Logo not found")
-

@@ -72,8 +72,9 @@ def extract_land_certificate_with_gemini(
                     (
                         "Hay dem va trich xuat tat ca tai san/GCN co trong tai lieu, khong chi lay tai san dau tien. "
                         "Neu mot file co nhieu thua dat hoac nhieu GCN, moi tai san la mot phan tu trong assets. "
-                        "Tap trung vao so thua, so to ban do, dia chi thua dat, chu so huu cuoi cung, dia chi va CCCD/CMND cua nguoi do."
-                    ),
+                    "Tap trung vao so thua, so to ban do, dia chi thua dat, chu so huu cuoi cung, dia chi va CCCD/CMND cua nguoi do. "
+                    "Doc them So giay chung nhan, So vao so cap giay chung nhan va ngay cap giay chung nhan neu co."
+                ),
                 ],
                 config=types.GenerateContentConfig(
                     system_instruction=EXTRACTION_INSTRUCTIONS,

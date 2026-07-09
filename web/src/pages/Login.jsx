@@ -45,12 +45,12 @@ export default function Login() {
       justifyContent: 'center',
       alignItems: 'center',
       minHeight: '100vh',
-      backgroundColor: '#f5f7fb',
+      backgroundColor: '#f4faf9',
       padding: '20px',
     }}>
       <div style={{ textAlign: 'center', marginBottom: 24 }} className="login-brand">
         <Title level={1} style={{ 
-          color: '#0f6cbd', 
+          color: '#007f7a', 
           fontSize: '28px', 
           fontWeight: 750, 
           margin: 0,

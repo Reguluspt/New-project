@@ -9,7 +9,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from telegram.ext import ConversationHandler
 
+from src.database_manager import get_all_sobo_records
 from src.models import ExtractedValue, LandCertificateExtraction, LandCertificateMultiExtraction
+from src.sobo_handler import _rename_sobo_attachment_by_parcel
 from src.sobo_handler import (
     SOBO_ASSET_SELECT,
     SOBO_DOC,
@@ -54,6 +56,21 @@ def _value(value: str) -> ExtractedValue:
 
 
 class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
+    def test_sobo_attachment_name_uses_sheet_and_parcel(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            source = Path(tmpdir) / "upload.pdf"
+            source.write_bytes(b"pdf")
+
+            renamed_path, display_name = _rename_sobo_attachment_by_parcel(
+                str(source),
+                "12",
+                "34/5",
+            )
+
+            self.assertEqual(display_name, "To 12 - Thua 34-5.pdf")
+            self.assertTrue(Path(renamed_path).exists())
+            self.assertFalse(source.exists())
+
     async def test_command_starts_with_two_asset_type_choices(self) -> None:
         update = Mock()
         update.message.reply_text = AsyncMock()
@@ -434,6 +451,50 @@ class SoboHandlerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(state, ConversationHandler.END)
         self.assertEqual(send.await_args.kwargs["attachment_path"], ["may_cat.pdf", "anh_thiet_bi.pdf"])
+
+    async def test_sobo_send_failure_keeps_pending_record_for_retry(self) -> None:
+        update = Mock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = "sobo_send"
+        context = Mock()
+        context.user_data = {
+            "sobo": {
+                "asset_type": "real_estate",
+                "email": SOBO_EMAIL_OPTIONS[0],
+                "subject": "[SƠ BỘ] VCB Gia Lai",
+                "body": "Body",
+                "body_html": "<p>Body</p>",
+                "source": "VCB Gia Lai",
+                "so_thua": "72",
+                "so_to": "13",
+                "dia_chi": "Gia Lai",
+                "link": "https://maps.example",
+                "note": "Không có",
+                "file_paths": ["gcn.pdf"],
+            }
+        }
+
+        with TemporaryDirectory() as tmpdir:
+            db_path = str(Path(tmpdir) / "records.db")
+            with (
+                patch("src.database_manager.resolve_records_db_path", return_value=db_path),
+                patch(
+                    "src.sobo_handler.send_sobo_email_with_result",
+                    AsyncMock(return_value=Mock(success=False, user_message="Gmail rate limit")),
+                ),
+            ):
+                state = await sobo_handle_confirm(update, context)
+
+            records = await get_all_sobo_records(db_path)
+
+        self.assertEqual(state, ConversationHandler.END)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["status"], "PENDING")
+        self.assertEqual(records[0]["source"], "VCB Gia Lai")
+        message = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("Gmail rate limit", message)
+        self.assertIn("Đã giữ hồ sơ sơ bộ #1", message)
 
     async def test_real_estate_source_prompts_for_note_before_preview(self) -> None:
         update = Mock()

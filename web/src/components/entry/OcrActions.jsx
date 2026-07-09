@@ -216,6 +216,15 @@ export default function OcrActions({ uploadId, activeFile, files = [], onApplyDa
               <Descriptions.Item label="CCCD chủ sở hữu">
                 {extractedResult.so_cccd_chu_so_huu_cuoi_cung?.value || 'Không có'}
               </Descriptions.Item>
+              <Descriptions.Item label="Số giấy chứng nhận">
+                {extractedResult.so_giay_chung_nhan?.value || 'Không có'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Số vào sổ cấp giấy chứng nhận">
+                {extractedResult.so_vao_so_cap_giay_chung_nhan?.value || 'Không có'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Ngày cấp giấy chứng nhận">
+                {extractedResult.ngay_cap_giay_chung_nhan?.value || 'Không có'}
+              </Descriptions.Item>
               {extractedResult.notes && extractedResult.notes.length > 0 && (
                 <Descriptions.Item label="Ghi chú AI">
                   <ul style={{ paddingLeft: 16, margin: 0 }}>

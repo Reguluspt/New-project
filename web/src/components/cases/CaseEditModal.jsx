@@ -4,7 +4,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import { getOrganizations, createOrganization } from '../../api/organizations';
 import { getFilters } from '../../api/cases';
-import { getFormOptions } from '../../api/entry';
+import { getFormOptions, addFormOption } from '../../api/entry';
 
 const { TextArea } = Input;
 
@@ -42,6 +42,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
   const [customPurposes, setCustomPurposes] = useState([]);
   const [customAssetTypes, setCustomAssetTypes] = useState([]);
   const [customBranches, setCustomBranches] = useState([]);
+  const [customValuationBranches, setCustomValuationBranches] = useState([]);
   const [customOffices, setCustomOffices] = useState([]);
   const [internalFilters, setInternalFilters] = useState({});
 
@@ -58,7 +59,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
           branches: [...new Set([...(options.source || []), ...(filters.branches || [])])],
           appraisers: [...new Set([...(options.valuation_staff || []), ...(filters.appraisers || [])])],
           payment_statuses: filters.payment_statuses && filters.payment_statuses.length ? filters.payment_statuses : ['Đã thanh toán', 'Chưa thanh toán'],
-          offices: ['vp Đà Nẵng'],
+          offices: [...new Set([...(filters.offices || []), 'vp Đà Nẵng'])],
           valuation_purposes: [...new Set([...(options.valuation_purpose || []), ...(filters.valuation_purposes || [])])],
           asset_types: [...new Set([...(options.asset_type || []), ...(filters.asset_types || [])])],
         });
@@ -122,11 +123,20 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
     }
   };
 
+  const saveCustomOption = async (field, value, optionKey, setCustomOptions) => {
+    await addFormOption(field, value);
+    setLocalFilterOptions(prev => ({
+      ...prev,
+      [optionKey]: [...new Set([...(prev[optionKey] || []), value])],
+    }));
+    setCustomOptions([]);
+  };
+
   const handleAddNewPurpose = () => {
     let inputVal = '';
     Modal.confirm({
       title: 'Thêm mới Mục đích thẩm định',
-      icon: <PlusOutlined style={{ color: '#0f6cbd' }} />,
+      icon: <PlusOutlined style={{ color: '#007f7a' }} />,
       content: (
         <Input 
           placeholder="Nhập mục đích mới..." 
@@ -136,21 +146,27 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
       ),
       okText: 'Thêm',
       cancelText: 'Hủy',
-      onOk: () => {
-        const val = inputVal.trim();
-        if (val) {
-          setCustomPurposes(prev => [...prev, val]);
+    onOk: async () => {
+      const val = inputVal.trim();
+      if (val) {
+        try {
+          await saveCustomOption('valuation_purpose', val, 'valuation_purposes', setCustomPurposes);
           form.setFieldValue('valuation_purpose', val);
+          message.success('Đã lưu mục đích thẩm định mới');
+        } catch (err) {
+          message.error(err.response?.data?.error || 'Không lưu được mục đích thẩm định mới');
+          throw err;
         }
       }
-    });
-  };
+    }
+  });
+};
 
   const handleAddNewAssetType = () => {
     let inputVal = '';
     Modal.confirm({
       title: 'Thêm mới Loại tài sản',
-      icon: <PlusOutlined style={{ color: '#0f6cbd' }} />,
+      icon: <PlusOutlined style={{ color: '#007f7a' }} />,
       content: (
         <Input 
           placeholder="Nhập loại tài sản mới..." 
@@ -160,21 +176,27 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
       ),
       okText: 'Thêm',
       cancelText: 'Hủy',
-      onOk: () => {
-        const val = inputVal.trim();
-        if (val) {
-          setCustomAssetTypes(prev => [...prev, val]);
+    onOk: async () => {
+      const val = inputVal.trim();
+      if (val) {
+        try {
+          await saveCustomOption('asset_type', val, 'asset_types', setCustomAssetTypes);
           form.setFieldValue('asset_type', val);
+          message.success('Đã lưu loại tài sản mới');
+        } catch (err) {
+          message.error(err.response?.data?.error || 'Không lưu được loại tài sản mới');
+          throw err;
         }
       }
-    });
-  };
+    }
+  });
+};
 
   const handleAddNewBranch = () => {
     let inputVal = '';
     Modal.confirm({
       title: 'Thêm mới Chi nhánh / Ngân hàng nguồn',
-      icon: <PlusOutlined style={{ color: '#0f6cbd' }} />,
+      icon: <PlusOutlined style={{ color: '#007f7a' }} />,
       content: (
         <Input 
           placeholder="Nhập chi nhánh/ngân hàng mới..." 
@@ -184,21 +206,27 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
       ),
       okText: 'Thêm',
       cancelText: 'Hủy',
-      onOk: () => {
-        const val = inputVal.trim();
-        if (val) {
-          setCustomBranches(prev => [...prev, val]);
+    onOk: async () => {
+      const val = inputVal.trim();
+      if (val) {
+        try {
+          await saveCustomOption('source', val, 'branches', setCustomBranches);
           form.setFieldValue('source', val);
+          message.success('Đã lưu chi nhánh/ngân hàng mới');
+        } catch (err) {
+          message.error(err.response?.data?.error || 'Không lưu được chi nhánh/ngân hàng mới');
+          throw err;
         }
       }
-    });
-  };
+    }
+  });
+};
 
   const handleAddNewOffice = () => {
     let inputVal = '';
     Modal.confirm({
       title: 'Thêm mới Văn phòng thẩm định',
-      icon: <PlusOutlined style={{ color: '#0f6cbd' }} />,
+      icon: <PlusOutlined style={{ color: '#007f7a' }} />,
       content: (
         <Input 
           placeholder="Nhập tên văn phòng mới..." 
@@ -208,11 +236,47 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
       ),
       okText: 'Thêm',
       cancelText: 'Hủy',
-      onOk: () => {
+    onOk: async () => {
+      const val = inputVal.trim();
+      if (val) {
+        try {
+          await saveCustomOption('office', val, 'offices', setCustomOffices);
+          form.setFieldValue('office', val);
+          message.success('Đã lưu văn phòng mới');
+        } catch (err) {
+          message.error(err.response?.data?.error || 'Không lưu được văn phòng mới');
+          throw err;
+        }
+      }
+    }
+  });
+  };
+
+  const handleAddNewValuationBranch = () => {
+    let inputVal = '';
+    Modal.confirm({
+      title: 'Thêm mới Chi nhánh thẩm định',
+      icon: <PlusOutlined style={{ color: '#007f7a' }} />,
+      content: (
+        <Input
+          placeholder="Nhập tên chi nhánh mới..."
+          onChange={(e) => { inputVal = e.target.value; }}
+          style={{ marginTop: 12 }}
+        />
+      ),
+      okText: 'Thêm',
+      cancelText: 'Hủy',
+      onOk: async () => {
         const val = inputVal.trim();
         if (val) {
-          setCustomOffices(prev => [...prev, val]);
-          form.setFieldValue('office', val);
+          try {
+            await saveCustomOption('valuation_branch', val, 'valuation_branches', setCustomValuationBranches);
+            form.setFieldValue('valuation_branch', val);
+            message.success('Đã lưu chi nhánh thẩm định mới');
+          } catch (err) {
+            message.error(err.response?.data?.error || 'Không lưu được chi nhánh thẩm định mới');
+            throw err;
+          }
         }
       }
     });
@@ -220,6 +284,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
 
   const {
     branches = [],
+    valuation_branches = [],
     appraisers = [],
     payment_statuses = ['Đã thanh toán', 'Chưa thanh toán'],
     offices = ['vp Đà Nẵng'],
@@ -284,7 +349,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
         }}
       >
         {/* Section 1: Thông tin hợp đồng */}
-        <Divider orientation="left" style={{ margin: '12px 0', color: '#0f6cbd' }}>Thông tin hợp đồng</Divider>
+        <Divider orientation="left" style={{ margin: '12px 0', color: '#007f7a' }}>Thông tin hợp đồng</Divider>
         <Row gutter={16}>
           <Col span={8}>
             <Form.Item name="contract_number" label="Số hợp đồng">
@@ -324,7 +389,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
                         type="text" 
                         size="small" 
                         icon={<PlusOutlined />} 
-                        style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                        style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                         onClick={handleAddNewBranch}
                       >
                         Thêm mới...
@@ -355,37 +420,15 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
                         type="text" 
                         size="small" 
                         icon={<PlusOutlined />} 
-                        style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
-                        onClick={() => {
-                          let inputVal = '';
-                          Modal.confirm({
-                            title: 'Thêm mới Chi nhánh thẩm định',
-                            icon: <PlusOutlined style={{ color: '#0f6cbd' }} />,
-                            content: (
-                              <Input 
-                                placeholder="Nhập tên chi nhánh mới..." 
-                                onChange={(e) => { inputVal = e.target.value; }} 
-                                style={{ marginTop: 12 }}
-                              />
-                            ),
-                            okText: 'Thêm',
-                            cancelText: 'Hủy',
-                            onOk: () => {
-                              const val = inputVal.trim();
-                              if (val) {
-                                setCustomBranches(prev => [...prev, val]);
-                                form.setFieldValue('valuation_branch', val);
-                              }
-                            }
-                          });
-                        }}
+                        style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
+                        onClick={handleAddNewValuationBranch}
                       >
                         Thêm mới...
                       </Button>
                     </div>
                   </>
                 )}
-                options={[...["cn Đà Nẵng", "cn Miền Bắc", "CN Miền Nam"], ...customBranches].map(b => ({ label: b, value: b }))}
+                options={[...new Set([...valuation_branches, ...["cn Đà Nẵng", "cn Miền Bắc", "CN Miền Nam"], ...customValuationBranches])].map(b => ({ label: b, value: b }))}
               />
             </Form.Item>
           </Col>
@@ -404,7 +447,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
                         type="text" 
                         size="small" 
                         icon={<PlusOutlined />} 
-                        style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                        style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                         onClick={handleAddNewOffice}
                       >
                         Thêm mới...
@@ -422,7 +465,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
         </Row>
 
         {/* Section 2: Thông tin khách hàng */}
-        <Divider orientation="left" style={{ margin: '12px 0', color: '#0f6cbd' }}>Thông tin khách hàng</Divider>
+        <Divider orientation="left" style={{ margin: '12px 0', color: '#007f7a' }}>Thông tin khách hàng</Divider>
         <Row gutter={16}>
           <Col span={24}>
             {customerType === 'organization' ? (
@@ -450,7 +493,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
                           type="text" 
                           size="small" 
                           icon={<PlusOutlined />} 
-                          style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                          style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                           onClick={() => setNewOrgOpen(true)}
                         >
                           Thêm mới tổ chức...
@@ -546,11 +589,15 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
         )}
 
         {/* Section 3: Thông tin tài sản */}
-        <Divider orientation="left" style={{ margin: '12px 0', color: '#0f6cbd' }}>Thông tin tài sản</Divider>
+        <Divider orientation="left" style={{ margin: '12px 0', color: '#007f7a' }}>Thông tin tài sản</Divider>
         <Row gutter={16}>
           <Col span={24}>
             <Form.Item name="asset_description" label="Mô tả tài sản" rules={[{ required: true, message: 'Vui lòng nhập mô tả tài sản!' }]}>
-              <Input placeholder="Ví dụ: QSDĐ và tài sản gắn liền với đất..." />
+              <TextArea
+                autoSize={{ minRows: 2, maxRows: 10 }}
+                placeholder={"Mỗi tài sản nhập trên một dòng. Ví dụ:\nThửa đất số G2-18, tờ bản đồ số Độc lập; Tại địa chỉ...\nThửa đất số G1-30, tờ bản đồ số Độc lập; Tại địa chỉ..."}
+                style={{ whiteSpace: 'pre-wrap' }}
+              />
             </Form.Item>
           </Col>
         </Row>
@@ -570,7 +617,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
                         type="text" 
                         size="small" 
                         icon={<PlusOutlined />} 
-                        style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                        style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                         onClick={handleAddNewAssetType}
                       >
                         Thêm mới...
@@ -600,7 +647,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
                         type="text" 
                         size="small" 
                         icon={<PlusOutlined />} 
-                        style={{ width: '100%', color: '#0f6cbd', fontWeight: 600 }}
+                        style={{ width: '100%', color: '#007f7a', fontWeight: 600 }}
                         onClick={handleAddNewPurpose}
                       >
                         Thêm mới...
@@ -618,7 +665,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
         </Row>
 
         {/* Section 4: Phí & Thanh toán */}
-        <Divider orientation="left" style={{ margin: '12px 0', color: '#0f6cbd' }}>Phí & Thanh toán</Divider>
+        <Divider orientation="left" style={{ margin: '12px 0', color: '#007f7a' }}>Phí & Thanh toán</Divider>
         <Row gutter={16}>
           <Col span={8}>
             <Form.Item name="valuation_fee_number" label="Phí thẩm định (VND)">
@@ -638,7 +685,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
         </Row>
 
         {/* Section 5: Thực hiện */}
-        <Divider orientation="left" style={{ margin: '12px 0', color: '#0f6cbd' }}>Thực hiện & Nghiệp vụ</Divider>
+        <Divider orientation="left" style={{ margin: '12px 0', color: '#007f7a' }}>Thực hiện & Nghiệp vụ</Divider>
         <Row gutter={16}>
           <Col span={8}>
             <Form.Item name="execution_month" label="Tháng thực hiện" rules={[{ required: true, message: 'Nhập tháng thực hiện!' }]}>
@@ -664,7 +711,7 @@ export default function CaseEditModal({ open, caseData, onCancel, onSave, filter
 
 
         {/* Section 7: Ghi chú */}
-        <Divider orientation="left" style={{ margin: '12px 0', color: '#0f6cbd' }}>Ghi chú</Divider>
+        <Divider orientation="left" style={{ margin: '12px 0', color: '#007f7a' }}>Ghi chú</Divider>
         <Row gutter={16}>
           <Col span={24}>
             <Form.Item name="personal_note" label="Ghi chú nội bộ">

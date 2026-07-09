@@ -108,9 +108,9 @@ export default function CaseDocuments({ caseData, onCaseRefresh }) {
     switch (type) {
       case 'docx':
       case 'doc':
-        return <FileWordOutlined style={{ fontSize: 24, color: '#0f6cbd' }} />;
+        return <FileWordOutlined style={{ fontSize: 24, color: '#007f7a' }} />;
       case 'pdf':
-        return <FilePdfOutlined style={{ fontSize: 24, color: '#ef4444' }} />;
+        return <FilePdfOutlined style={{ fontSize: 24, color: '#c2413d' }} />;
       case 'zip':
       case 'rar':
         return <FileZipOutlined style={{ fontSize: 24, color: '#eab308' }} />;
@@ -173,7 +173,7 @@ export default function CaseDocuments({ caseData, onCaseRefresh }) {
 
           <Space size="middle" wrap>
             <Button
-              icon={<MailOutlined style={{ color: '#0f6cbd' }} />}
+              icon={<MailOutlined style={{ color: '#007f7a' }} />}
               onClick={() => setEmailOpen(true)}
               style={{ borderRadius: 6 }}
             >
@@ -269,6 +269,7 @@ export default function CaseDocuments({ caseData, onCaseRefresh }) {
         open={deliveryOpen}
         onClose={() => setDeliveryOpen(false)}
         caseId={caseId}
+        contractNumber={caseData?.contract_number}
         onSuccess={() => {
           fetchDocuments();
           if (onCaseRefresh) onCaseRefresh();

@@ -74,7 +74,7 @@ export default function Templates() {
       sorter: (a, b) => a.name.localeCompare(b.name),
       render: (text) => (
         <Space>
-          <FileWordOutlined style={{ fontSize: '18px', color: '#0f6cbd' }} />
+          <FileWordOutlined style={{ fontSize: '18px', color: '#007f7a' }} />
           <strong>{text}</strong>
         </Space>
       )

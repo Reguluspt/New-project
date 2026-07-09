@@ -36,6 +36,7 @@ class MailData(BaseModel):
     sales_staff: str = "Truongpnt"
     pro_staff: str = ""
     notes: str = Field(default="")
+    include_signature: bool = True
 
 
 def format_fee_for_mail(value: object) -> str:
@@ -123,7 +124,8 @@ async def send_appraisal_email_preview(
 
 def mail_data_from_record(record: dict[str, Any]) -> MailData:
     contract_id = str(record.get("contract_id") or record.get("contract_number") or record.get("id") or "")
-    
+    contract_display = contract_id if "010/" in contract_id else expand_contract_number(contract_id)
+
     customer_info = str(record.get("customer_info") or record.get("chu_so_huu") or "")
     customer_phone = str(record.get("customer_phone") or "").strip()
     
@@ -134,7 +136,7 @@ def mail_data_from_record(record: dict[str, Any]) -> MailData:
         
     return MailData(
         recipient_name=str(record.get("chu_so_huu") or record.get("customer_info") or ""),
-        contract_id=expand_contract_number(contract_id),
+        contract_id=contract_display,
         certificate_number=str(record.get("certificate_number") or ""),
         asset_type=str(record.get("asset_type") or ""),
         asset_description=str(record.get("asset_description") or record.get("dia_chi") or ""),

@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Entry from './pages/Entry';
 import Cases from './pages/Cases';
 import CaseDetail from './pages/CaseDetail';
+import Tasks from './pages/Tasks';
 import Sobo from './pages/Sobo';
 import Organizations from './pages/Organizations';
 import Delivery from './pages/Delivery';
@@ -75,6 +76,16 @@ function App() {
             <ProtectedRoute adminOnly={true}>
               <Layout>
                 <CaseDetail />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tasks"
+          element={
+            <ProtectedRoute adminOnly={true}>
+              <Layout>
+                <Tasks />
               </Layout>
             </ProtectedRoute>
           }

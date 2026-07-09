@@ -17,9 +17,7 @@ if not exist "%PYTHON_EXE%" (
     echo Khong tim thay Python virtualenv tai:
     echo %PYTHON_EXE%
     echo.
-    echo Hay cai dat truoc:
-    echo python -m venv .venv
-    echo .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+    echo Hay chay CaiDat.bat truoc de tao moi truong Windows.
     pause
     exit /b 1
 )
@@ -28,33 +26,29 @@ if not exist "%ROOT%logs" mkdir "%ROOT%logs" >nul 2>nul
 if not exist "%ROOT%data" mkdir "%ROOT%data" >nul 2>nul
 
 echo Dang kiem tra cac tien trinh ngam...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PYTHON_EXE%' -c \"from dotenv import load_dotenv; from pathlib import Path; load_dotenv(Path('API.env')); load_dotenv(Path('.env')); from src.background_services import ensure_background_services; print(ensure_background_services())\""
+"%PYTHON_EXE%" -c "from dotenv import load_dotenv; from pathlib import Path; load_dotenv(Path('API.env')); load_dotenv(Path('.env')); from src.background_services import ensure_background_services; print(ensure_background_services())"
 if errorlevel 1 (
     echo Khong khoi dong duoc tien trinh ngam. Kiem tra cau hinh API.env va log trong thu muc logs.
     pause
     exit /b 1
 )
 
-rem Kiem tra neu Flask da chay
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$root=(Resolve-Path '.').Path; $existing=Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*api.run*' -and $_.CommandLine -like ('*' + $root + '*') } | Select-Object -First 1; if ($existing) { Set-Content -Path (Join-Path $root 'flask.pid') -Value $existing.ProcessId -Encoding ASCII; exit 0 }; exit 1" >nul 2>nul
+rem Kiem tra neu Flask da chay trong thu muc hien tai.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$root=(Resolve-Path '.').Path; $existing=Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*api.run*' -and $_.CommandLine -like ('*' + $root + '*') } | Select-Object -First 1; if ($existing) { Set-Content -Path 'flask.pid' -Value $existing.ProcessId -Encoding ASCII; exit 0 } else { exit 1 }" >nul 2>nul
 if not errorlevel 1 (
     set "OLD_PID="
     for /f "usebackq delims=" %%P in ("%ROOT%flask.pid") do set "OLD_PID=%%P"
-    echo He thong dang chay san voi PID Flask: !OLD_PID!
-    echo Mo trinh duyet: http://localhost:%FLASK_PORT%
+    echo Flask da dang chay voi PID !OLD_PID!
+    echo API: http://localhost:%FLASK_PORT%
     start "" "http://localhost:%FLASK_PORT%"
     pause
     exit /b 0
 )
 
-echo Dang khoi dong he thong...
-echo - Flask API: http://localhost:%FLASK_PORT%
-echo - Telegram webhook, mail listener va ngrok se chay ngam neu duoc bat.
-echo.
-
+echo Dang khoi dong Flask API tai http://localhost:%FLASK_PORT% ...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$root=(Resolve-Path '.').Path; $python=$env:PYTHON_EXE; $stdout=Join-Path $root 'flask_stdout.log'; $stderr=Join-Path $root 'flask_stderr.log'; $pidPath=Join-Path $root 'flask.pid'; $args=@('-m','api.run','--port',$env:FLASK_PORT); $p=Start-Process -FilePath $python -ArgumentList $args -WorkingDirectory $root -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru; Set-Content -Path $pidPath -Value $p.Id -Encoding ASCII; Write-Host $p.Id"
 if errorlevel 1 (
-    echo Khoi dong that bai. Kiem tra log:
+    echo Khoi dong bai. Kiem tra log:
     echo %ROOT%flask_stderr.log
     pause
     exit /b 1

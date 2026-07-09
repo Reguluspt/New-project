@@ -104,11 +104,11 @@ export default function Entry() {
         <Col xs={24} lg={12}>
           {!uploadId ? (
             <Card 
-              style={{ borderRadius: 12, border: '1px solid #dbe3f3', minHeight: '400px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+              style={{ borderRadius: 12, border: '1px solid #d8e7e5', minHeight: '400px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
               styles={{ body: { padding: '24px' } }}
             >
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <FilePdfOutlined style={{ fontSize: 44, color: '#0f6cbd' }} />
+                <FilePdfOutlined style={{ fontSize: 44, color: '#007f7a' }} />
                 <Title level={4} style={{ marginTop: 12, marginBottom: 8 }}>Bắt đầu bằng cách tải lên hồ sơ GCN</Title>
                 <Text type="secondary" style={{ fontSize: '13px' }}>AI sẽ tự động nhận diện và trích xuất thông tin.</Text>
               </div>

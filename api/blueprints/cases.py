@@ -13,6 +13,7 @@ from src.sqlite_store import (
     CASE_FIELDS
 )
 from src.case_excel_export import export_case_rows_to_excel
+from src.form_options_store import load_custom_form_options
 import math
 import tempfile
 from pathlib import Path
@@ -29,19 +30,24 @@ def query_cases(db_path, *, page=1, size=20, sort="id", order="desc", search="",
         conditions.append(
             """
             (
-                INSTR(LOWER(contract_number), :search) > 0
-                OR INSTR(LOWER(customer_info), :search) > 0
-                OR INSTR(LOWER(customer_address), :search) > 0
-                OR INSTR(LOWER(asset_description), :search) > 0
-                OR INSTR(LOWER(valuation_purpose), :search) > 0
-                OR INSTR(LOWER(source), :search) > 0
-                OR INSTR(LOWER(personal_note), :search) > 0
-                OR INSTR(LOWER(valuation_staff), :search) > 0
-                OR INSTR(LOWER(business_staff), :search) > 0
+                INSTR(CASEFOLD(contract_number), :search) > 0
+                OR INSTR(CASEFOLD(customer_info), :search) > 0
+                OR INSTR(CASEFOLD(customer_address), :search) > 0
+                OR INSTR(CASEFOLD(asset_description), :search) > 0
+                OR INSTR(CASEFOLD(valuation_purpose), :search) > 0
+                OR INSTR(CASEFOLD(source), :search) > 0
+                OR INSTR(CASEFOLD(personal_note), :search) > 0
+                OR INSTR(CASEFOLD(valuation_staff), :search) > 0
+                OR INSTR(CASEFOLD(business_staff), :search) > 0
+                OR INSTR(CASEFOLD(citizen_id), :search) > 0
+                OR INSTR(CASEFOLD(customer_type), :search) > 0
+                OR INSTR(CASEFOLD(case_status), :search) > 0
+                OR INSTR(CASEFOLD(execution_month), :search) > 0
+                OR INSTR(CASEFOLD(payment_status), :search) > 0
             )
             """
         )
-        params["search"] = search.lower()
+        params["search"] = search.casefold()
         
     if status:
         conditions.append("case_status = :status")
@@ -336,11 +342,36 @@ def filters_endpoint():
         
         from src.excel_writer import load_dropdown_options
         excel_options = load_dropdown_options(excel_template_path)
-        valuation_purposes = excel_options.get("valuation_purpose", [])
-        asset_types = excel_options.get("asset_type", [])
-        
-        valuation_branches = distinct_case_values(db, "valuation_branch")
-        
+        custom_options = load_custom_form_options()
+
+        def merge_options(*groups):
+            seen = set()
+            values = []
+            for group in groups:
+                for item in group or []:
+                    text = str(item or "").strip()
+                    if text and text not in seen:
+                        seen.add(text)
+                        values.append(text)
+            return values
+
+        valuation_purposes = merge_options(
+            excel_options.get("valuation_purpose", []),
+            custom_options.get("valuation_purpose", []),
+        )
+        asset_types = merge_options(
+            excel_options.get("asset_type", []),
+            custom_options.get("asset_type", []),
+        )
+
+        valuation_branches = merge_options(
+            distinct_case_values(db, "valuation_branch"),
+            custom_options.get("valuation_branch", []),
+        )
+        branches = merge_options(branches, custom_options.get("source", []))
+        appraisers = merge_options(appraisers, custom_options.get("valuation_staff", []))
+        offices = merge_options(custom_options.get("office", []))
+
         return jsonify({
             "statuses": statuses,
             "branches": branches,
@@ -349,7 +380,8 @@ def filters_endpoint():
             "execution_months": execution_months,
             "payment_statuses": payment_statuses,
             "valuation_purposes": valuation_purposes,
-            "asset_types": asset_types
+            "asset_types": asset_types,
+            "offices": offices
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -26,6 +26,10 @@ export const getFormOptions = () => {
   return client.get('/entry/form-options');
 };
 
+export const addFormOption = (field, value) => {
+  return client.post('/entry/form-options/custom', { field, value });
+};
+
 export const saveCase = (payload) => {
   return client.post('/entry/save', payload);
 };

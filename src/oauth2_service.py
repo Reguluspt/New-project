@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import base64
 import asyncio
+from datetime import datetime, timezone, timedelta
 import json
 import logging
+import os
+import re
 import smtplib
 import time
 from email.message import EmailMessage
@@ -15,10 +18,113 @@ import httpx
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OAUTH_CONFIG_PATH = PROJECT_ROOT / "data" / "oauth_config.json"
+GMAIL_COOLDOWN_PATH = PROJECT_ROOT / "data" / "gmail_api_cooldown.json"
 
 logger = logging.getLogger(__name__)
 OUTLOOK_GRAPH_SCOPES = "https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadWrite offline_access"
 OUTLOOK_SMTP_SCOPES = "https://outlook.office.com/SMTP.Send offline_access"
+GMAIL_RETRY_AFTER_PATTERN = re.compile(r"Retry after ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z)")
+GMAIL_API_LOCK = asyncio.Lock()
+
+
+class GmailRateLimitError(RuntimeError):
+    """Raised when Gmail asks this user/project to pause API calls."""
+
+    def __init__(self, retry_after: str, detail: str = "") -> None:
+        self.retry_after = retry_after
+        message = f"Gmail đang bị giới hạn đến {retry_after}"
+        if detail:
+            message = f"{message}. {detail}"
+        super().__init__(message)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_retry_after(value: str) -> datetime | None:
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return _utc_now() + timedelta(seconds=int(value))
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _retry_after_from_gmail_response(response: httpx.Response) -> datetime | None:
+    header_retry = _parse_retry_after(response.headers.get("Retry-After", ""))
+    if header_retry:
+        return header_retry
+    try:
+        body_text = response.text
+    except Exception:
+        body_text = ""
+    match = GMAIL_RETRY_AFTER_PATTERN.search(body_text)
+    if match:
+        return _parse_retry_after(match.group(1))
+    return None
+
+
+def _cooldown_to_json(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def set_gmail_cooldown_until(retry_after: datetime) -> str:
+    retry_after = retry_after.astimezone(timezone.utc)
+    GMAIL_COOLDOWN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GMAIL_COOLDOWN_PATH.write_text(
+        json.dumps({"retry_after": _cooldown_to_json(retry_after)}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return _cooldown_to_json(retry_after)
+
+
+def get_gmail_cooldown_until() -> str | None:
+    if not GMAIL_COOLDOWN_PATH.exists():
+        return None
+    try:
+        data = json.loads(GMAIL_COOLDOWN_PATH.read_text(encoding="utf-8"))
+        retry_after = _parse_retry_after(str(data.get("retry_after") or ""))
+    except Exception:
+        return None
+    if not retry_after:
+        return None
+    if retry_after <= _utc_now():
+        try:
+            GMAIL_COOLDOWN_PATH.unlink()
+        except OSError:
+            pass
+        return None
+    return _cooldown_to_json(retry_after)
+
+
+def raise_if_gmail_cooling_down() -> None:
+    retry_after = get_gmail_cooldown_until()
+    if retry_after:
+        raise GmailRateLimitError(retry_after)
+
+
+def handle_gmail_rate_limit_response(response: httpx.Response) -> None:
+    if response.status_code != 429:
+        return
+    retry_after = _retry_after_from_gmail_response(response)
+    if retry_after is None:
+        retry_after = _utc_now() + timedelta(minutes=10)
+    retry_after_text = set_gmail_cooldown_until(retry_after)
+    raise GmailRateLimitError(retry_after_text, response.text)
+
+
+def _gmail_max_results(limit: int) -> int:
+    default_limit = int(os.getenv("GMAIL_API_MAX_MESSAGES_PER_POLL", "10") or "10")
+    return max(1, min(int(limit or default_limit), default_limit))
 
 # Default config structure
 DEFAULT_OAUTH_CONFIG = {
@@ -542,20 +648,24 @@ async def send_email_via_oauth2(
         raw_bytes = msg.as_bytes()
         raw_b64 = base64.urlsafe_b64encode(raw_bytes).decode("utf-8")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            }
-            send_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
-            payload: dict[str, Any] = {"raw": raw_b64}
-            if thread_id:
-                payload["threadId"] = thread_id
-            response = await client.post(send_url, headers=headers, json=payload)
-            if response.status_code not in [200, 201]:
-                raise RuntimeError(f"Gửi mail qua Gmail API thất bại: {response.text}")
-            res_data = response.json()
-            return res_data.get("id", "")
+        raise_if_gmail_cooling_down()
+        async with GMAIL_API_LOCK:
+            raise_if_gmail_cooling_down()
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                }
+                send_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+                payload: dict[str, Any] = {"raw": raw_b64}
+                if thread_id:
+                    payload["threadId"] = thread_id
+                response = await client.post(send_url, headers=headers, json=payload)
+                handle_gmail_rate_limit_response(response)
+                if response.status_code not in [200, 201]:
+                    raise RuntimeError(f"Gửi mail qua Gmail API thất bại: {response.text}")
+                res_data = response.json()
+                return res_data.get("id", "")
 
     elif provider == "outlook":
         outlook_sender_email = get_outlook_sender_email()
@@ -583,10 +693,11 @@ async def send_email_via_oauth2(
                 return response.headers.get("client-request-id", "outlook-msg-sent")
 
         # Build recipient JSON payload
-        to_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in to_email.split(",") if addr.strip()]
+        from email.utils import parseaddr
+        to_recipients = [{"emailAddress": {"address": parseaddr(addr.strip())[1]}} for addr in to_email.split(",") if parseaddr(addr.strip())[1]]
         cc_recipients = []
         if cc_emails:
-            cc_recipients = [{"emailAddress": {"address": addr.strip()}} for addr in cc_emails if addr.strip()]
+            cc_recipients = [{"emailAddress": {"address": parseaddr(addr.strip())[1]}} for addr in cc_emails if parseaddr(addr.strip())[1]]
 
         attachments_payload = []
         logo_path = Path(__file__).resolve().parent / "templates" / "logo.jpg"
@@ -655,43 +766,54 @@ async def fetch_emails_via_oauth2(
     query_contract: str | None = None,
     limit: int = 15,
     unread_only: bool = True,
+    skip_uids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Tải và parse danh sách email thông qua REST API Google/Microsoft."""
     access_token = await get_valid_access_token_async(provider)
     emails_list = []
+    skip_uids = skip_uids or set()
 
     if provider == "google":
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            headers = {"Authorization": f"Bearer {access_token}"}
-            # Search messages
-            search_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
-            params: dict[str, Any] = {"maxResults": limit}
-            q_parts: list[str] = []
-            if unread_only:
-                q_parts.extend(["is:unread", "label:INBOX"])
-            if query_contract:
-                q_parts.append(f'subject:"{query_contract}"')
-            params["q"] = " ".join(q_parts)
-            
-            response = await client.get(search_url, headers=headers, params=params)
-            if response.status_code != 200:
-                logger.error(f"Gmail API Search thất bại: {response.text}")
-                return []
-            
-            messages = response.json().get("messages", [])
-            for msg_summary in messages:
-                msg_id = msg_summary["id"]
-                # Fetch raw MIME message
-                detail_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}"
-                detail_response = await client.get(detail_url, headers=headers, params={"format": "raw"})
-                if detail_response.status_code == 200:
-                    raw_b64 = detail_response.json().get("raw", "")
-                    raw_bytes = base64.urlsafe_b64decode(raw_b64)
-                    emails_list.append({
-                        "uid": msg_id,
-                        "thread_id": str(msg_summary.get("threadId") or ""),
-                        "raw_bytes": raw_bytes
-                    })
+        raise_if_gmail_cooling_down()
+        async with GMAIL_API_LOCK:
+            raise_if_gmail_cooling_down()
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                headers = {"Authorization": f"Bearer {access_token}"}
+                search_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+                max_results = _gmail_max_results(limit)
+                params: dict[str, Any] = {"maxResults": max_results}
+                q_parts: list[str] = []
+                if unread_only:
+                    q_parts.extend(["is:unread", "label:INBOX"])
+                if query_contract:
+                    q_parts.append(f'subject:"{query_contract}"')
+                newer_than = os.getenv("GMAIL_API_QUERY_NEWER_THAN", "30d").strip()
+                if newer_than:
+                    q_parts.append(f"newer_than:{newer_than}")
+                params["q"] = " ".join(q_parts)
+
+                response = await client.get(search_url, headers=headers, params=params)
+                handle_gmail_rate_limit_response(response)
+                if response.status_code != 200:
+                    logger.error(f"Gmail API Search thất bại: {response.text}")
+                    return []
+
+                messages = response.json().get("messages", [])
+                for msg_summary in messages[:max_results]:
+                    msg_id = msg_summary["id"]
+                    if msg_id in skip_uids:
+                        continue
+                    detail_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}"
+                    detail_response = await client.get(detail_url, headers=headers, params={"format": "raw"})
+                    handle_gmail_rate_limit_response(detail_response)
+                    if detail_response.status_code == 200:
+                        raw_b64 = detail_response.json().get("raw", "")
+                        raw_bytes = base64.urlsafe_b64decode(raw_b64)
+                        emails_list.append({
+                            "uid": msg_id,
+                            "thread_id": str(msg_summary.get("threadId") or ""),
+                            "raw_bytes": raw_bytes
+                        })
 
     elif provider == "outlook":
         async with httpx.AsyncClient(timeout=30.0) as client:

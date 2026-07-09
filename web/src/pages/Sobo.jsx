@@ -16,9 +16,11 @@ import {
   syncTelegram,
   checkMail
 } from '../api/sobo';
+import { createCase } from '../api/cases';
 import SoboTable from '../components/sobo/SoboTable';
 import SoboDetailDrawer from '../components/sobo/SoboDetailDrawer';
 import SoboEditModal from '../components/sobo/SoboEditModal';
+import CaseEditModal from '../components/cases/CaseEditModal';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -59,6 +61,8 @@ export default function Sobo() {
   
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [recordToEdit, setRecordToEdit] = useState(null);
+  const [convertModalOpen, setConvertModalOpen] = useState(false);
+  const [caseDraft, setCaseDraft] = useState(null);
 
   // Loading Action States
   const [syncingTelegram, setSyncingTelegram] = useState(false);
@@ -203,6 +207,57 @@ export default function Sobo() {
     fetchRecords();
   };
 
+  const buildCaseDraftFromSobo = (record) => {
+    const assetDescription = record.asset_type === 'machinery'
+      ? (record.equipment_name || record.note || '')
+      : [
+          record.so_thua ? `Thửa đất số ${record.so_thua}` : '',
+          record.so_to ? `tờ bản đồ số ${record.so_to}` : '',
+          record.dia_chi ? `tại ${record.dia_chi}` : '',
+        ].filter(Boolean).join(', ');
+
+    return {
+      customer_type: 'individual',
+      customer_info: record.owner_name || record.chu_so_huu || '',
+      customer_address: record.owner_address || '',
+      citizen_id: record.owner_citizen_id || '',
+      source: record.source || '',
+      asset_type: record.asset_type === 'machinery' ? 'Máy móc thiết bị' : (record.asset_sub_type || 'BĐS đặc thù khác'),
+      asset_description: assetDescription,
+      so_thua_dat: record.so_thua || '',
+      so_to_ban_do: record.so_to || '',
+      dia_chi_thua_dat: record.dia_chi || '',
+      personal_note: [
+        record.so_giay_chung_nhan ? `Số giấy chứng nhận: ${record.so_giay_chung_nhan}` : '',
+        record.so_vao_so_cap_giay_chung_nhan ? `Số vào sổ cấp giấy chứng nhận: ${record.so_vao_so_cap_giay_chung_nhan}` : '',
+        record.ngay_cap_giay_chung_nhan ? `Ngày cấp giấy chứng nhận: ${record.ngay_cap_giay_chung_nhan}` : '',
+        record.note ? `Ghi chú sơ bộ: ${record.note}` : '',
+        record.response_content ? `Phản hồi sơ bộ: ${record.response_content}` : '',
+      ].filter(Boolean).join('\n'),
+      original_file_path: record.attachment_paths || '',
+      case_status: 'Đang xử lý',
+      payment_status: 'Chưa thanh toán',
+      execution_month: `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+    };
+  };
+
+  const handleConvertToCase = (record) => {
+    setCaseDraft(buildCaseDraftFromSobo(record));
+    setConvertModalOpen(true);
+  };
+
+  const handleSaveConvertedCase = async (values) => {
+    try {
+      await createCase(values);
+      message.success('Đã chuyển hồ sơ sơ bộ sang thẩm định.');
+      setConvertModalOpen(false);
+      setCaseDraft(null);
+    } catch (err) {
+      console.error(err);
+      message.error(err.response?.data?.error || 'Chuyển sang thẩm định thất bại.');
+    }
+  };
+
   // Duration Formatter Helper
   const formatDuration = (seconds) => {
     if (!seconds || seconds <= 0) return '-';
@@ -216,14 +271,14 @@ export default function Sobo() {
   // Pulse style for overdue warning card
   const overdueCardStyle = (stats.has_overdue && stats.pending_count > 0)
     ? {
-        borderLeft: '5px solid #ef4444',
+        borderLeft: '5px solid #c2413d',
         borderRight: '1px solid #fca5a5',
         borderTop: '1px solid #fca5a5',
         borderBottom: '1px solid #fca5a5',
         animation: 'pulse 1.5s infinite',
         boxShadow: '0 0 8px rgba(239, 68, 68, 0.2)'
       }
-    : { borderLeft: '5px solid #ef4444' };
+    : { borderLeft: '5px solid #c2413d' };
 
   return (
     <div style={{ padding: '0 8px' }}>
@@ -231,7 +286,7 @@ export default function Sobo() {
       <style>{`
         @keyframes pulse {
           0% { border-color: #fca5a5; box-shadow: 0 0 4px rgba(239, 68, 68, 0.15); }
-          50% { border-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.45); }
+          50% { border-color: #c2413d; box-shadow: 0 0 12px rgba(239, 68, 68, 0.45); }
           100% { border-color: #fca5a5; box-shadow: 0 0 4px rgba(239, 68, 68, 0.15); }
         }
       `}</style>
@@ -272,7 +327,7 @@ export default function Sobo() {
                 <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   🔴 Chờ phản hồi
                 </div>
-                <div style={{ fontSize: '28px', fontWeight: 800, marginTop: 4, color: '#ef4444' }}>
+                <div style={{ fontSize: '28px', fontWeight: 800, marginTop: 4, color: '#c2413d' }}>
                   {loadingStats ? <Spin size="small" /> : stats.pending_count}
                 </div>
               </div>
@@ -281,7 +336,7 @@ export default function Sobo() {
               </div>
             </div>
             {stats.has_overdue && stats.pending_count > 0 && (
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#ef4444', fontWeight: 600 }}>
+              <div style={{ marginTop: 8, fontSize: '12px', color: '#c2413d', fontWeight: 600 }}>
                 ⚠️ Phát hiện hồ sơ trễ hạn phản hồi (&gt; 24h)
               </div>
             )}
@@ -292,7 +347,7 @@ export default function Sobo() {
           <Card 
             bordered 
             style={{ 
-              borderLeft: '5px solid #10b981', 
+              borderLeft: '5px solid #047857', 
               width: '100%', 
               display: 'flex', 
               flexDirection: 'column' 
@@ -311,7 +366,7 @@ export default function Sobo() {
                 <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   🟢 Đã phản hồi
                 </div>
-                <div style={{ fontSize: '28px', fontWeight: 800, marginTop: 4, color: '#10b981' }}>
+                <div style={{ fontSize: '28px', fontWeight: 800, marginTop: 4, color: '#047857' }}>
                   {loadingStats ? <Spin size="small" /> : stats.responded_count}
                 </div>
               </div>
@@ -327,7 +382,7 @@ export default function Sobo() {
           <Card 
             bordered 
             style={{ 
-              borderLeft: '5px solid #3b82f6', 
+              borderLeft: '5px solid #007f7a', 
               width: '100%', 
               display: 'flex', 
               flexDirection: 'column' 
@@ -346,7 +401,7 @@ export default function Sobo() {
                 <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   ⚡ Thời gian phản hồi TB
                 </div>
-                <div style={{ fontSize: '28px', fontWeight: 800, marginTop: 4, color: '#3b82f6' }}>
+                <div style={{ fontSize: '28px', fontWeight: 800, marginTop: 4, color: '#007f7a' }}>
                   {loadingStats ? <Spin size="small" /> : formatDuration(stats.avg_duration_secs)}
                 </div>
               </div>
@@ -431,6 +486,7 @@ export default function Sobo() {
         onChange={handleTableChange}
         onView={handleOpenDetail}
         onEdit={handleOpenEdit}
+        onConvert={handleConvertToCase}
         onDelete={handleDelete}
         isGuest={isGuest}
       />
@@ -444,6 +500,16 @@ export default function Sobo() {
           setEditModalOpen(false);
           setRecordToEdit(null);
         }}
+      />
+
+      <CaseEditModal
+        open={convertModalOpen}
+        caseData={caseDraft}
+        onCancel={() => {
+          setConvertModalOpen(false);
+          setCaseDraft(null);
+        }}
+        onSave={handleSaveConvertedCase}
       />
 
       {/* Detail Drawer */}

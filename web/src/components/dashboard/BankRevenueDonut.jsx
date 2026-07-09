@@ -10,18 +10,18 @@ const formatMillion = (value) => {
 };
 
 export default function BankRevenueDonut({ data = [] }) {
-  const colors = [
-    "#0f6cbd",
+const colors = [
+    "#007f7a",
     "#2aa0a4",
-    "#8ab8ff",
-    "#ffcc4d",
-    "#7c3aed",
-    "#14b8a6",
-    "#f97316",
+    "#d99a55",
+    "#047857",
+    "#c2413d",
+    "#6aa6a1",
+    "#b77938",
     "#64748b",
-    "#db2777",
-    "#84cc16",
-  ];
+    "#94a3b8",
+    "#0f766e",
+];
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
@@ -44,7 +44,7 @@ export default function BankRevenueDonut({ data = [] }) {
 
   return (
     <Card 
-      style={{ borderRadius: 12, border: '1px solid #dbe3f3', height: '100%' }}
+      style={{ borderRadius: 12, border: '1px solid #d8e7e5', height: '100%' }}
       bodyStyle={{ padding: '20px 22px' }}
     >
       <Title level={4} style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>

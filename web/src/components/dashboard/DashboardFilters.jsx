@@ -39,7 +39,7 @@ export default function DashboardFilters({
 
   return (
     <Card 
-      style={{ marginBottom: 20, borderRadius: 12, border: '1px solid #dbe3f3' }} 
+      style={{ marginBottom: 20, borderRadius: 12, border: '1px solid #d8e7e5' }} 
       bodyStyle={{ padding: '16px 20px' }}
     >
       <Row gutter={[12, 12]} align="middle">

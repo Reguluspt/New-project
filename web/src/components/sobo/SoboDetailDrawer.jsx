@@ -63,7 +63,7 @@ export default function SoboDetailDrawer({ open, record, onClose }) {
     <Drawer
       title={
         <Space>
-          <ContainerOutlined style={{ color: '#0f6cbd' }} />
+          <ContainerOutlined style={{ color: '#007f7a' }} />
           <span>Chi tiết Yêu cầu Sơ bộ #{record.id}</span>
         </Space>
       }
@@ -92,9 +92,9 @@ export default function SoboDetailDrawer({ open, record, onClose }) {
 
         <Descriptions.Item label="Thời gian xử lý">
           {isPending ? (
-            <span style={{ color: '#ef4444', fontWeight: 600 }}>⌛ {elapsed} (đang chờ)</span>
+            <span style={{ color: '#c2413d', fontWeight: 600 }}>⌛ {elapsed} (đang chờ)</span>
           ) : (
-            <span style={{ color: '#10b981', fontWeight: 600 }}>⚡ {elapsed} (phản hồi xong)</span>
+            <span style={{ color: '#047857', fontWeight: 600 }}>⚡ {elapsed} (phản hồi xong)</span>
           )}
         </Descriptions.Item>
 
