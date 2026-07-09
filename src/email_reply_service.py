@@ -155,7 +155,15 @@ def phathanh_send_mode() -> str:
 
 
 def phathanh_docx_template_path() -> Path:
-    return Path(os.getenv("PHATHANH_DOCX_TEMPLATE", DEFAULT_PHATHANH_DOCX_TEMPLATE))
+    configured_path = Path(os.getenv("PHATHANH_DOCX_TEMPLATE", DEFAULT_PHATHANH_DOCX_TEMPLATE))
+    if configured_path.exists():
+        return configured_path
+
+    project_data_path = Path(__file__).resolve().parent.parent / "data" / "form_phat_hanh_chung_thu.docx"
+    if project_data_path.exists():
+        return project_data_path
+
+    return configured_path
 
 
 def _phathanh_case_values(case: dict, recipient: str | None) -> dict[str, str]:

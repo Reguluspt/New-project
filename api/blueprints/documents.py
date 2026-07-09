@@ -449,7 +449,7 @@ def send_phathanh_reply_endpoint(case_id):
 def get_delivery_contacts():
     try:
         from src.database_manager import resolve_records_db_path, ensure_tracking_record_schema, get_all_delivery_contacts
-        records_db_path = Path(resolve_records_db_path())
+        records_db_path = Path(resolve_records_db_path(current_app.config["RECORDS_DB"]))
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -498,7 +498,7 @@ def save_case_delivery(case_id):
     if save_to_contacts and manual_short_name and manual_details:
         try:
             from src.database_manager import resolve_records_db_path, add_delivery_contact
-            records_db_path = Path(resolve_records_db_path())
+            records_db_path = Path(resolve_records_db_path(current_app.config["RECORDS_DB"]))
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -514,7 +514,7 @@ def save_case_delivery(case_id):
         try:
             from src.database_manager import resolve_records_db_path
             import sqlite3
-            records_db_path = resolve_records_db_path()
+            records_db_path = resolve_records_db_path(current_app.config["RECORDS_DB"])
             with sqlite3.connect(records_db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute("SELECT * FROM delivery_contacts WHERE id = ?", (delivery_contact_id,)).fetchone()
@@ -544,7 +544,7 @@ def download_phathanh_docx(case_id):
             try:
                 from src.database_manager import resolve_records_db_path
                 import sqlite3
-                records_db_path = resolve_records_db_path()
+                records_db_path = resolve_records_db_path(current_app.config["RECORDS_DB"])
                 with sqlite3.connect(records_db_path) as conn:
                     conn.row_factory = sqlite3.Row
                     row = conn.execute("SELECT * FROM delivery_contacts WHERE id = ?", (delivery_contact_id,)).fetchone()
@@ -581,7 +581,7 @@ def get_phathanh_content(case_id):
             try:
                 from src.database_manager import resolve_records_db_path
                 import sqlite3
-                records_db_path = resolve_records_db_path()
+                records_db_path = resolve_records_db_path(current_app.config["RECORDS_DB"])
                 with sqlite3.connect(records_db_path) as conn:
                     conn.row_factory = sqlite3.Row
                     row = conn.execute("SELECT * FROM delivery_contacts WHERE id = ?", (delivery_contact_id,)).fetchone()
@@ -622,7 +622,7 @@ def get_latest_email(case_id):
     import sqlite3
     import os
     
-    db_path = resolve_records_db_path()
+    db_path = resolve_records_db_path(current_app.config["RECORDS_DB"])
     if not db_path or not os.path.exists(db_path):
         return jsonify({"error": "Không tìm thấy cơ sở dữ liệu Telegram"}), 404
         

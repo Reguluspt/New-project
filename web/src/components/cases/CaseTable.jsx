@@ -42,7 +42,9 @@ import {
   downloadPhathanhDocx,
   getPhathanhContent,
   getXinsoContent,
-  getLatestEmail
+  getLatestEmail,
+  getDeliveryContacts,
+  saveDelivery
 } from '../../api/documents';
 import { sendEmail as sendAppraisalEmail, submitWeb } from '../../api/entry';
 import CaseFilterBar from './CaseFilterBar';
@@ -97,6 +99,13 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
 
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [activeCaseForDelivery, setActiveCaseForDelivery] = useState(null);
+  const [phathanhDeliveryOpen, setPhathanhDeliveryOpen] = useState(false);
+  const [activeCaseForPhathanh, setActiveCaseForPhathanh] = useState(null);
+  const [phathanhDeliveryContacts, setPhathanhDeliveryContacts] = useState([]);
+  const [loadingPhathanhDeliveryContacts, setLoadingPhathanhDeliveryContacts] = useState(false);
+  const [creatingPhathanhForm, setCreatingPhathanhForm] = useState(false);
+  const [phathanhDeliverySearch, setPhathanhDeliverySearch] = useState('');
+  const [phathanhDeliveryForm] = Form.useForm();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [activeCaseForTask, setActiveCaseForTask] = useState(null);
 
@@ -109,6 +118,12 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
   const [latestEmailModalOpen, setLatestEmailModalOpen] = useState(false);
   const [latestEmailData, setLatestEmailData] = useState(null);
   const [loadingLatestEmail, setLoadingLatestEmail] = useState(false);
+
+  const selectedPhathanhDeliveryContactId = Form.useWatch('delivery_contact_id', phathanhDeliveryForm);
+  const defaultDeliveryContactDetails = 'CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ - VP TẠI GIA LAI\nĐịa chỉ: 90/60/3 Trường Chinh, TP. Pleiku, Gia Lai\nĐiện thoại: 0905226968';
+  const selectedPhathanhDeliveryDetails = selectedPhathanhDeliveryContactId === 0
+    ? defaultDeliveryContactDetails
+    : (phathanhDeliveryContacts.find((contact) => contact.id === selectedPhathanhDeliveryContactId)?.full_details || '');
 
   // Format received email time to "HH:MM DD/MM/YYYY" format
   const formatLatestEmailTime = (timeStr) => {
@@ -158,6 +173,53 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
       } catch (fallbackErr) {
         message.error('Không thể sao chép tự động. Vui lòng bôi đen và copy thủ công.');
       }
+    }
+  };
+
+  const fetchPhathanhDeliveryContacts = async () => {
+    setLoadingPhathanhDeliveryContacts(true);
+    try {
+      const res = await getDeliveryContacts();
+      setPhathanhDeliveryContacts(res.data || []);
+    } catch (err) {
+      console.error(err);
+      message.error('Không thể tải danh bạ chuyển phát');
+    } finally {
+      setLoadingPhathanhDeliveryContacts(false);
+    }
+  };
+
+  const handleOpenPhathanhDeliveryModal = (record) => {
+    setActiveCaseForPhathanh(record);
+    phathanhDeliveryForm.setFieldsValue({
+      delivery_contact_id: record.delivery_contact_id || 0,
+    });
+    setPhathanhDeliverySearch('');
+    setPhathanhDeliveryOpen(true);
+    fetchPhathanhDeliveryContacts();
+  };
+
+  const handleCreatePhathanhContentWithDelivery = async () => {
+    if (!activeCaseForPhathanh) return;
+
+    setCreatingPhathanhForm(true);
+    try {
+      const values = await phathanhDeliveryForm.validateFields();
+      await saveDelivery(activeCaseForPhathanh.id, {
+        delivery_contact_id: values.delivery_contact_id,
+        manual_short_name: '',
+        manual_details: '',
+        save_to_contacts: false,
+      });
+      setPhathanhDeliveryOpen(false);
+      setActiveCaseForPhathanh(null);
+      await handleDownloadPhathanhDocx(activeCaseForPhathanh);
+    } catch (err) {
+      if (err?.errorFields) return;
+      console.error(err);
+      message.error(err.response?.data?.error || 'Không thể lưu thông tin chuyển phát để tạo form.');
+    } finally {
+      setCreatingPhathanhForm(false);
     }
   };
 
@@ -923,7 +985,7 @@ title: 'HỒ SƠ',
             <Button 
               type="text" 
               icon={<FormOutlined style={{ color: '#d97706', fontSize: '18px' }} />} 
-              onClick={() => handleOpenPhathanhContent(record)}
+              onClick={() => handleOpenPhathanhDeliveryModal(record)}
               style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
             />
           </Tooltip>
@@ -1095,6 +1157,66 @@ open={appraisalMailOpen}
                 </Select>
               </Form.Item>
             ) : null}
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        open={phathanhDeliveryOpen}
+        title="Chọn thông tin chuyển phát để tạo form"
+        okText="Tạo form phát hành"
+        cancelText="Hủy"
+        confirmLoading={creatingPhathanhForm}
+        onCancel={() => {
+          setPhathanhDeliveryOpen(false);
+          setActiveCaseForPhathanh(null);
+          setPhathanhDeliverySearch('');
+          phathanhDeliveryForm.resetFields();
+        }}
+        onOk={handleCreatePhathanhContentWithDelivery}
+        destroyOnClose
+        width={600}
+      >
+        <Form form={phathanhDeliveryForm} layout="vertical">
+          <Form.Item label="Số chứng thư phát hành">
+            <Input value={activeCaseForPhathanh?.contract_number || ''} disabled />
+          </Form.Item>
+
+          <Form.Item
+            name="delivery_contact_id"
+            label="Chọn người nhận chuyển phát"
+            rules={[{ required: true, message: 'Vui lòng chọn người nhận chuyển phát' }]}
+          >
+            <Select
+              placeholder="Chọn từ danh bạ..."
+              loading={loadingPhathanhDeliveryContacts}
+              showSearch
+              searchValue={phathanhDeliverySearch}
+              onSearch={setPhathanhDeliverySearch}
+              onDropdownOpenChange={(visible) => {
+                if (visible) setPhathanhDeliverySearch('');
+              }}
+              optionFilterProp="label"
+              filterOption={(input, option) =>
+                String(option?.label || '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={[
+                { value: 0, label: 'VP Gia Lai (mặc định) - 90/60/3 Trường Chinh' },
+                ...phathanhDeliveryContacts.map((contact) => ({
+                  value: contact.id,
+                  label: `${contact.short_name} (${contact.full_details.split('\n')[0] || ''})`,
+                })),
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item label="Thông tin chuyển phát">
+            <Input.TextArea
+              value={selectedPhathanhDeliveryDetails}
+              rows={4}
+              readOnly
+              placeholder="Chọn người nhận chuyển phát để kiểm tra thông tin"
+            />
           </Form.Item>
         </Form>
       </Modal>

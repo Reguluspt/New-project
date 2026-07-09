@@ -14,6 +14,7 @@ export default function DeliveryModal({ open, onClose, caseId, contractNumber, o
   const [sourceType, setSourceType] = useState('select');
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
+  const [contactSearch, setContactSearch] = useState('');
 
   const selectedContactId = Form.useWatch('delivery_contact_id', form);
   const manualDetails = Form.useWatch('manual_details', form);
@@ -29,6 +30,7 @@ export default function DeliveryModal({ open, onClose, caseId, contractNumber, o
         save_to_contacts: false,
       });
       setSourceType('select');
+      setContactSearch('');
     }
   }, [open, form]);
 
@@ -196,6 +198,16 @@ export default function DeliveryModal({ open, onClose, caseId, contractNumber, o
                 <Select
                   placeholder="Chọn từ danh bạ..."
                   loading={loadingContacts}
+                  showSearch
+                  searchValue={contactSearch}
+                  onSearch={setContactSearch}
+                  onDropdownOpenChange={(visible) => {
+                    if (visible) setContactSearch('');
+                  }}
+                  optionFilterProp="label"
+                  filterOption={(input, option) =>
+                    String(option?.label || '').toLowerCase().includes(input.toLowerCase())
+                  }
                   style={{ width: '100%' }}
                   dropdownRender={(menu) => (
                     <>
