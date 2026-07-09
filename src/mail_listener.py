@@ -8,6 +8,9 @@ import json
 import os
 import re
 import unicodedata
+import logging
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 from email.header import decode_header, make_header
 from email.message import EmailMessage, Message
@@ -48,6 +51,7 @@ from .professional_forwarding import (
     professional_forward_enabled,
     professional_recipient_from_record,
     professional_recipient_greeting,
+    professional_recipient_intro_text,
 )
 
 
@@ -157,6 +161,8 @@ class MailListenerSettings:
     professional_dept_email: str = ""
     monitor_cc_list: list[str] | None = None
     cases_db_path: str = ""
+    oauth_providers: tuple[str, ...] = ()
+    gmail_max_messages_per_poll: int = 10
 
 
 def _load_env() -> None:
@@ -296,6 +302,10 @@ async def ensure_processed_email_table(db_path: str | Path) -> None:
             )
             """
         )
+        try:
+            await db.execute("ALTER TABLE processed_emails ADD COLUMN body TEXT")
+        except Exception:
+            pass
         await db.commit()
 
 
@@ -371,10 +381,27 @@ async def was_email_processed(db_path: str | Path, incoming: IncomingEmail, *, m
             (message_id, mailbox, incoming.uid),
         )
         row = await cursor.fetchone()
-    return row is not None
+        return row is not None
 
 
-async def mark_email_processed(
+async def processed_email_uids(db_path: str | Path, *, mailbox: str) -> set[str]:
+    await ensure_processed_email_table(db_path)
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        cursor = await db.execute(
+            """
+            SELECT uid
+            FROM processed_emails
+            WHERE mailbox = ?
+              AND uid IS NOT NULL
+              AND TRIM(uid) <> ''
+            """,
+            (mailbox,),
+        )
+        rows = await cursor.fetchall()
+    return {str(row[0]).strip() for row in rows if str(row[0] or "").strip()}
+
+
+async def save_processed_email(
     db_path: str | Path,
     incoming: IncomingEmail,
     *,
@@ -384,19 +411,21 @@ async def mark_email_processed(
     score: float | None = None,
 ) -> None:
     await ensure_processed_email_table(db_path)
+    body_content = incoming.html if incoming.html else incoming.text
     async with aiosqlite.connect(db_path, timeout=30) as db:
         await db.execute(
             """
             INSERT INTO processed_emails (
                 mailbox, uid, message_id, subject, from_email,
-                result, record_id, score, processed_at
+                result, record_id, score, processed_at, body
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(message_id) DO UPDATE SET
                 result = excluded.result,
                 record_id = excluded.record_id,
                 score = excluded.score,
-                processed_at = excluded.processed_at
+                processed_at = excluded.processed_at,
+                body = excluded.body
             """,
             (
                 mailbox,
@@ -408,9 +437,13 @@ async def mark_email_processed(
                 record_id,
                 score,
                 _utc_now_iso(),
+                body_content,
             ),
         )
         await db.commit()
+
+
+mark_email_processed = save_processed_email
 
 
 def load_mail_listener_settings() -> MailListenerSettings:
@@ -423,6 +456,12 @@ def load_mail_listener_settings() -> MailListenerSettings:
     management_cc = _parse_email_list(os.getenv("MANAGEMENT_CC", ""))
     control_board_cc = _parse_email_list(os.getenv("CONTROL_BOARD_CC", ""))
     monitor_cc_list = _dedupe_emails([*management_cc, *control_board_cc])
+    provider_env = os.getenv("MAIL_LISTENER_PROVIDERS", "outlook,google")
+    oauth_providers = tuple(
+        provider.strip().lower()
+        for provider in provider_env.split(",")
+        if provider.strip().lower() in {"google", "outlook"}
+    )
     return MailListenerSettings(
         imap_host=os.getenv("IMAP_HOST", "imap.gmail.com").strip() or "imap.gmail.com",
         imap_port=_int_env("IMAP_PORT", 993),
@@ -440,6 +479,8 @@ def load_mail_listener_settings() -> MailListenerSettings:
         professional_dept_email=os.getenv("PROFESSIONAL_DEPT_EMAIL", "").strip(),
         monitor_cc_list=monitor_cc_list,
         cases_db_path=str(PROJECT_ROOT / "data" / "cases.db"),
+        oauth_providers=oauth_providers,
+        gmail_max_messages_per_poll=max(1, _int_env("GMAIL_API_MAX_MESSAGES_PER_POLL", 10)),
     )
 
 
@@ -870,7 +911,7 @@ def build_professional_forward_message(
         update={
             "greeting_name": greeting_name,
             "contract_id": certificate_number,
-            "intro_text": "Em phân chuyên viên định giá tài sản theo thông tin bên dưới giúp anh nhé, cảm ơn em!",
+            "intro_text": professional_recipient_intro_text(professional_email),
         }
     )
     html_body = render_appraisal_email(mail_data) + _original_reply_html(incoming)
@@ -909,6 +950,61 @@ async def send_professional_forward(
     smtp_settings: GmailSmtpSettings,
     settings: MailListenerSettings,
 ) -> None:
+    import os
+    send_mode = os.getenv("PROFESSIONAL_FORWARD_SEND_MODE", "playwright").strip().casefold()
+    if send_mode != "playwright":
+        append_listener_log(
+            "professional_forward_mode_forced_playwright",
+            uid=incoming.uid,
+            record_id=record.get("id"),
+            configured_mode=send_mode,
+        )
+        send_mode = "playwright"
+
+    if send_mode == "playwright":
+        from .email_reply_service import send_professional_reply_all_via_playwright_raw
+        
+        professional_email = professional_recipient_from_record(record, settings.professional_dept_email)
+        if not professional_email:
+            raise RuntimeError("Thiếu PROFESSIONAL_DEPT_EMAIL để chuyển tiếp cho bộ phận nghiệp vụ.")
+        greeting_name = professional_recipient_greeting(professional_email)
+        mail_data = mail_data_from_record(dict(record)).model_copy(
+            update={
+                "greeting_name": greeting_name,
+                "contract_id": certificate_number,
+                "intro_text": professional_recipient_intro_text(professional_email),
+                "include_signature": False,
+            }
+        )
+        html_body = render_appraisal_email(mail_data)
+
+        case_data = {
+            "contract_number": certificate_number or record.get("contract_number") or "",
+            "to": professional_email
+        }
+
+        append_listener_log(
+            "professional_playwright_sending",
+            uid=incoming.uid,
+            record_id=record.get("id"),
+            contract_number=case_data["contract_number"],
+            professional_email=professional_email,
+        )
+
+        await send_professional_reply_all_via_playwright_raw(
+            case_data=case_data,
+            html_body=html_body,
+            professional_email=professional_email
+        )
+
+        append_listener_log(
+            "professional_playwright_sent",
+            uid=incoming.uid,
+            record_id=record.get("id"),
+            professional_email=professional_email,
+        )
+        return
+
     from .oauth2_service import get_enabled_oauth_provider, send_email_via_oauth2
 
     provider = get_enabled_oauth_provider()
@@ -1687,21 +1783,23 @@ async def sync_sobo_emails_from_mailbox(db_path: str | Path | None = None) -> in
     
     from .oauth2_service import is_oauth_enabled, fetch_emails_via_oauth2
     providers = []
-    if is_oauth_enabled("outlook"):
+    if "outlook" in settings.oauth_providers and is_oauth_enabled("outlook"):
         providers.append("outlook")
-    if is_oauth_enabled("google"):
+    if "google" in settings.oauth_providers and is_oauth_enabled("google"):
         providers.append("google")
     
     if providers:
         for provider in providers:
             try:
                 print(f"Syncing sobo emails via OAuth2 API for provider: {provider}", flush=True)
-                # Fetch up to 150 recent emails containing the sobo marker.
+                limit = settings.gmail_max_messages_per_poll if provider == "google" else 150
+                skip_uids = await processed_email_uids(db_path, mailbox=provider) if provider == "google" else set()
                 oauth_emails = await fetch_emails_via_oauth2(
                     provider,
                     query_contract="SƠ BỘ",
-                    limit=150,
+                    limit=limit,
                     unread_only=False,
+                    skip_uids=skip_uids,
                 )
                 for item in oauth_emails:
                     raw_emails.append(item["raw_bytes"])
@@ -1901,8 +1999,27 @@ async def sync_sobo_emails_from_mailbox(db_path: str | Path | None = None) -> in
     return synced_count
 
 
-async def listen_forever(settings: MailListenerSettings | None = None, *, poll_interval_seconds: int = 60) -> None:
+async def cleanup_old_email_bodies(db_path: str | Path) -> None:
+    try:
+        from datetime import datetime, timedelta
+        # Calculate cutoff timestamp (6 months = 180 days)
+        six_months_ago = (datetime.utcnow() - timedelta(days=180)).isoformat()
+        async with aiosqlite.connect(db_path, timeout=30) as db:
+            cursor = await db.execute(
+                "UPDATE processed_emails SET body = NULL WHERE processed_at < ? AND body IS NOT NULL",
+                (six_months_ago,)
+            )
+            await db.commit()
+            changes = cursor.rowcount
+            if changes > 0:
+                logger.info(f"Đã dọn dẹp {changes} nội dung email cũ hơn 6 tháng để giải phóng dung lượng.")
+    except Exception as e:
+        logger.error(f"Lỗi dọn dẹp email cũ: {e}")
+
+
+async def listen_forever(settings: MailListenerSettings | None = None, *, poll_interval_seconds: int | None = None) -> None:
     current_settings = settings or load_mail_listener_settings()
+    poll_interval_seconds = poll_interval_seconds or _int_env("MAIL_LISTENER_POLL_INTERVAL_SECONDS", 600)
     log_records_db_path("mail_listener", current_settings.records_db_path)
     append_listener_log(
         "started",
@@ -1910,6 +2027,11 @@ async def listen_forever(settings: MailListenerSettings | None = None, *, poll_i
         mailbox=current_settings.mailbox,
         records_db_path=current_settings.records_db_path,
     )
+    
+    # Run cleanup once on startup
+    await cleanup_old_email_bodies(current_settings.records_db_path)
+    
+    cleanup_counter = 0
     while True:
         if is_listener_enabled():
             try:
@@ -1918,6 +2040,13 @@ async def listen_forever(settings: MailListenerSettings | None = None, *, poll_i
                 append_listener_log("failed", scope="poll", error_type=type(exc).__name__, error=str(exc))
         else:
             append_listener_log("skipped", reason="listener_disabled")
+            
+        # Run cleanup roughly once every 24 hours.
+        cleanup_counter += 1
+        if cleanup_counter * poll_interval_seconds >= 86400:
+            await cleanup_old_email_bodies(current_settings.records_db_path)
+            cleanup_counter = 0
+            
         await asyncio.sleep(poll_interval_seconds)
 
 
@@ -1927,4 +2056,3 @@ if __name__ == "__main__":
         asyncio.run(listen_forever())
     finally:
         append_listener_log("stopped", pid=os.getpid())
-

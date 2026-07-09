@@ -20,6 +20,13 @@ def professional_recipient_greeting(value: object) -> str:
     return "Kiệt"
 
 
+def professional_recipient_intro_text(value: object) -> str:
+    recipient = normalize_professional_recipient(value)
+    if recipient.casefold() == PROFESSIONAL_RECIPIENT_OPTIONS["anhvu"].casefold():
+        return "Chị phân chuyên viên định giá tài sản theo thông tin bên dưới giúp em nhé, em cảm ơn chị!"
+    return "Em phân chuyên viên định giá tài sản theo thông tin bên dưới giúp anh nhé, cảm ơn em!"
+
+
 def professional_forward_enabled(record: Mapping[str, Any]) -> bool:
     value = str(record.get("professional_forward_enabled") or "1").strip().casefold()
     return value not in {"0", "false", "no", "off", "khong", "không"}

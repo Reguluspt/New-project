@@ -16,10 +16,16 @@ import {
   MailOutlined,
   EnvironmentOutlined,
   BankOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  FormOutlined,
+  IdcardOutlined,
+  FileAddOutlined,
+  CopyOutlined,
+  CheckSquareOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
+import client from '../../api/client';
 import { 
   listCases, 
   getCase,
@@ -30,12 +36,20 @@ import {
   addNote,
   exportCases 
 } from '../../api/cases';
-import { generateDocuments, downloadAllZip } from '../../api/documents';
+import { 
+  generateDocuments, 
+  downloadAllZip, 
+  downloadPhathanhDocx,
+  getPhathanhContent,
+  getXinsoContent,
+  getLatestEmail
+} from '../../api/documents';
 import { sendEmail as sendAppraisalEmail, submitWeb } from '../../api/entry';
 import CaseFilterBar from './CaseFilterBar';
 import CaseEditModal from './CaseEditModal';
 import CaseImportModal from './CaseImportModal';
 import DeliveryModal from './DeliveryModal';
+import TaskModal from '../tasks/TaskModal';
 
 export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
   const navigate = useNavigate();
@@ -75,26 +89,145 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
   const [activeCaseForAppraisalMail, setActiveCaseForAppraisalMail] = useState(null);
   const [sendingAppraisalMail, setSendingAppraisalMail] = useState(false);
   const [appraisalMailForm] = Form.useForm();
+  const [webAssetModalOpen, setWebAssetModalOpen] = useState(false);
+  const [activeCaseForWeb, setActiveCaseForWeb] = useState(null);
+  const [webAssetOptions, setWebAssetOptions] = useState([]);
+  const [selectedWebAssetKeys, setSelectedWebAssetKeys] = useState([]);
+  const [submittingWeb, setSubmittingWeb] = useState(false);
 
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [activeCaseForDelivery, setActiveCaseForDelivery] = useState(null);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [activeCaseForTask, setActiveCaseForTask] = useState(null);
+
+  // States for copy-paste content popups
+  const [contentModalOpen, setContentModalOpen] = useState(false);
+  const [contentModalTitle, setContentModalTitle] = useState('');
+  const [contentModalHtml, setContentModalHtml] = useState('');
+
+  // States for latest email viewer popup
+  const [latestEmailModalOpen, setLatestEmailModalOpen] = useState(false);
+  const [latestEmailData, setLatestEmailData] = useState(null);
+  const [loadingLatestEmail, setLoadingLatestEmail] = useState(false);
+
+  // Format received email time to "HH:MM DD/MM/YYYY" format
+  const formatLatestEmailTime = (timeStr) => {
+    if (!timeStr) return 'N/A';
+    if (timeStr === 'Live Inbox') return 'Hộp thư trực tiếp (Đang quét)';
+    try {
+      const date = new Date(timeStr);
+      if (isNaN(date.getTime())) return timeStr;
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${hours}:${minutes} ${day}/${month}/${year}`;
+    } catch (e) {
+      return timeStr;
+    }
+  };
+
+  // Copy HTML Rich Text helper
+  const handleCopyHtml = async () => {
+    if (!contentModalHtml) return;
+    try {
+      const blob = new Blob([contentModalHtml], { type: 'text/html' });
+      // Plain text fallback
+      const plainText = contentModalHtml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      const textBlob = new Blob([plainText], { type: 'text/plain' });
+      
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': blob,
+          'text/plain': textBlob
+        })
+      ]);
+      message.success('Đã sao chép định dạng bảng (Rich Text) thành công! Bạn có thể dán trực tiếp vào Outlook/Gmail.');
+    } catch (err) {
+      console.error(err);
+      try {
+        const listener = (e) => {
+          e.clipboardData.setData('text/html', contentModalHtml);
+          e.preventDefault();
+        };
+        document.addEventListener('copy', listener);
+        document.execCommand('copy');
+        document.removeEventListener('copy', listener);
+        message.success('Đã sao chép nội dung vào Clipboard!');
+      } catch (fallbackErr) {
+        message.error('Không thể sao chép tự động. Vui lòng bôi đen và copy thủ công.');
+      }
+    }
+  };
+
+  // Open "Tạo form phát hành chứng thư" content
+  const handleOpenPhathanhContent = async (record) => {
+    const hide = message.loading('Đang lấy nội dung phát hành...', 0);
+    try {
+      const res = await getPhathanhContent(record.id);
+      setContentModalTitle(`Nội dung phát hành chứng thư: ${record.contract_number || record.id}`);
+      setContentModalHtml(res.data.html || '');
+      setContentModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      message.error(err.response?.data?.error || 'Không thể lấy nội dung phát hành.');
+    } finally {
+      hide();
+    }
+  };
+
+  // Open "Tạo form xin số chứng thư" content
+  const handleOpenXinsoContent = async (record) => {
+    const hide = message.loading('Đang lấy nội dung xin số...', 0);
+    try {
+      const res = await getXinsoContent(record.id);
+      setContentModalTitle(`Nội dung xin số chứng thư: ${record.contract_number || record.id}`);
+      setContentModalHtml(res.data.html || '');
+      setContentModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      message.error(err.response?.data?.error || 'Không thể lấy nội dung xin số.');
+    } finally {
+      hide();
+    }
+  };
+
+  // Open "Xem mail mới nhất" popup
+  const handleOpenLatestEmail = async (record) => {
+    setLoadingLatestEmail(true);
+    setLatestEmailModalOpen(true);
+    setLatestEmailData(null);
+    try {
+      const res = await getLatestEmail(record.id);
+      setLatestEmailData(res.data.email || null);
+    } catch (err) {
+      console.error(err);
+      message.error(err.response?.data?.error || 'Không thể tải email mới nhất.');
+    } finally {
+      setLoadingLatestEmail(false);
+    }
+  };
 
   // 1. Quick Word Export
   const handleQuickExportWord = async (record) => {
-    const hide = message.loading('Đang xuất nhanh bộ hồ sơ Word...', 0);
-    try {
-      await generateDocuments(record.id);
-      message.success('Xuất hồ sơ Word thành công! Đang tải về...');
-      // Download all documents ZIP
-      const response = await downloadAllZip(record.id);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `hoso_word_${record.contract_number || record.id}.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode.removeChild(link);
-    } catch (err) {
+const hide = message.loading('Đang xuất nhanh bộ hồ sơ Word...', 0);
+try {
+const generateResponse = await generateDocuments(record.id);
+// Download all documents ZIP
+const response = await downloadAllZip(record.id);
+const url = window.URL.createObjectURL(new Blob([response.data]));
+const link = document.createElement('a');
+link.href = url;
+const rawFolderName = generateResponse.data?.folder_name || `hoso_word_${record.id}`;
+const safeFolderName = String(rawFolderName).replace(/[<>:"/\\|?*]+/g, '-').replace(/\s+/g, ' ').trim();
+link.setAttribute('download', `${safeFolderName || `hoso_word_${record.id}`}.zip`);
+document.body.appendChild(link);
+link.click();
+link.parentNode.removeChild(link);
+window.URL.revokeObjectURL(url);
+message.success('Xuất hồ sơ Word thành công! Đang tải về...');
+} catch (err) {
       console.error(err);
       message.error(err.response?.data?.error || 'Xuất hồ sơ Word thất bại.');
     } finally {
@@ -145,15 +278,90 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
     setDeliveryOpen(true);
   };
 
+  const handleOpenTaskModal = (record) => {
+    setActiveCaseForTask(record);
+    setTaskModalOpen(true);
+  };
+
+  const handleCreateTask = async (payload) => {
+    await client.post('/tasks', {
+      ...payload,
+      case_id: activeCaseForTask?.id ?? payload.case_id,
+      status: 'todo',
+    });
+    message.success('Đã tạo công việc cho hồ sơ');
+    setTaskModalOpen(false);
+    setActiveCaseForTask(null);
+  };
+
   // 4. Submit valuation request to Web automation
-  const handleSubmitCaseToWeb = async (record) => {
-    const hide = message.loading('Đang gửi yêu cầu định giá lên Web...', 0);
+  const buildWebAssetOptions = (caseData) => {
+    const description = String(caseData.asset_description || '').trim();
+    const lines = description
+      .split(/\r?\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const sourceLines = lines.length > 0 ? lines : [description || caseData.contract_number || `Hồ sơ #${caseData.id}`];
+    return sourceLines.map((line, index) => ({
+      key: String(index),
+      index: index + 1,
+      asset_description: line,
+      so_to_ban_do: caseData.so_to_ban_do || '',
+      so_thua_dat: caseData.so_thua_dat || '',
+    }));
+  };
+
+  const handleOpenSubmitWebModal = async (record) => {
     try {
       const res = await getCase(record.id);
       const caseData = res.data || record;
+      const options = buildWebAssetOptions(caseData);
+      if (options.length === 1) {
+        const hide = message.loading('Đang gửi yêu cầu định giá lên Web...', 0);
+        setSubmittingWeb(true);
+        try {
+          const payload = {
+            ...caseData,
+            asset_description: options[0].asset_description,
+            customer_phone: caseData.customer_phone || '',
+            citizen_id: caseData.citizen_id || '',
+            personal_note: caseData.personal_note || '',
+            advance_payment: caseData.advance_payment ? String(caseData.advance_payment) : '0',
+          };
+          const submitRes = await submitWeb(payload);
+          message.success(submitRes.data?.message || 'Gửi yêu cầu lên Web thành công! 🌐');
+        } finally {
+          setSubmittingWeb(false);
+          hide();
+        }
+        return;
+      }
+      setActiveCaseForWeb(caseData);
+      setWebAssetOptions(options);
+      setSelectedWebAssetKeys(options.map((item) => item.key));
+      setWebAssetModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      message.error(err.response?.data?.error || 'Không tải được thông tin hồ sơ để gửi Web.');
+    }
+  };
+
+  const handleSubmitCaseToWeb = async () => {
+    if (!activeCaseForWeb) return;
+    const selectedAssets = webAssetOptions.filter((item) => selectedWebAssetKeys.includes(item.key));
+    if (selectedAssets.length === 0) {
+      message.warning('Vui lòng chọn ít nhất một tài sản để gửi lên Web.');
+      return;
+    }
+    const hide = message.loading('Đang gửi yêu cầu định giá lên Web...', 0);
+    setSubmittingWeb(true);
+    try {
+      const caseData = activeCaseForWeb;
+      const selectedDescription = selectedAssets.map((item) => item.asset_description).join('\n');
       
       const payload = {
         ...caseData,
+        asset_description: selectedDescription,
         customer_phone: caseData.customer_phone || '',
         citizen_id: caseData.citizen_id || '',
         personal_note: caseData.personal_note || '',
@@ -162,9 +370,35 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
       
       const submitRes = await submitWeb(payload);
       message.success(submitRes.data?.message || 'Gửi yêu cầu lên Web thành công! 🌐');
+      setWebAssetModalOpen(false);
+      setActiveCaseForWeb(null);
     } catch (err) {
       console.error(err);
       message.error(err.response?.data?.error || 'Gửi yêu cầu lên Web thất bại.');
+    } finally {
+      setSubmittingWeb(false);
+      hide();
+    }
+  };
+
+  // 5. Download certificate release form docx
+  const handleDownloadPhathanhDocx = async (record) => {
+    const hide = message.loading('Đang tạo form phát hành chứng thư...', 0);
+    try {
+      const response = await downloadPhathanhDocx(record.id);
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const contractNum = record.contract_number ? record.contract_number.replace(/\//g, '_') : record.id;
+      link.setAttribute('download', `phieu_phat_hanh_${contractNum}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      message.success('Tải form phát hành chứng thư thành công! 📄');
+    } catch (err) {
+      console.error(err);
+      message.error(err.response?.data?.error || 'Tạo form phát hành chứng thư thất bại.');
     } finally {
       hide();
     }
@@ -407,13 +641,12 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
     asset_description: 320,
     valuation_fee_number: 110,
     case_status: 140,
-    citizen_id: 120,
-    actions: 140
+    actions: 160
   });
 
   const columns = [
     {
-      title: 'HỒ SƠ',
+title: 'HỒ SƠ',
       key: 'contract_number',
       width: 380,
       render: (_, record) => {
@@ -455,6 +688,14 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
                 <span>
                   <span style={{ color: '#475569', fontWeight: 600 }}>Địa chỉ: </span>
                   <span style={{ color: '#0f172a', fontWeight: 'normal' }}>{record.customer_address || '-'}</span>
+                </span>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <IdcardOutlined style={{ color: '#64748b', marginRight: '6px' }} />
+                <span>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>CCCD: </span>
+                  <span style={{ color: '#0f172a', fontWeight: 'normal' }}>{record.citizen_id || '-'}</span>
                 </span>
               </div>
               
@@ -509,7 +750,20 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
       dataIndex: 'asset_description',
       key: 'asset_description',
       width: 320,
-      render: (text) => <div style={{ whiteSpace: 'normal' }}>{text || '-'}</div>
+      render: (text) => {
+        if (!text) return '-';
+        const items = text.split('\n').map(item => item.trim()).filter(Boolean);
+        if (items.length === 0) return '-';
+        return (
+          <ul style={{ margin: 0, paddingLeft: '16px', listStyleType: 'disc', whiteSpace: 'normal' }}>
+            {items.map((item, idx) => (
+              <li key={idx} style={{ marginBottom: idx === items.length - 1 ? 0 : '4px' }}>
+                {item}
+              </li>
+            ))}
+          </ul>
+        );
+      }
     },
     {
       title: 'PHÍ',
@@ -603,27 +857,12 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
       },
     },
     {
-      title: 'CCCD',
-      dataIndex: 'citizen_id',
-      key: 'citizen_id',
-      width: 120,
-      render: (text) => text || '•'
-    },
-    {
       title: 'THAO TÁC NHANH',
       key: 'actions',
-      width: 160,
+      width: 200,
       align: 'center',
-      render: (text, record) => (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px 6px', justifyContent: 'center', alignItems: 'center', width: 'fit-content', margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-          <Tooltip title="Xuất nhanh bộ hồ sơ Word">
-            <Button 
-              type="text" 
-              icon={<FileWordOutlined style={{ color: '#0f6cbd', fontSize: '18px' }} />} 
-              onClick={() => handleQuickExportWord(record)}
-              style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
-            />
-          </Tooltip>
+        render: (text, record) => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 36px)', gap: '8px 8px', justifyContent: 'center', alignItems: 'center', width: 'fit-content', margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
           <Tooltip title="Gửi mail yêu cầu định giá">
             <Button 
               type="text" 
@@ -632,11 +871,19 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
               style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
             />
           </Tooltip>
-          <Tooltip title="Gửi mail phát hành chứng thư">
+          <Tooltip title="Tạo form xin số chứng thư">
             <Button 
               type="text" 
-              icon={<SendOutlined style={{ color: '#8b5cf6', fontSize: '18px' }} />} 
-              onClick={() => handleOpenDelivery(record)}
+              icon={<FileAddOutlined style={{ color: '#0284c7', fontSize: '18px' }} />} 
+              onClick={() => handleOpenXinsoContent(record)}
+              style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
+            />
+          </Tooltip>
+          <Tooltip title="Xem mail mới nhất">
+            <Button 
+              type="text" 
+              icon={<CommentOutlined style={{ color: '#0891b2', fontSize: '18px' }} />} 
+              onClick={() => handleOpenLatestEmail(record)}
               style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
             />
           </Tooltip>
@@ -644,7 +891,39 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
             <Button 
               type="text" 
               icon={<GlobalOutlined style={{ color: '#ea4335', fontSize: '18px' }} />} 
-              onClick={() => handleSubmitCaseToWeb(record)}
+              onClick={() => handleOpenSubmitWebModal(record)}
+              style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
+            />
+          </Tooltip>
+          <Tooltip title="Xuất nhanh bộ hồ sơ Word">
+            <Button 
+              type="text" 
+              icon={<FileWordOutlined style={{ color: '#007f7a', fontSize: '18px' }} />} 
+              onClick={() => handleQuickExportWord(record)}
+              style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
+            />
+          </Tooltip>
+          <Tooltip title="Tạo công việc">
+            <Button
+              type="text"
+              icon={<CheckSquareOutlined style={{ color: '#7c3aed', fontSize: '18px' }} />}
+              onClick={() => handleOpenTaskModal(record)}
+              style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f5f3ff', border: 'none', padding: 0 }}
+            />
+          </Tooltip>
+          <Tooltip title="Gửi mail phát hành chứng thư">
+            <Button 
+              type="text" 
+              icon={<SendOutlined style={{ color: '#d99a55', fontSize: '18px' }} />} 
+              onClick={() => handleOpenDelivery(record)}
+              style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
+            />
+          </Tooltip>
+          <Tooltip title="Tạo form phát hành chứng thư">
+            <Button 
+              type="text" 
+              icon={<FormOutlined style={{ color: '#d97706', fontSize: '18px' }} />} 
+              onClick={() => handleOpenPhathanhContent(record)}
               style={{ width: '36px', height: '36px', minWidth: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', backgroundColor: '#f1f5f9', border: 'none', padding: 0 }}
             />
           </Tooltip>
@@ -678,7 +957,7 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
 
       {/* Main Case Table Card */}
       <Card 
-        style={{ borderRadius: 12, border: '1px solid #dbe3f3' }} 
+        style={{ borderRadius: 12, border: '1px solid #d8e7e5' }} 
         bodyStyle={{ padding: 0 }}
         title={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -749,14 +1028,46 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
       />
 
       {/* Import Modal */}
-      <CaseImportModal
-        open={importModalOpen}
-        onCancel={() => setImportModalOpen(false)}
-        onSuccess={() => { setImportModalOpen(false); fetchCases(); if (onFilterOptionsRefresh) onFilterOptionsRefresh(); }}
-      />
+<CaseImportModal
+open={importModalOpen}
+onCancel={() => setImportModalOpen(false)}
+onSuccess={() => { setImportModalOpen(false); fetchCases(); if (onFilterOptionsRefresh) onFilterOptionsRefresh(); }}
+/>
 
       <Modal
-        open={appraisalMailOpen}
+        open={webAssetModalOpen}
+        title="Chọn tài sản gửi yêu cầu định giá lên Web"
+        okText="Gửi lên Web"
+        cancelText="Hủy"
+        confirmLoading={submittingWeb}
+        onCancel={() => {
+          setWebAssetModalOpen(false);
+          setActiveCaseForWeb(null);
+        }}
+        onOk={handleSubmitCaseToWeb}
+        width={900}
+        destroyOnClose
+      >
+        <Table
+          size="small"
+          rowKey="key"
+          dataSource={webAssetOptions}
+          pagination={false}
+          rowSelection={{
+            selectedRowKeys: selectedWebAssetKeys,
+            onChange: setSelectedWebAssetKeys,
+          }}
+          columns={[
+            { title: 'STT', dataIndex: 'index', width: 70 },
+            { title: 'Tài sản', dataIndex: 'asset_description' },
+            { title: 'Số tờ', dataIndex: 'so_to_ban_do', width: 120 },
+            { title: 'Số thửa', dataIndex: 'so_thua_dat', width: 120 },
+          ]}
+        />
+      </Modal>
+
+<Modal
+open={appraisalMailOpen}
         title="Tùy chọn gửi mail cho Nghiệp vụ"
         okText="Gửi mail"
         cancelText="Hủy"
@@ -793,7 +1104,15 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
         open={deliveryOpen}
         onClose={() => { setDeliveryOpen(false); setActiveCaseForDelivery(null); }}
         caseId={activeCaseForDelivery?.id}
+        contractNumber={activeCaseForDelivery?.contract_number}
         onSuccess={() => fetchCases()}
+      />
+
+      <TaskModal
+        open={taskModalOpen}
+        defaultCaseId={activeCaseForTask?.id}
+        onCancel={() => { setTaskModalOpen(false); setActiveCaseForTask(null); }}
+        onSubmit={handleCreateTask}
       />
 
       {/* Notes Drawer */}
@@ -846,6 +1165,93 @@ export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
           </div>
         </div>
       </Drawer>
+
+      {/* Content Display Modal (Copy-paste form) */}
+      <Modal
+        title={<span style={{ fontSize: 16, fontWeight: 700 }}>{contentModalTitle}</span>}
+        open={contentModalOpen}
+        onCancel={() => setContentModalOpen(false)}
+        width={1100}
+        footer={[
+          <Button key="close" onClick={() => setContentModalOpen(false)}>
+            Đóng
+          </Button>,
+          <Button 
+            key="copy" 
+            type="primary" 
+            icon={<CopyOutlined />} 
+            onClick={handleCopyHtml}
+            style={{ backgroundColor: '#047857', borderColor: '#047857' }}
+          >
+            Sao chép bảng nội dung
+          </Button>
+        ]}
+      >
+        <div style={{ padding: '12px 0' }}>
+          <p style={{ color: '#64748b', fontSize: 13, marginBottom: 12 }}>
+            💡 Nội dung bảng dưới đây có thể được sao chép trực tiếp. Sau khi nhấn <strong>Sao chép bảng nội dung</strong>, bạn có thể dán (Ctrl+V) trực tiếp vào Outlook/Gmail để giữ nguyên định dạng bảng và màu sắc.
+          </p>
+          <div 
+            style={{ 
+              maxHeight: '550px', 
+              overflowY: 'auto', 
+              border: '1px solid #e2e8f0', 
+              padding: '16px', 
+              borderRadius: '8px', 
+              backgroundColor: '#ffffff',
+              boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)'
+            }}
+            dangerouslySetInnerHTML={{ __html: contentModalHtml }}
+          />
+        </div>
+      </Modal>
+
+      {/* Latest Email Viewer Modal */}
+      <Modal
+        title={<span style={{ fontSize: 16, fontWeight: 700 }}>Email mới nhất từ Mail-Listener</span>}
+        open={latestEmailModalOpen}
+        onCancel={() => setLatestEmailModalOpen(false)}
+        width={1200}
+        footer={[
+          <Button key="close" onClick={() => setLatestEmailModalOpen(false)}>
+            Đóng
+          </Button>
+        ]}
+      >
+        {loadingLatestEmail ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Badge status="processing" text="Đang tải email mới nhất..." />
+          </div>
+        ) : latestEmailData ? (
+          <div style={{ padding: '12px 0' }}>
+            <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: 16 }}>
+              <div style={{ marginBottom: 8 }}><strong style={{ color: '#475569' }}>Tiêu đề:</strong> <span style={{ fontWeight: 600, color: '#0f172a' }}>{latestEmailData.subject}</span></div>
+              <div style={{ marginBottom: 8 }}><strong style={{ color: '#475569' }}>Người gửi:</strong> <span style={{ color: '#0f172a' }}>{latestEmailData.from_email}</span></div>
+              <div><strong style={{ color: '#475569' }}>Thời gian:</strong> <span style={{ color: '#64748b' }}>{formatLatestEmailTime(latestEmailData.processed_at)}</span></div>
+            </div>
+            
+            <strong style={{ color: '#475569', display: 'block', marginBottom: 8 }}>Nội dung email:</strong>
+            <div 
+              style={{ 
+                maxHeight: '600px', 
+                overflowY: 'auto', 
+                border: '1px solid #e2e8f0', 
+                padding: '16px', 
+                borderRadius: '8px', 
+                backgroundColor: '#ffffff',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif'
+              }}
+              dangerouslySetInnerHTML={{ __html: latestEmailData.body }}
+            />
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '45px 0', color: '#64748b' }}>
+            📭 Chưa nhận được email tương ứng nào từ mail-listener cho hồ sơ này trong cơ sở dữ liệu.
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
