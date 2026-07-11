@@ -533,6 +533,10 @@ async def _send_appraisal_mail_for_record_choice(
     record_id: int,
     choice: str,
 ) -> None:
+    record = await get_record(settings.records_db_path, record_id)
+    if str(record.get("outbound_message_id") or "").strip():
+        raise RuntimeError(f"Hồ sơ #{record_id} đã gửi mail Hành chính, không gửi lặp.")
+
     choice_values = professional_choice_values(choice)
     await db_update_record_fields(settings.records_db_path, record_id, choice_values)
     pending_key = f"pending_mail_payload_{record_id}"
@@ -540,7 +544,6 @@ async def _send_appraisal_mail_for_record_choice(
     if isinstance(pending_payload, dict):
         mail_payload = dict(pending_payload)
     else:
-        record = await get_record(settings.records_db_path, record_id)
         mail_payload = dict(record)
     mail_payload.update(choice_values)
     mail_payload["to_email"] = settings.mail_to

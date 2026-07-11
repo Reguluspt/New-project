@@ -575,6 +575,7 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
                 patch("src.mail_listener.append_listener_log"),
             ):
                 match = await process_incoming_email(_raw_admin_reply(), uid="21", settings=settings)
+                duplicate_match = await process_incoming_email(_raw_admin_reply(), uid="22", settings=settings)
 
             async with aiosqlite.connect(db_path) as db:
                 cursor = await db.execute(
@@ -584,7 +585,8 @@ class MailListenerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNotNone(match)
         forward_mock.assert_awaited_once()
-        notify_mock.assert_awaited_once()
+        self.assertEqual(duplicate_match.reason, "duplicate_professional_forward")
+        self.assertEqual(notify_mock.await_count, 2)
         self.assertEqual(row, ("CT-2026-0007", SENT_TO_PROFESSIONAL_STATUS))
         self.assertIn("Nguyễn Thị Loan", notify_mock.await_args.args[1])
 

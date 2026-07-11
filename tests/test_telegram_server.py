@@ -25,6 +25,7 @@ from src.telegram_server import (
     TELEGRAM_WEBHOOK_PATH,
     TelegramSettings,
     WEB_AUTOMATION_CALLBACK_PREFIX,
+    _send_appraisal_mail_for_record_choice,
     automation_keyboard,
     build_form_field_queue,
     build_telegram_application,
@@ -777,6 +778,35 @@ class TelegramServerTests(unittest.IsolatedAsyncioTestCase):
 
         send_mail_mock.assert_not_awaited()
         self.assertIn("chuyển tiếp cho Nghiệp vụ", query.edit_message_text.await_args.args[0])
+
+    async def test_send_appraisal_mail_blocks_duplicate_admin_email(self) -> None:
+        context = Mock()
+        context.user_data = {}
+        settings = TelegramSettings(
+            bot_token="token",
+            webhook_url="https://example.com",
+            gemini_api_key="gemini-secret",
+            gemini_model="gemini-test",
+            upload_dir="tmp/uploads",
+            records_db_path="tmp/records.db",
+            mail_to="ops@example.com",
+        )
+
+        with (
+            patch("src.telegram_server.get_record", AsyncMock(return_value={"id": "9", "outbound_message_id": "<sent@example.com>"})),
+            patch("src.telegram_server.db_update_record_fields", AsyncMock()) as update_fields_mock,
+            patch("src.telegram_server.send_appraisal_email_service", AsyncMock()) as send_mail_mock,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "không gửi lặp"):
+                await _send_appraisal_mail_for_record_choice(
+                    context=context,
+                    settings=settings,
+                    record_id=9,
+                    choice="kiet",
+                )
+
+        update_fields_mock.assert_not_awaited()
+        send_mail_mock.assert_not_awaited()
 
     async def test_professional_choice_callback_sends_email(self) -> None:
         context = Mock()

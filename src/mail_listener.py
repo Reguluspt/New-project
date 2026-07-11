@@ -1376,6 +1376,22 @@ async def process_certificate_reply(incoming: IncomingEmail, *, settings: MailLi
         )
 
     smtp_settings = load_gmail_smtp_settings()
+    if str(record.get("status") or "").strip().upper() == SENT_TO_PROFESSIONAL_STATUS:
+        append_listener_log(
+            "professional_forward_duplicate_skipped",
+            uid=incoming.uid,
+            subject=incoming.subject,
+            from_email=incoming.from_email,
+            record_id=record.get("id"),
+            certificate_number=certificate_number,
+            status=SENT_TO_PROFESSIONAL_STATUS,
+        )
+        await notify_telegram(
+            settings,
+            f"Hồ sơ {owner_name_from_record(record)} đã gửi Nghiệp vụ trước đó; đã chặn email lặp.",
+        )
+        return RecordMatch(record=dict(record), score=float(extraction.confidence or 0), reason="duplicate_professional_forward")
+
     if not professional_forward_enabled(record):
         await update_certificate_received(
             settings.records_db_path,
