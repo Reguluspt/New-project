@@ -52,6 +52,21 @@ import CaseEditModal from './CaseEditModal';
 import CaseImportModal from './CaseImportModal';
 import DeliveryModal from './DeliveryModal';
 import TaskModal from '../tasks/TaskModal';
+import './CaseTable.css';
+
+const getCaseRowClassName = (record) => {
+  const status = record.case_status || 'Đang xử lý';
+
+  if (status === 'Hoàn thành') {
+    return 'case-table-row case-table-row--completed';
+  }
+
+  if (status === 'Đang xử lý' || status === 'Đang thực hiện') {
+    return 'case-table-row case-table-row--in-progress';
+  }
+
+  return 'case-table-row';
+};
 
 export default function CaseTable({ filterOptions, onFilterOptionsRefresh }) {
   const navigate = useNavigate();
@@ -678,9 +693,9 @@ message.success('Xuất hồ sơ Word thành công! Đang tải về...');
     switch (status) {
       case 'Hoàn thành':
         return {
-          bg: '#f0fdf4',
-          color: '#16a34a',
-          border: '#bbf7d0',
+          bg: '#e8f5f3',
+          color: '#007f7a',
+          border: '#9dd6d1',
         };
       case 'Hủy':
         return {
@@ -931,7 +946,7 @@ title: 'HỒ SƠ',
       width: 200,
       align: 'center',
         render: (text, record) => (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 36px)', gap: '8px 8px', justifyContent: 'center', alignItems: 'center', width: 'fit-content', margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
+          <div className="case-table-actions" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 36px)', gap: '8px 8px', justifyContent: 'center', alignItems: 'center', width: 'fit-content', margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
           <Tooltip title="Gửi mail yêu cầu định giá">
             <Button 
               type="text" 
@@ -1063,6 +1078,7 @@ title: 'HỒ SƠ',
           {...getResizableProps(columns)}
           dataSource={data.items}
           rowKey="id"
+          rowClassName={getCaseRowClassName}
           loading={loading}
           scroll={{ x: 'max-content' }}
           pagination={{
