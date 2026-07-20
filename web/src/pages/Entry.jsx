@@ -5,6 +5,7 @@ import FileUploader from '../components/entry/FileUploader';
 import PageViewer from '../components/entry/PageViewer';
 import OcrActions from '../components/entry/OcrActions';
 import EntryForm from '../components/entry/EntryForm';
+import { initialScanStatus } from '../components/entry/ocrQueue';
 
 const { Title, Text } = Typography;
 
@@ -34,10 +35,11 @@ export default function Entry() {
   const [, setScannedResults] = useState({});
 
   const handleUploadSuccess = (newUploadId, uploadedFiles) => {
+    const nextFiles = uploadedFiles || [];
     setUploadId(newUploadId);
-    setFiles((uploadedFiles || []).map((file) => ({
+    setFiles(nextFiles.map((file) => ({
       ...file,
-      scanStatus: 'pending',
+      scanStatus: initialScanStatus(file, nextFiles),
       extraction: null,
       multiExtraction: null,
       scanError: '',
@@ -123,6 +125,7 @@ export default function Entry() {
     processing: 'Đang quét',
     applied: 'Đã đưa vào form',
     error: 'Lỗi quét',
+    skipped: 'Đã ghép vào PDF',
   }[status] || 'Chờ quét');
 
   const scanStatusColor = (status) => ({
@@ -130,6 +133,7 @@ export default function Entry() {
     processing: 'processing',
     applied: 'success',
     error: 'error',
+    skipped: 'default',
   }[status] || 'default');
 
   const handleSaveSuccess = (caseId) => {

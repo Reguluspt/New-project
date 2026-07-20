@@ -1119,6 +1119,7 @@ async def send_phathanh_email_via_playwright_raw(case_data: dict, html_body: str
             context = await browser.new_context()
             page = await context.new_page()
 
+        send_triggered = False
         try:
             # 1. Navigate to the login page
             print(f"[Playwright Raw Fallback] Navigating to {webmail_url}")
@@ -1552,6 +1553,7 @@ async def send_phathanh_email_via_playwright_raw(case_data: dict, html_body: str
             )
             await page.wait_for_timeout(500)
             await page.keyboard.press("Control+Enter")
+            send_triggered = True
             print("[Playwright Raw Fallback] Ctrl+Enter sent.")
 
             # 7. Wait for compose editor to close + Undo Send progress bar to finish
@@ -1614,17 +1616,23 @@ async def send_phathanh_email_via_playwright_raw(case_data: dict, html_body: str
 
 
         except Exception as exc:
-            print(f"[Playwright Raw Fallback] Error occurred during raw flow: {exc}")
-            try:
-                os.makedirs("C:/Users/Truon/.gemini/antigravity/brain/93fb4859-d7ac-4272-81c9-dfbf8c16bb7c/scratch/modern_survey", exist_ok=True)
-                screenshot_path = "C:/Users/Truon/.gemini/antigravity/brain/93fb4859-d7ac-4272-81c9-dfbf8c16bb7c/scratch/modern_survey/error_screenshot.png"
-                await page.screenshot(path=screenshot_path)
-                print(f"[Playwright Raw Fallback] Captured error screenshot to {screenshot_path}")
-            except Exception as ss_exc:
-                print(f"[Playwright Raw Fallback] Failed to capture error screenshot: {ss_exc}")
-            raise exc
+            if send_triggered:
+                print(f"[Playwright Raw Fallback] Post-send verification warning: {exc}")
+            else:
+                print(f"[Playwright Raw Fallback] Error occurred before send: {exc}")
+                try:
+                    os.makedirs("C:/Users/Truon/.gemini/antigravity/brain/93fb4859-d7ac-4272-81c9-dfbf8c16bb7c/scratch/modern_survey", exist_ok=True)
+                    screenshot_path = "C:/Users/Truon/.gemini/antigravity/brain/93fb4859-d7ac-4272-81c9-dfbf8c16bb7c/scratch/modern_survey/error_screenshot.png"
+                    await page.screenshot(path=screenshot_path)
+                    print(f"[Playwright Raw Fallback] Captured error screenshot to {screenshot_path}")
+                except Exception as ss_exc:
+                    print(f"[Playwright Raw Fallback] Failed to capture error screenshot: {ss_exc}")
+                raise
         finally:
-            await context.close()
+            try:
+                await context.close()
+            except Exception as close_exc:
+                print(f"[Playwright Raw Fallback] Browser close warning: {close_exc}")
 
     return case_data.get("to") or case_data.get("from") or "Webmail Playwright Raw Fallback"
 

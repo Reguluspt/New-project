@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Form, Input, Select, Checkbox, Radio, Space, Button, message, Divider, Typography } from 'antd';
 import { CompassOutlined, PlusOutlined } from '@ant-design/icons';
 import { createDeliveryContact, getDeliveryContacts, saveDelivery, sendPhathanhReply } from '../../api/documents';
+import { deliveryMailFailureNotice } from './deliveryMailError';
 
 const DEFAULT_CONTACT_DETAILS = 'CÔNG TY CỔ PHẦN THẨM ĐỊNH GIÁ THẾ KỶ - VP TẠI GIA LAI\nĐịa chỉ: 90/60/3 Trường Chinh, TP. Pleiku, Gia Lai\nĐiện thoại: 0905226968';
 
@@ -147,9 +148,10 @@ export default function DeliveryModal({ open, onClose, caseId, contractNumber, o
       });
     } catch (err) {
       console.error(err);
-      Modal.error({
-        title: 'Gửi mail phát hành chứng thư thất bại',
-        content: err.response?.data?.error || 'Gửi mail phát hành hoặc lưu thông tin thất bại',
+      const failureNotice = deliveryMailFailureNotice(err);
+      Modal[failureNotice.type]({
+        title: failureNotice.title,
+        content: failureNotice.content,
         okText: 'Đóng',
       });
     } finally {

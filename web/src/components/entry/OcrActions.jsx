@@ -8,6 +8,7 @@ const STATUS = {
   processing: { label: 'Đang quét', color: 'processing' },
   applied: { label: 'Đã đưa vào form', color: 'success' },
   error: { label: 'Lỗi quét', color: 'error' },
+  skipped: { label: 'Đã ghép vào PDF', color: 'default' },
 };
 
 const allPagesFor = (file) => Array.from({ length: file.pages || 0 }, (_, index) => index + 1);
@@ -192,7 +193,7 @@ export default function OcrActions({ uploadId, activeFile, files = [], onFileSca
             </div>
             <Button
               icon={<ReloadOutlined />}
-              disabled={extracting || !activeFile}
+              disabled={extracting || !activeFile || activeFile.scanStatus === 'skipped'}
               onClick={() => scanFilesSequentially([activeFile])}
             >
               Quét lại file này
