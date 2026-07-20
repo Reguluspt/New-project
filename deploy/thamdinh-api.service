@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/root/app
 EnvironmentFile=-/root/app/API.env
-ExecStart=/root/app/.venv/bin/gunicorn --workers 2 --bind 127.0.0.1:5000 --access-logfile - --error-logfile - api.run:app
+ExecStart=/root/app/.venv/bin/gunicorn --workers 2 --timeout 180 --bind 127.0.0.1:5000 --access-logfile - --error-logfile - api.run:app
 Restart=always
 RestartSec=5
 
