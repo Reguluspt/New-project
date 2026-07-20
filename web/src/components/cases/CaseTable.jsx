@@ -23,7 +23,7 @@ import {
   CopyOutlined,
   CheckSquareOutlined
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import client from '../../api/client';
 import { 
@@ -717,16 +717,22 @@ title: 'HỒ SƠ',
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '2px 0' }}>
             {/* Header: ID & Contract Number & Type Tag */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <span style={{ 
-                fontSize: '11px', 
-                color: '#6366f1', 
-                backgroundColor: '#e0e7ff', 
-                padding: '2px 6px', 
-                borderRadius: '4px',
-                fontWeight: 700 
-              }}>
+              <Link
+                to={`/cases/${record.id}`}
+                onClick={(event) => event.stopPropagation()}
+                title="Xem chi tiết hồ sơ"
+                style={{
+                  fontSize: '11px',
+                  color: '#4f46e5',
+                  backgroundColor: '#e0e7ff',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                }}
+              >
                 #{record.id}
-              </span>
+              </Link>
               <span style={{ fontSize: '15px', color: '#1e40af', fontWeight: 700, letterSpacing: '-0.01em' }}>
                 {record.contract_number || 'N/A'}
               </span>

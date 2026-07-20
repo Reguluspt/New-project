@@ -12,7 +12,6 @@ import asyncio
 import smtplib
 from dotenv import load_dotenv
 
-from .contracts import expand_contract_number
 from .mail_renderer import MailData, mail_data_from_record, render_appraisal_email
 from .database_manager import log_records_db_path, resolve_records_db_path, save_outbound_message
 
@@ -149,7 +148,7 @@ def _subject_from_payload(data_dict: Mapping[str, Any], mail_data: MailData) -> 
     source = _remove_phone_numbers(str(data_dict.get("source") or mail_data.source or "").strip())
     asset_description = _subject_asset_text(str(data_dict.get("asset_description") or mail_data.asset_description or "").strip())
     contract_number = str(data_dict.get("contract_number") or mail_data.contract_id or "").strip()
-    prefix = f"[{expand_contract_number(contract_number)}]" if contract_number else "[XIN SỐ]"
+    prefix = f"[{contract_number}]" if contract_number else "[XIN SỐ]"
     parts = [prefix]
     if source:
         parts.append(source)

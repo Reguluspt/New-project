@@ -445,7 +445,7 @@ def save_entry_case():
     case_fields["customer_type"] = case_type
     
     try:
-        case_id = create_case(db, case_fields)
+        case_id = create_case(db, case_fields, gcn_details=data.get("gcn_details") or [])
         
         case_files_dir = current_app.config.get("CASE_FILES_DIR") or CASE_FILES_DIR
         folder = Path(case_folder(

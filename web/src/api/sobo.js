@@ -20,6 +20,10 @@ export const deleteSoboRecord = (id) => {
   return client.delete(`/sobo/${id}`);
 };
 
+export const unfollowSoboRecord = (id) => {
+  return client.post(`/sobo/${id}/unfollow`);
+};
+
 export const getSoboFiles = (id) => {
   return client.get(`/sobo/${id}/files`);
 };

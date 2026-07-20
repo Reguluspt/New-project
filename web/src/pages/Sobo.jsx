@@ -13,6 +13,7 @@ import {
   getSoboRecords,
   getSoboStats,
   deleteSoboRecord,
+  unfollowSoboRecord,
   syncTelegram,
   checkMail
 } from '../api/sobo';
@@ -185,6 +186,18 @@ export default function Sobo() {
     } catch (err) {
       console.error(err);
       message.error('Không thể xóa hồ sơ sơ bộ');
+    }
+  };
+
+  const handleUnfollow = async (id) => {
+    try {
+      await unfollowSoboRecord(id);
+      message.success('Đã bỏ theo dõi mail phản hồi cho hồ sơ');
+      fetchStats();
+      fetchRecords();
+    } catch (err) {
+      console.error(err);
+      message.error('Không thể bỏ theo dõi hồ sơ sơ bộ');
     }
   };
 
@@ -487,6 +500,7 @@ export default function Sobo() {
         onView={handleOpenDetail}
         onEdit={handleOpenEdit}
         onConvert={handleConvertToCase}
+        onUnfollow={handleUnfollow}
         onDelete={handleDelete}
         isGuest={isGuest}
       />

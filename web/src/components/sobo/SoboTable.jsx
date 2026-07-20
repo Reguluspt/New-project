@@ -6,7 +6,8 @@ import {
   CompassOutlined,
   DownloadOutlined,
   MailOutlined,
-  ImportOutlined
+  ImportOutlined,
+  StopOutlined
 } from '@ant-design/icons';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 
@@ -35,16 +36,17 @@ export default function SoboTable({
   onEdit,
   onDelete,
   isGuest,
-  onConvert
+  onConvert,
+  onUnfollow
 }) {
   const [previewRecord, setPreviewRecord] = useState(null);
 
   const { getResizableProps } = useResizableColumns('sobo_list', {
-    id_date: 180,
+    id_date: 120,
     info: 450,
-    response_content: 250,
-    status_time: 180,
-    actions: 220
+    response_content: 360,
+    status_time: 130,
+    actions: 260
   });
 
   const getAssetDisplay = (record) => {
@@ -96,11 +98,15 @@ export default function SoboTable({
 
   const columns = [
     {
-      title: 'MÃ HỒ SƠ / NGÀY GỬI',
+      title: (
+        <span className="sobo-compact-header">
+          MÃ HỒ SƠ /<br />NGÀY GỬI
+        </span>
+      ),
       key: 'id_date',
-    width: 180,
+      width: 120,
       render: (_, record) => (
-        <div>
+        <div className="sobo-id-date-cell">
           <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
             #{record.id}
           </div>
@@ -148,16 +154,18 @@ export default function SoboTable({
         return (
           <div
             onClick={(e) => { e.stopPropagation(); setPreviewRecord(record); }}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}
           >
             {/* Rút gọn với fade-out */}
-            <div style={{
+            <div className="sobo-response-preview" style={{
               position: 'relative',
               maxHeight: '110px',
               overflow: 'hidden',
               fontSize: '12px',
               color: '#374151',
               lineHeight: 1.5,
+              maxWidth: '100%',
+              minWidth: 0,
             }}>
               {isHtml ? (
                 <div
@@ -196,9 +204,13 @@ export default function SoboTable({
       }
     },
     {
-      title: 'TRẠNG THÁI / THỜI GIAN',
+      title: (
+        <span className="sobo-compact-header">
+          TRẠNG THÁI /<br />THỜI GIAN
+        </span>
+      ),
       key: 'status_time',
-      width: 200,
+      width: 130,
       align: 'center',
       render: (_, record) => {
         const elapsed = formatDuration(record.outbound_sent_at || record.created_at, record.responded_at, record.status);
@@ -207,13 +219,13 @@ export default function SoboTable({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
             <div>
               {isResponded ? (
-                <span style={{ 
+                <span className="sobo-status-pill" style={{ 
                   display: 'inline-flex', 
                   alignItems: 'center', 
                   background: '#ecfdf5', 
                   color: '#047857', 
                   border: '1px solid #d1fae5',
-                  padding: '4px 12px', 
+                  padding: '4px 8px', 
                   borderRadius: '16px', 
                   fontWeight: 700, 
                   fontSize: '11px' 
@@ -222,13 +234,13 @@ export default function SoboTable({
                   Đã phản hồi
                 </span>
               ) : (
-                <span style={{ 
+                <span className="sobo-status-pill" style={{ 
                   display: 'inline-flex', 
                   alignItems: 'center', 
                   background: '#fef2f2', 
                   color: '#b91c1c', 
                   border: '1px solid #fee2e2',
-                  padding: '4px 12px', 
+                  padding: '4px 8px', 
                   borderRadius: '16px', 
                   fontWeight: 700, 
                   fontSize: '11px' 
@@ -327,7 +339,36 @@ export default function SoboTable({
                 }}
               />
             </Tooltip>
-          )} {!isGuest && (
+          )}
+          {!isGuest && (
+            <Tooltip title="Bỏ theo dõi">
+              <Popconfirm
+                title="Bỏ theo dõi mail phản hồi"
+                description="Hồ sơ này sẽ không còn hiển thị trong danh sách chờ phản hồi."
+                onConfirm={() => onUnfollow(record.id)}
+                okText="Bỏ theo dõi"
+                cancelText="Hủy"
+              >
+                <Button
+                  type="text"
+                  icon={<StopOutlined style={{ color: '#d97706', fontSize: '18px' }} />}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    minWidth: '36px',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderRadius: '6px',
+                    backgroundColor: '#fffbeb',
+                    border: 'none',
+                    padding: 0
+                  }}
+                />
+              </Popconfirm>
+            </Tooltip>
+          )}
+          {!isGuest && (
             <Tooltip title="Xóa">
               <Popconfirm
                 title="Xóa hồ sơ sơ bộ"
@@ -388,6 +429,42 @@ export default function SoboTable({
 
   return (
     <>
+      <style>{`
+        .sobo-compact-header {
+          display: inline-block;
+          max-width: 100%;
+          white-space: normal;
+          line-height: 1.35;
+          overflow-wrap: anywhere;
+          text-align: center;
+        }
+        .sobo-id-date-cell {
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+        .sobo-status-pill {
+          max-width: 100%;
+          justify-content: center;
+          white-space: normal;
+          line-height: 1.25;
+          text-align: center;
+        }
+        .sobo-response-preview,
+        .sobo-response-preview * {
+          max-width: 100%;
+          box-sizing: border-box;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+        .sobo-response-preview table {
+          width: 100% !important;
+          table-layout: fixed;
+        }
+        .sobo-response-preview img {
+          height: auto;
+          max-width: 100% !important;
+        }
+      `}</style>
       <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e5ebf0', overflow: 'hidden' }}>
         <Table
           bordered
@@ -395,7 +472,8 @@ export default function SoboTable({
           dataSource={dataSource}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 'max-content' }}
+          tableLayout="fixed"
+          scroll={{ x: 1230 }}
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,

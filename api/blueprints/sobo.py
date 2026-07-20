@@ -8,13 +8,14 @@ import io
 import math
 from datetime import datetime
 
-from src.database_manager import resolve_records_db_path, delete_sobo_record, create_sobo_record
+from src.database_manager import resolve_records_db_path, delete_sobo_record, create_sobo_record, ensure_sobo_schema
 from src.sqlite_store import get_case
 
 sobo_bp = Blueprint("sobo", __name__)
 
 async def query_sobo_records(db_path, search, status, page, size, sort, order):
-    conditions = []
+    await ensure_sobo_schema(db_path)
+    conditions = ["COALESCE(follow_replies, 1) = 1"]
     params = []
     
     if search:
@@ -76,7 +77,8 @@ async def get_sobo_record_by_id(db_path, record_id):
 async def update_sobo_record_in_db(db_path, record_id, update_data):
     allowed_fields = {
         "asset_type", "asset_sub_type", "source", "so_thua", "so_to", "dia_chi",
-        "link", "email_recipient", "status", "note", "equipment_name", "attachment_paths", "response_content"
+        "link", "email_recipient", "status", "note", "equipment_name", "attachment_paths",
+        "response_content", "follow_replies"
     }
     fields_to_set = []
     params = []
@@ -144,6 +146,10 @@ def get_sobo_stats():
         now = datetime.now()
         
         for r in records:
+            follow_replies = r.get("follow_replies")
+            if follow_replies is not None and int(follow_replies) == 0:
+                continue
+
             status = r.get("status") or "PENDING"
             sent_time_str = r.get("outbound_sent_at") or r.get("created_at")
             resp_time_str = r.get("responded_at")
@@ -211,6 +217,19 @@ def update_sobo_record_endpoint(record_id):
         updated = asyncio.run(update_sobo_record_in_db(db_path, record_id, data))
         if not updated:
             return jsonify({"error": "Không có trường hợp lệ nào để cập nhật"}), 400
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@sobo_bp.route("/sobo/<int:record_id>/unfollow", methods=["POST"])
+@login_required
+def unfollow_sobo_record_endpoint(record_id):
+    db_path = resolve_records_db_path(current_app.config["RECORDS_DB"])
+    try:
+        record = asyncio.run(get_sobo_record_by_id(db_path, record_id))
+        if not record:
+            return jsonify({"error": "Không tìm thấy hồ sơ sơ bộ"}), 404
+        asyncio.run(update_sobo_record_in_db(db_path, record_id, {"follow_replies": 0}))
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

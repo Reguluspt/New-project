@@ -1,68 +1,82 @@
-import React, { useState } from 'react';
-import { Card, Button, Checkbox, Modal, Space, Select, Descriptions, message, Spin, Alert } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { useMemo, useState } from 'react';
+import { Alert, Button, Divider, Modal, Progress, Select, Space, Spin, Tag, message } from 'antd';
+import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { extractFields } from '../../api/entry';
 
-export default function OcrActions({ uploadId, activeFile, files = [], onApplyData }) {
+const STATUS = {
+  pending: { label: 'Chờ quét', color: 'default' },
+  processing: { label: 'Đang quét', color: 'processing' },
+  applied: { label: 'Đã đưa vào form', color: 'success' },
+  error: { label: 'Lỗi quét', color: 'error' },
+};
+
+const allPagesFor = (file) => Array.from({ length: file.pages || 0 }, (_, index) => index + 1);
+
+export default function OcrActions({ uploadId, activeFile, files = [], onFileScanState, onFileScanned }) {
   const [open, setOpen] = useState(false);
-  const [selectedPages, setSelectedPages] = useState([]);
   const [extracting, setExtracting] = useState(false);
-  const [extractedResult, setExtractedResult] = useState(null);
   const [provider, setProvider] = useState('Gemini');
   const [model, setModel] = useState('gemini-2.5-flash');
-  const [scanAll, setScanAll] = useState(true);
 
-  const pageCount = activeFile?.pages || 0;
+  const pendingFiles = useMemo(
+    () => files.filter((file) => file.scanStatus === 'pending' || file.scanStatus === 'error'),
+    [files],
+  );
 
   const handleOpen = () => {
-    if (!uploadId) {
-      message.warning('Vui lòng upload tài liệu trước khi trích xuất');
+    if (!uploadId || !activeFile?.file_id) {
+      message.warning('Vui lòng tải lên và chọn file GCN trước khi quét.');
       return;
     }
-    if (!activeFile?.file_id) {
-      message.warning('Vui lòng chọn file cần trích xuất');
-      return;
-    }
-    // Default select all pages
-    const allPages = Array.from({ length: pageCount }, (_, i) => i + 1);
-    setSelectedPages(allPages);
-    setScanAll(true);
     setOpen(true);
   };
 
-  const handleExtract = async () => {
-    if (!scanAll && selectedPages.length === 0) {
-      message.warning('Vui lòng chọn ít nhất một trang để trích xuất');
+  const scanFilesSequentially = async (targets) => {
+    if (!targets.length) {
+      message.info('Không còn file nào cần quét.');
       return;
     }
 
     setExtracting(true);
+    let completedCount = 0;
     try {
-      const res = await extractFields({
-        upload_id: uploadId,
-        file_id: activeFile.file_id,
-        pages: selectedPages,
-        provider: provider,
-        model: model,
-        extract_all: scanAll
-      });
-
-      setExtractedResult(res.data?.extraction || {});
-      message.success('Trích xuất thông tin AI hoàn tất! 🔮');
-    } catch (err) {
-      console.error(err);
-      message.error(err.response?.data?.error || 'Trích xuất thất bại. Vui lòng kiểm tra lại API Key.');
+      for (const file of targets) {
+        onFileScanState(file.file_id, { scanStatus: 'processing', scanError: '' });
+        try {
+          const response = await extractFields({
+            upload_id: uploadId,
+            file_id: file.file_id,
+            pages: allPagesFor(file),
+            provider,
+            model,
+            extract_all: false,
+          });
+          const extraction = response.data?.extraction || {};
+          const multiExtraction = response.data?.multi_extraction || {};
+          const assetCount = Array.isArray(multiExtraction.assets) ? multiExtraction.assets.length : 0;
+          onFileScanState(file.file_id, {
+            scanStatus: 'applied',
+            extraction,
+            multiExtraction,
+            assetCount,
+            scanError: '',
+          });
+          onFileScanned?.(file.file_id, extraction, multiExtraction);
+          completedCount += 1;
+        } catch (error) {
+          console.error(error);
+          onFileScanState(file.file_id, {
+            scanStatus: 'error',
+            scanError: error.response?.data?.error || 'Không thể trích xuất file này.',
+          });
+        }
+      }
     } finally {
       setExtracting(false);
     }
-  };
 
-  const handleApply = () => {
-    if (onApplyData && extractedResult) {
-      onApplyData(extractedResult);
-      message.success('Đã áp dụng kết quả trích xuất vào form!');
-      setOpen(false);
-      setExtractedResult(null);
+    if (completedCount) {
+      message.success(`Đã quét và đưa ${completedCount}/${targets.length} file vào form.`);
     }
   };
 
@@ -73,168 +87,118 @@ export default function OcrActions({ uploadId, activeFile, files = [], onApplyDa
         icon={<ThunderboltOutlined />}
         onClick={handleOpen}
         disabled={!uploadId}
-        style={{
-          background: '#059669',
-          borderColor: '#059669',
-          borderRadius: 6
-        }}
+        style={{ background: '#007f7a', borderColor: '#007f7a', borderRadius: 6 }}
       >
-        Trích xuất AI
+        Quét GCN
       </Button>
 
       <Modal
         open={open}
-        title={
-          <Space>
-            <ThunderboltOutlined style={{ color: '#059669' }} />
-            <span>Trích xuất thông tin GCN bằng AI</span>
-          </Space>
-        }
-        onCancel={() => setOpen(false)}
-        footer={
-          extractedResult ? [
-            <Button key="back" onClick={() => setExtractedResult(null)}>Trích xuất lại</Button>,
-            <Button 
-              key="submit" 
-              type="primary" 
-              icon={<CheckCircleOutlined />} 
-              onClick={handleApply}
-              style={{ background: '#059669', borderColor: '#059669' }}
-            >
-              Áp dụng kết quả
-            </Button>
-          ] : [
-            <Button key="cancel" onClick={() => setOpen(false)}>Hủy</Button>,
-            <Button 
-              key="extract" 
-              type="primary" 
-              loading={extracting} 
-              onClick={handleExtract}
-              style={{ background: '#059669', borderColor: '#059669' }}
-            >
-              Bắt đầu trích xuất
-            </Button>
-          ]
-        }
-        width={650}
-        destroyOnClose
-        style={{ borderRadius: 10 }}
+        title="Hàng đợi quét GCN"
+        onCancel={() => !extracting && setOpen(false)}
+        closable={!extracting}
+        footer={[
+          <Button key="close" onClick={() => setOpen(false)} disabled={extracting}>Đóng</Button>,
+          <Button
+            key="scan-pending"
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            loading={extracting}
+            disabled={!pendingFiles.length}
+            onClick={() => scanFilesSequentially(pendingFiles)}
+            style={{ background: '#007f7a', borderColor: '#007f7a' }}
+          >
+            Quét {pendingFiles.length} file chờ
+          </Button>,
+        ]}
+        width={720}
+        destroyOnClose={false}
       >
-        {!extractedResult ? (
-          <Spin spinning={extracting} tip={scanAll ? "AI đang đọc và trích xuất dữ liệu từ tất cả các file đã tải lên (khoảng 10-35s)..." : "AI đang đọc và trích xuất dữ liệu từ các trang đã chọn (khoảng 10-25s)..."}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}>
-              <Alert 
-                message="Chọn trang và mô hình AI phù hợp. Lưu ý chọn các trang có sơ đồ thửa đất, thông tin chủ sở hữu và trang thay đổi/bien động." 
-                type="info" 
-                showIcon 
-              />
-              
-              <div>
-                <Checkbox 
-                  checked={scanAll} 
-                  onChange={(e) => setScanAll(e.target.checked)}
-                  style={{ fontWeight: 500, marginBottom: 8 }}
+        <Alert
+          type="info"
+          showIcon
+          message="Các file được quét theo thứ tự. Sau khi quét xong, tài sản được tự động đưa vào form."
+          style={{ marginBottom: 16 }}
+        />
+
+        <Spin spinning={extracting} tip="AI đang quét file trong hàng đợi...">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {files.map((file) => {
+              const status = STATUS[file.scanStatus] || STATUS.pending;
+              const isActive = file.file_id === activeFile?.file_id;
+              return (
+                <div
+                  key={file.file_id}
+                  style={{
+                    border: `1px solid ${isActive ? '#8fcfc9' : '#d8e7e5'}`,
+                    borderRadius: 6,
+                    padding: '11px 12px',
+                    background: isActive ? '#f0faf8' : '#fff',
+                  }}
                 >
-                  Quét tất cả các file đã tải lên (Mặc định)
-                </Checkbox>
-              </div>
-
-              {!scanAll && (
-                <div>
-                  <span style={{ fontWeight: 500, display: 'block', marginBottom: 8 }}>Chọn trang GCN trích xuất:</span>
-                  <Checkbox.Group 
-                    options={Array.from({ length: pageCount }, (_, i) => ({ label: `Trang ${i + 1}`, value: i + 1 }))}
-                    value={selectedPages}
-                    onChange={setSelectedPages}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {file.name}
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: 12, marginTop: 3 }}>
+                        {file.pages} trang{file.assetCount ? ` · AI nhận diện ${file.assetCount} tài sản` : ''}
+                      </div>
+                    </div>
+                    <Tag color={status.color}>{status.label}</Tag>
+                  </div>
+                  {file.scanStatus === 'processing' && <Progress percent={50} size="small" status="active" style={{ marginTop: 9 }} />}
+                  {file.scanError && <div style={{ color: '#b42318', fontSize: 12, marginTop: 7 }}>{file.scanError}</div>}
                 </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 16 }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontWeight: 500, display: 'block', marginBottom: 8 }}>Nhà cung cấp:</span>
-                  <Select
-                    value={provider}
-                    onChange={(val) => {
-                      setProvider(val);
-                      setModel(val === 'Gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini');
-                    }}
-                    style={{ width: '100%' }}
-                    options={[
-                      { value: 'Gemini', label: 'Google Gemini' },
-                      { value: 'OpenAI', label: 'OpenAI GPT' }
-                    ]}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontWeight: 500, display: 'block', marginBottom: 8 }}>Mô hình AI:</span>
-                  <Select
-                    value={model}
-                    onChange={setModel}
-                    style={{ width: '100%' }}
-                    options={
-                      provider === 'Gemini' 
-                        ? [
-                            { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Nhanh, Tối ưu)' },
-                            { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro (Thông minh nhất)' }
-                          ]
-                        : [
-                            { value: 'gpt-4o-mini', label: 'gpt-4o-mini (Nhanh)' },
-                            { value: 'gpt-4o', label: 'gpt-4o (Đầy đủ)' }
-                          ]
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-          </Spin>
-        ) : (
-          <div style={{ marginTop: 12 }}>
-            <Alert 
-              message="Vui lòng đối chiếu kết quả trích xuất bên dưới trước khi áp dụng vào form nhập liệu." 
-              type="success" 
-              showIcon 
-              style={{ marginBottom: 16 }}
-            />
-            
-            <Descriptions title="Kết quả trích xuất từ AI" bordered column={1} size="small">
-              <Descriptions.Item label="Số thửa đất">
-                {extractedResult.so_thua_dat?.value || 'Không có'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Số tờ bản đồ">
-                {extractedResult.so_to_ban_do?.value || 'Không có'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Địa chỉ thửa đất">
-                {extractedResult.dia_chi_thua_dat?.value || 'Không có'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Chủ sở hữu cuối cùng">
-                {extractedResult.ten_chu_so_huu_cuoi_cung?.value || 'Không có'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Địa chỉ chủ sở hữu">
-                {extractedResult.dia_chi_chu_so_huu_cuoi_cung?.value || 'Không có'}
-              </Descriptions.Item>
-              <Descriptions.Item label="CCCD chủ sở hữu">
-                {extractedResult.so_cccd_chu_so_huu_cuoi_cung?.value || 'Không có'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Số giấy chứng nhận">
-                {extractedResult.so_giay_chung_nhan?.value || 'Không có'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Số vào sổ cấp giấy chứng nhận">
-                {extractedResult.so_vao_so_cap_giay_chung_nhan?.value || 'Không có'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Ngày cấp giấy chứng nhận">
-                {extractedResult.ngay_cap_giay_chung_nhan?.value || 'Không có'}
-              </Descriptions.Item>
-              {extractedResult.notes && extractedResult.notes.length > 0 && (
-                <Descriptions.Item label="Ghi chú AI">
-                  <ul style={{ paddingLeft: 16, margin: 0 }}>
-                    {extractedResult.notes.map((note, i) => <li key={i}>{note}</li>)}
-                  </ul>
-                </Descriptions.Item>
-              )}
-            </Descriptions>
+              );
+            })}
           </div>
-        )}
+        </Spin>
+
+        <Divider style={{ margin: '18px 0 14px' }} />
+        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 500, marginBottom: 6 }}>Nhà cung cấp</div>
+              <Select
+                value={provider}
+                onChange={(value) => {
+                  setProvider(value);
+                  setModel(value === 'Gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini');
+                }}
+                disabled={extracting}
+                style={{ width: '100%' }}
+                options={[{ value: 'Gemini', label: 'Google Gemini' }, { value: 'OpenAI', label: 'OpenAI GPT' }]}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 500, marginBottom: 6 }}>Model AI</div>
+              <Select
+                value={model}
+                onChange={setModel}
+                disabled={extracting}
+                style={{ width: '100%' }}
+                options={provider === 'Gemini'
+                  ? [{ value: 'gemini-2.5-flash', label: 'gemini-2.5-flash' }, { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro' }]
+                  : [{ value: 'gpt-4o-mini', label: 'gpt-4o-mini' }, { value: 'gpt-4o', label: 'gpt-4o' }]}
+              />
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>File đang xem: {activeFile?.name || 'Chưa chọn'}</div>
+              <div style={{ color: '#64748b', fontSize: 12, marginTop: 3 }}>Quét lại sẽ thay thế phần tài sản của file này trong form.</div>
+            </div>
+            <Button
+              icon={<ReloadOutlined />}
+              disabled={extracting || !activeFile}
+              onClick={() => scanFilesSequentially([activeFile])}
+            >
+              Quét lại file này
+            </Button>
+          </div>
+        </Space>
       </Modal>
     </>
   );

@@ -236,6 +236,23 @@ export default function CaseDetail() {
               {caseData.owner_name || 'N/A'}
             </Descriptions.Item>
 
+            {caseData.gcn_details?.length > 0 && (
+              <Descriptions.Item label="Thông tin từng GCN" span={3}>
+                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  {caseData.gcn_details.map((detail, index) => (
+                    <Card key={detail.id || index} size="small" style={{ borderRadius: 6 }}>
+                      <strong>GCN {index + 1}{detail.source_file_name ? ` - ${detail.source_file_name}` : ''}</strong>
+                      <div>Số GCN: {detail.so_giay_chung_nhan || 'N/A'} | Số vào sổ: {detail.so_vao_so_cap_giay_chung_nhan || 'N/A'} | Ngày cấp: {detail.ngay_cap_giay_chung_nhan || 'N/A'}</div>
+                      <div>Thửa: {detail.so_thua_dat || 'N/A'} | Tờ bản đồ: {detail.so_to_ban_do || 'N/A'}</div>
+                      <div>Chủ sử dụng: {detail.owner_name || 'N/A'} | CCCD: {detail.owner_citizen_id || 'N/A'}</div>
+                      <div>Địa chỉ thửa đất: {detail.dia_chi_thua_dat || 'N/A'}</div>
+                      <div>Địa chỉ chủ sở hữu: {detail.owner_address || 'N/A'}</div>
+                    </Card>
+                  ))}
+                </Space>
+              </Descriptions.Item>
+            )}
+
             <Descriptions.Item label="Tháng thực hiện" span={1}>
               {caseData.execution_month || 'N/A'}
             </Descriptions.Item>

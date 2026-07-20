@@ -797,7 +797,8 @@ async def ensure_sobo_schema(db_path: str | Path) -> None:
             "  so_giay_chung_nhan TEXT,"
             "  so_vao_so_cap_giay_chung_nhan TEXT,"
             "  ngay_cap_giay_chung_nhan TEXT,"
-            "  response_content TEXT"
+            "  response_content TEXT,"
+            "  follow_replies INTEGER NOT NULL DEFAULT 1"
             ")"
         )
         cursor = await db.execute("PRAGMA table_info(sobo_records)")
@@ -814,6 +815,8 @@ async def ensure_sobo_schema(db_path: str | Path) -> None:
         ):
             if column not in columns:
                 await db.execute(f"ALTER TABLE sobo_records ADD COLUMN {column} TEXT")
+        if "follow_replies" not in columns:
+            await db.execute("ALTER TABLE sobo_records ADD COLUMN follow_replies INTEGER NOT NULL DEFAULT 1")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_sobo_outbound_msg_id ON sobo_records(outbound_message_id)")
         await db.commit()
 
@@ -827,7 +830,7 @@ async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int
         "outbound_sent_at", "responded_at", "status", "note", "equipment_name", "attachment_paths",
         "owner_name", "owner_address", "owner_citizen_id",
         "so_giay_chung_nhan", "so_vao_so_cap_giay_chung_nhan", "ngay_cap_giay_chung_nhan",
-        "response_content"
+        "response_content", "follow_replies"
     ]
     columns = ", ".join(fields)
     placeholders = ", ".join(f":{f}" for f in fields)
@@ -837,6 +840,8 @@ async def create_sobo_record(db_path: str | Path, values: dict[str, Any]) -> int
         payload["created_at"] = datetime.now().isoformat()
     if not payload["status"]:
         payload["status"] = "PENDING"
+    if not payload["follow_replies"]:
+        payload["follow_replies"] = "1"
         
     async with aiosqlite.connect(db_path, timeout=30) as db:
         cursor = await db.execute(

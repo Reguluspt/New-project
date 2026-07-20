@@ -31,23 +31,15 @@ const formatContractNumber = (value) => {
   return value;
 };
 
-// Cascading locations mock data
-const locationsData = {
-  "Gia Lai": {
-    "Pleiku": ["Hoa Lư", "Phù Đổng", "Tây Sơn"],
-    "An Khê": ["An Bình", "An Phú", "An Tân"]
-  },
-  "Đà Nẵng": {
-    "Thanh Khê": ["An Khê", "Hòa Khê", "Chính Gián"],
-    "Hải Châu": ["Thạch Thang", "Thuận Phước", "Hòa Cường Bắc"]
-  },
-  "Hồ Chí Minh": {
-    "Quận 1": ["Bến Nghé", "Bến Thành", "Đa Kao"],
-    "Bình Thạnh": ["Phường 15", "Phường 25", "Phường 27"]
-  }
-};
+const readExtractedValue = (field) => (typeof field === 'object' ? field?.value || '' : field || '');
 
-const readExtractedValue = (field) => field?.value || '';
+const detailValue = (detail, ...fields) => {
+  for (const field of fields) {
+    const value = readExtractedValue(detail?.[field]);
+    if (String(value).trim()) return value;
+  }
+  return '';
+};
 
 const buildOcrPersonalNote = (formValues) => {
   const notes = Array.isArray(formValues?.notes) ? [...formValues.notes] : [];
@@ -217,14 +209,6 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
   const [selectedBranch, setSelectedBranch] = useState('cn Đà Nẵng');
   const [offices, setOffices] = useState(["vp Đà Nẵng"]);
   
-  // Cascading location state
-  const [provinces, setProvinces] = useState(Object.keys(locationsData));
-  const [districts, setDistricts] = useState([]);
-  const [wards, setWards] = useState([]);
-  
-  const [selectedProvince, setSelectedProvince] = useState(null);
-  const [selectedDistrict, setSelectedDistrict] = useState(null);
-
   const fetchOrganizations = async () => {
     try {
       const res = await getOrganizations();
@@ -258,9 +242,6 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
           : ''),
         personal_note: buildOcrPersonalNote(formValues)
       });
-      
-      // Auto guess locations if available
-      guessLocationFromAddress(formValues.dia_chi_thua_dat?.value || '');
     }
   }, [formValues, form]);
 
@@ -275,64 +256,6 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
     } finally {
       setLoadingOptions(false);
     }
-  };
-
-  const guessLocationFromAddress = (address) => {
-    if (!address) return;
-    const addr = address.toLowerCase();
-    let matchedProvince = null;
-    
-    for (const prov of Object.keys(locationsData)) {
-      if (addr.includes(prov.toLowerCase())) {
-        matchedProvince = prov;
-        break;
-      }
-    }
-    
-    if (matchedProvince) {
-      form.setFieldValue('province', matchedProvince);
-      handleProvinceChange(matchedProvince);
-      
-      // Try district
-      let matchedDistrict = null;
-      for (const dist of Object.keys(locationsData[matchedProvince])) {
-        if (addr.includes(dist.toLowerCase())) {
-          matchedDistrict = dist;
-          break;
-        }
-      }
-      
-      if (matchedDistrict) {
-        form.setFieldValue('district', matchedDistrict);
-        handleDistrictChange(matchedDistrict, matchedProvince);
-        
-        // Try ward
-        let matchedWard = null;
-        for (const ward of locationsData[matchedProvince][matchedDistrict]) {
-          if (addr.includes(ward.toLowerCase())) {
-            matchedWard = ward;
-            break;
-          }
-        }
-        if (matchedWard) {
-          form.setFieldValue('ward', matchedWard);
-        }
-      }
-    }
-  };
-
-  const handleProvinceChange = (value) => {
-    setSelectedProvince(value);
-    setSelectedDistrict(null);
-    setDistricts(Object.keys(locationsData[value] || {}));
-    setWards([]);
-    form.setFieldsValue({ district: undefined, ward: undefined });
-  };
-
-  const handleDistrictChange = (value, prov = selectedProvince) => {
-    setSelectedDistrict(value);
-    setWards(locationsData[prov]?.[value] || []);
-    form.setFieldsValue({ ward: undefined });
   };
 
   const handleBranchChange = (value) => {
@@ -426,10 +349,6 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
       handover_contact_position: values.handover_contact_position || '',
       handover_contact_phone: values.handover_contact_phone || '',
 
-      // Province/District/Ward selections
-      province: values.province || '',
-      district: values.district || '',
-      ward: values.ward || ''
     };
   };
 
@@ -440,7 +359,8 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
       const res = await saveCase({
         extraction: payload,
         case_type: customerType,
-        upload_id: uploadId
+        upload_id: uploadId,
+        gcn_details: formValues?.gcn_details || [],
       });
       message.success('Lưu hồ sơ thành công! 💾');
       if (onSaveSuccess) onSaveSuccess(res.data?.case_id);
@@ -666,6 +586,7 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
                   </Form.Item>
                 </Col>
               </Row>
+
               <Row gutter={16}>
                 <Col span={8}>
                   <Form.Item name="tax_code" label="Mã số thuế">
@@ -870,68 +791,26 @@ export default function EntryForm({ uploadId, formValues, onSaveSuccess }) {
           {/* Section 3: Collapse for GCN Details */}
           <Collapse ghost style={{ marginBottom: 16, backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
             <Collapse.Panel header={<span>📄 Thông tin GCN trích xuất (từ AI)</span>} key="1">
-              <Divider style={{ margin: '8px 0' }}>Bản đồ vị trí (Tỉnh/Huyện/Xã)</Divider>
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="province" label="Tỉnh / Thành phố">
-                    <Select placeholder="Chọn Tỉnh..." onChange={handleProvinceChange}>
-                      {provinces.map(p => <Option key={p} value={p}>{p}</Option>)}
-                    </Select>
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="district" label="Quận / Huyện">
-                    <Select placeholder="Chọn Huyện..." onChange={(val) => handleDistrictChange(val)} disabled={!districts.length}>
-                      {districts.map(d => <Option key={d} value={d}>{d}</Option>)}
-                    </Select>
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="ward" label="Phường / Xã">
-                    <Select placeholder="Chọn Xã..." disabled={!wards.length}>
-                      {wards.map(w => <Option key={w} value={w}>{w}</Option>)}
-                    </Select>
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Divider style={{ margin: '8px 0' }}>Thông tin chi tiết GCN trích xuất</Divider>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item name="so_thua_dat" label="Số thửa đất">
-                    <Input placeholder="Vd: 43" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="so_to_ban_do" label="Số tờ bản đồ">
-                    <Input placeholder="Vd: 12" />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Row gutter={16}>
-                <Col span={24}>
-                  <Form.Item name="dia_chi_thua_dat" label="Địa chỉ thửa đất (Trên GCN)">
-                    <TextArea rows={2} placeholder="Vị trí thửa đất theo GCN..." />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Row gutter={16}>
-                <Col span={24}>
-                  <Form.Item name="owner_name" label="Chủ sở hữu cuối cùng (Người sử dụng đất)">
-                    <Input placeholder="Tên chủ sở hữu..." />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Row gutter={16}>
-                <Col span={24}>
-                  <Form.Item name="owner_address" label="Địa chỉ thường trú của chủ sở hữu">
-                    <Input placeholder="Địa chỉ của chủ..." />
-                  </Form.Item>
-                </Col>
-              </Row>
+              {formValues?.gcn_details?.length > 0 && (
+                <>
+                  <Divider style={{ margin: '8px 0' }}>Danh sách từng GCN đã quét</Divider>
+                  <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                    {formValues.gcn_details.map((detail, index) => (
+                      <Card key={`${detail.source_file_id || 'gcn'}-${index}`} size="small" style={{ borderRadius: 6 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                          GCN {index + 1}{detail.source_file_name ? ` - ${detail.source_file_name}` : ''}
+                        </div>
+                        <div>Số GCN: {detailValue(detail, 'so_giay_chung_nhan') || 'Chưa nhận diện'}</div>
+                        <div>Số vào sổ: {detailValue(detail, 'so_vao_so_cap_giay_chung_nhan') || 'Chưa nhận diện'} | Ngày cấp: {detailValue(detail, 'ngay_cap_giay_chung_nhan') || 'Chưa nhận diện'}</div>
+                        <div>Thửa: {detailValue(detail, 'so_thua_dat', 'so_thua') || 'Chưa nhận diện'} | Tờ bản đồ: {detailValue(detail, 'so_to_ban_do', 'so_to') || 'Chưa nhận diện'}</div>
+                        <div>Chủ sử dụng: {detailValue(detail, 'ten_chu_so_huu_cuoi_cung', 'owner_name') || 'Chưa nhận diện'}</div>
+                        <div>Địa chỉ: {detailValue(detail, 'dia_chi_thua_dat', 'land_address') || 'Chưa nhận diện'}</div>
+                        <div>CCCD: {detailValue(detail, 'so_cccd_chu_so_huu_cuoi_cung', 'owner_citizen_id', 'so_cccd') || 'Chưa nhận diện'}</div>
+                      </Card>
+                    ))}
+                  </Space>
+                </>
+              )}
             </Collapse.Panel>
           </Collapse>
 

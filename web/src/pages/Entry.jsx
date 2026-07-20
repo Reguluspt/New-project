@@ -1,12 +1,28 @@
-import React, { useState } from 'react';
-import { Row, Col, Card, Typography, Space, Button, message, Select } from 'antd';
-import { FilePdfOutlined, UploadOutlined, HomeOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Row, Col, Card, Typography, Space, Button, message, Select, Tag } from 'antd';
+import { FilePdfOutlined, UploadOutlined } from '@ant-design/icons';
 import FileUploader from '../components/entry/FileUploader';
 import PageViewer from '../components/entry/PageViewer';
 import OcrActions from '../components/entry/OcrActions';
 import EntryForm from '../components/entry/EntryForm';
 
 const { Title, Text } = Typography;
+
+const extractedValue = (asset, field) => {
+  const value = asset?.[field];
+  return typeof value === 'object' ? value?.value || '' : value || '';
+};
+
+const assetDescriptionFromExtraction = (asset) => {
+  const assetDescription = String(asset?.asset_description || '').trim();
+  if (assetDescription) return assetDescription;
+
+  const landParcel = extractedValue(asset, 'so_thua_dat') || extractedValue(asset, 'so_thua');
+  const mapSheet = extractedValue(asset, 'so_to_ban_do') || extractedValue(asset, 'so_to');
+  const address = extractedValue(asset, 'dia_chi_thua_dat') || extractedValue(asset, 'land_address');
+  if (!landParcel && !mapSheet && !address) return '';
+  return `Thửa đất số ${landParcel}, tờ bản đồ số ${mapSheet}; tại địa chỉ ${address}`;
+};
 
 export default function Entry() {
   const [uploadId, setUploadId] = useState(null);
@@ -15,14 +31,22 @@ export default function Entry() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [ocrData, setOcrData] = useState(null);
+  const [, setScannedResults] = useState({});
 
   const handleUploadSuccess = (newUploadId, uploadedFiles) => {
     setUploadId(newUploadId);
-    setFiles(uploadedFiles || []);
+    setFiles((uploadedFiles || []).map((file) => ({
+      ...file,
+      scanStatus: 'pending',
+      extraction: null,
+      multiExtraction: null,
+      scanError: '',
+    })));
     setActiveFileIndex(0);
     setCurrentPage(1);
     setRotation(0);
     setOcrData(null);
+    setScannedResults({});
   };
 
   const handleReset = () => {
@@ -32,6 +56,7 @@ export default function Entry() {
     setCurrentPage(1);
     setRotation(0);
     setOcrData(null);
+    setScannedResults({});
   };
 
   const handlePageChange = (pageNum) => {
@@ -47,9 +72,65 @@ export default function Entry() {
     setOcrData(null);
   };
 
-  const handleApplyOcrData = (data) => {
-    setOcrData(data);
+  const handleFileScanned = (fileId, extraction, multiExtraction) => {
+    setScannedResults((currentResults) => {
+      const scannedFile = files.find((file) => file.file_id === fileId);
+      const nextResults = {
+        ...currentResults,
+        [fileId]: {
+          extraction,
+          multiExtraction,
+          sourceFileName: scannedFile?.name || '',
+        },
+      };
+      const extractedFiles = Object.values(nextResults);
+      const primaryExtraction = extractedFiles[0]?.extraction || extraction;
+      const assetDescriptions = [...new Set(extractedFiles.flatMap(({ extraction: fileExtraction, multiExtraction: fileMultiExtraction }) => {
+        const assets = Array.isArray(fileMultiExtraction?.assets) && fileMultiExtraction.assets.length
+          ? fileMultiExtraction.assets
+          : [fileExtraction];
+        return assets.map(assetDescriptionFromExtraction).filter(Boolean);
+      }))];
+      const gcnDetails = extractedFiles.flatMap(({ extraction: fileExtraction, multiExtraction: fileMultiExtraction, sourceFileName }, fileIndex) => {
+        const assets = Array.isArray(fileMultiExtraction?.assets) && fileMultiExtraction.assets.length
+          ? fileMultiExtraction.assets
+          : [fileExtraction];
+        return assets.map((asset, assetIndex) => ({
+          ...asset,
+          source_file_id: Object.keys(nextResults)[fileIndex],
+          source_file_name: sourceFileName,
+          asset_index: assetIndex,
+        }));
+      });
+
+      setOcrData({
+        ...primaryExtraction,
+        asset_description: assetDescriptions.join('\n'),
+        gcn_details: gcnDetails,
+      });
+      return nextResults;
+    });
   };
+
+  const handleFileScanState = (fileId, changes) => {
+    setFiles((currentFiles) => currentFiles.map((file) => (
+      file.file_id === fileId ? { ...file, ...changes } : file
+    )));
+  };
+
+  const scanStatusLabel = (status) => ({
+    pending: 'Chờ quét',
+    processing: 'Đang quét',
+    applied: 'Đã đưa vào form',
+    error: 'Lỗi quét',
+  }[status] || 'Chờ quét');
+
+  const scanStatusColor = (status) => ({
+    pending: 'default',
+    processing: 'processing',
+    applied: 'success',
+    error: 'error',
+  }[status] || 'default');
 
   const handleSaveSuccess = (caseId) => {
     // Redirect or reset page
@@ -77,15 +158,21 @@ export default function Entry() {
                 style={{ minWidth: 240 }}
                 options={files.map((file, index) => ({
                   value: index,
-                  label: `${index + 1}. ${file.name}`,
+                  label: `${index + 1}. ${file.name} (${scanStatusLabel(file.scanStatus)})`,
                 }))}
               />
+            )}
+            {activeFile && (
+              <Tag color={scanStatusColor(activeFile.scanStatus)}>
+                {scanStatusLabel(activeFile.scanStatus)}
+              </Tag>
             )}
             <OcrActions 
               uploadId={uploadId} 
               activeFile={activeFile} 
               files={files}
-              onApplyData={handleApplyOcrData} 
+              onFileScanState={handleFileScanState}
+              onFileScanned={handleFileScanned}
             />
             <Button 
               icon={<UploadOutlined />} 

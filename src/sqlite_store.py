@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 import sqlite3
 import unicodedata
 from collections.abc import Iterator
@@ -250,6 +251,30 @@ def init_db(db_path: str | Path) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_contract ON cases(contract_number)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_customer ON cases(customer_info)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_citizen ON cases(citizen_id)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS case_gcn_details (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id INTEGER NOT NULL,
+                source_file_id TEXT,
+                source_file_name TEXT,
+                asset_index INTEGER NOT NULL DEFAULT 0,
+                so_thua_dat TEXT,
+                so_to_ban_do TEXT,
+                dia_chi_thua_dat TEXT,
+                owner_name TEXT,
+                owner_address TEXT,
+                owner_citizen_id TEXT,
+                so_giay_chung_nhan TEXT,
+                so_vao_so_cap_giay_chung_nhan TEXT,
+                ngay_cap_giay_chung_nhan TEXT,
+                extraction_json TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_case_gcn_details_case ON case_gcn_details(case_id, asset_index)")
 
         # Create organizations table
         conn.execute(
@@ -388,7 +413,51 @@ def _normalize_case(values: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def create_case(db_path: str | Path, values: dict[str, Any]) -> int:
+def _gcn_value(detail: dict[str, Any], *fields: str) -> str:
+    for field in fields:
+        value = detail.get(field)
+        if isinstance(value, dict):
+            value = value.get("value", "")
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def _insert_case_gcn_details(conn: sqlite3.Connection, case_id: int, gcn_details: list[dict[str, Any]], now: str) -> None:
+    for index, detail in enumerate(gcn_details):
+        if not isinstance(detail, dict):
+            continue
+        conn.execute(
+            """
+            INSERT INTO case_gcn_details (
+                case_id, source_file_id, source_file_name, asset_index,
+                so_thua_dat, so_to_ban_do, dia_chi_thua_dat,
+                owner_name, owner_address, owner_citizen_id,
+                so_giay_chung_nhan, so_vao_so_cap_giay_chung_nhan, ngay_cap_giay_chung_nhan,
+                extraction_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                case_id,
+                str(detail.get("source_file_id") or ""),
+                str(detail.get("source_file_name") or ""),
+                int(detail.get("asset_index") or index),
+                _gcn_value(detail, "so_thua_dat", "so_thua"),
+                _gcn_value(detail, "so_to_ban_do", "so_to"),
+                _gcn_value(detail, "dia_chi_thua_dat", "land_address"),
+                _gcn_value(detail, "ten_chu_so_huu_cuoi_cung", "owner_name"),
+                _gcn_value(detail, "dia_chi_chu_so_huu_cuoi_cung", "owner_address"),
+                _gcn_value(detail, "so_cccd_chu_so_huu_cuoi_cung", "owner_citizen_id", "so_cccd"),
+                _gcn_value(detail, "so_giay_chung_nhan"),
+                _gcn_value(detail, "so_vao_so_cap_giay_chung_nhan"),
+                _gcn_value(detail, "ngay_cap_giay_chung_nhan"),
+                json.dumps(detail, ensure_ascii=False),
+                now,
+            ),
+        )
+
+
+def create_case(db_path: str | Path, values: dict[str, Any], *, gcn_details: list[dict[str, Any]] | None = None) -> int:
     init_db(db_path)
     now = datetime.now().isoformat(timespec="seconds")
     data = _normalize_case(values)
@@ -400,7 +469,10 @@ def create_case(db_path: str | Path, values: dict[str, Any]) -> int:
             f"INSERT INTO cases ({', '.join(columns)}) VALUES ({placeholders})",
             params,
         )
-        return int(cursor.lastrowid)
+        case_id = int(cursor.lastrowid)
+        if gcn_details:
+            _insert_case_gcn_details(conn, case_id, gcn_details, now)
+        return case_id
 
 
 def update_case(db_path: str | Path, case_id: int, values: dict[str, Any]) -> None:
@@ -426,6 +498,7 @@ def update_case(db_path: str | Path, case_id: int, values: dict[str, Any]) -> No
 def delete_case(db_path: str | Path, case_id: int) -> None:
     init_db(db_path)
     with connect(db_path) as conn:
+        conn.execute("DELETE FROM case_gcn_details WHERE case_id = ?", (case_id,))
         cursor = conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
         if cursor.rowcount == 0:
             raise ValueError(f"Khong tim thay ho so id={case_id}")
@@ -435,7 +508,17 @@ def get_case(db_path: str | Path, case_id: int) -> dict[str, Any] | None:
     init_db(db_path)
     with connect(db_path) as conn:
         row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
-    return dict(row) if row else None
+        if row is None:
+            return None
+        case_data = dict(row)
+        case_data["gcn_details"] = [
+            dict(detail)
+            for detail in conn.execute(
+                "SELECT * FROM case_gcn_details WHERE case_id = ? ORDER BY asset_index, id",
+                (case_id,),
+            ).fetchall()
+        ]
+    return case_data
 
 
 def _build_case_search(
